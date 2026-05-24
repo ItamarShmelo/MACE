@@ -1,0 +1,51 @@
+#include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
+
+#include "compton_kernel_quadrature.hpp"
+
+namespace py = pybind11;
+using namespace compton;
+
+PYBIND11_MODULE(_compton_kernel_quadrature, m) {
+    m.doc() = "Compton scattering kernel via direct Gauss-Laguerre quadrature";
+
+    py::enum_<QuadratureForm>(m, "QuadratureForm")
+        .value("PostIBP", QuadratureForm::PostIntegrationByParts)
+        .value("PreIBP", QuadratureForm::PreIntegrationByParts);
+
+    py::class_<SigmaResult>(m, "SigmaResult")
+        .def_readonly("value", &SigmaResult::value)
+        .def_readonly("estimated_abs_error", &SigmaResult::estimated_abs_error)
+        .def_readonly("estimated_rel_error", &SigmaResult::estimated_rel_error);
+
+    py::class_<ComptonKernelQuadrature>(m, "ComptonKernelQuadrature")
+        .def(py::init<int, QuadratureForm>(),
+             py::arg("NL") = 64,
+             py::arg("form") = QuadratureForm::PostIntegrationByParts)
+        .def("sigma_E", &ComptonKernelQuadrature::sigma_E,
+             py::arg("E"), py::arg("E_prime"), py::arg("xi"),
+             py::arg("tau"), py::arg("Ne"))
+        .def("sigma_E_vec", [](const ComptonKernelQuadrature& self,
+                               double E,
+                               py::array_t<double, py::array::c_style | py::array::forcecast> E_prime_arr,
+                               double xi, double tau, double Ne) {
+            auto in = E_prime_arr.unchecked<1>();
+            const py::ssize_t n = in.shape(0);
+
+            py::array_t<double> values(n);
+            py::array_t<double> errors(n);
+            auto out_values = values.mutable_unchecked<1>();
+            auto out_errors = errors.mutable_unchecked<1>();
+
+            for (py::ssize_t i = 0; i < n; ++i) {
+                SigmaResult r = self.sigma_E(E, in(i), xi, tau, Ne);
+                out_values(i) = r.value;
+                out_errors(i) = r.estimated_abs_error;
+            }
+            return py::make_tuple(values, errors);
+        }, py::arg("E"), py::arg("E_prime_arr"), py::arg("xi"),
+           py::arg("tau"), py::arg("Ne"));
+
+    m.def("scaled_K2", &scaled_K2, py::arg("x"),
+          "Returns kve(2, x) = exp(x) * K_2(x)");
+}
