@@ -271,6 +271,7 @@ python3 tests/plot_comparison.py
 
 ## Further Documentation
 
+- [Series Methods](series.md) — alternative evaluation via power/asymptotic series
 - [Gauss-Laguerre Algorithm Details](gauss_laguerre.md) — how nodes/weights are computed
 - [Numerical Stability Design](numerical_stability.md) — techniques addressing overflow, cancellation, etc.
 - [Edge Cases and Pathological Regimes](edge_cases.md) — where the code fails or degrades

@@ -58,49 +58,9 @@
  *   Compton Scattering Medium," Technical Report UCRL-94345, 1986.
  */
 
-#include <cmath>
-#include <numbers>
-#include <stdexcept>
-
-#include "units/units.hpp"
+#include "compton_common/compton_common.hpp"
 
 namespace compton {
-
-/**
- * @brief Scaled modified Bessel function: K̃₂(x) = exp(x) · K₂(x).
- *
- * Uses Boost cyl_bessel_k for x < 50 (numerically stable after multiplying
- * by exp(x)), and a 5-term Hankel asymptotic expansion for x ≥ 50 where
- * the direct computation would overflow/underflow.
- */
-double scaled_K2(double x);
-
-/**
- * @brief Pre-computed kinematic parameters for a given (γ, γ', ξ, τ).
- *
- * Derived quantities used by both quadrature forms:
- *   a  = 1 − ξ                         (related to momentum transfer)
- *   s  = 1/γ + 1/γ'                    (sum of inverse energies)
- *   q  = |γ' − γ|² + 2γγ'a)^{1/2}     (momentum transfer magnitude)
- *   Δ  = √[(1 + γγ'a/2)(1 + (γ'−γ)²/(2γγ'a))]
- *   λ₊ = (γ'−γ)/2 + Δ                  (min electron Lorentz factor)
- *   ρ₊ = λ₊ + γ,  ρ₋ = λ₊ − γ'        (shifted momentum parameters)
- *   α± = 1/√(ρ±² + ω²)                 (appear in boundary terms)
- *   G, A±, Ψ                            (combined constants for the integrand)
- */
-struct KershawParams {
-    double a, s, q, omega2;
-    double Delta, lambda_plus, rho_plus, rho_minus;
-    double alpha_plus, alpha_minus;
-    double G, A_plus, A_minus, Psi;
-};
-
-/// Result of a kernel evaluation: value plus heuristic error estimates.
-struct SigmaResult {
-    double value;               ///< Σ_E in [cm²/erg] (Nₑ=1) or [1/(cm·erg)]
-    double estimated_abs_error; ///< |σ₀| · |IQ(N) − IQ(N/2)|
-    double estimated_rel_error; ///< abs_error / |value|
-};
 
 /// Selects which integral form to use for I_Q.
 enum class QuadratureForm {
@@ -138,10 +98,8 @@ public:
     SigmaResult sigma_E(double E, double E_prime, double xi, double tau, double Ne) const;
 
 private:
-    KershawParams compute_params(double gamma, double gamma_p, double xi, double tau) const;
     double compute_IQ_post_ibp(const KershawParams& p, double tau, int NL) const;
     double compute_IQ_pre_ibp(const KershawParams& p, double tau, int NL) const;
-    double stable_sigma0_E(double E, double tau, double lambda_plus, double Ne) const;
 
     int NL_;
     QuadratureForm form_;

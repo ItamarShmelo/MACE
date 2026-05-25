@@ -57,49 +57,7 @@
 #include "compton_kernel_quadrature.hpp"
 #include "gauss_laguerre.hpp"
 
-#include <boost/math/special_functions/bessel.hpp>
-
 namespace compton {
-
-// ═══════════════════════════════════════════════════════════════════════════
-// scaled_K2:  K̃₂(x) = exp(x) · K₂(x)
-// ═══════════════════════════════════════════════════════════════════════════
-//
-// For x < 50: compute K₂(x) via Boost and multiply by exp(x).
-// For x ≥ 50: use the Hankel asymptotic expansion
-//     K̃_ν(x) ~ √(π/(2x)) · Σ_{k=0}^{4} (μ−1²)(μ−3²)...(μ−(2k−1)²) / (k! (8x)^k)
-// with μ = 4ν² = 16.  Five terms give relative error < 10⁻¹⁵ for x ≥ 50.
-
-double scaled_K2(double x) {
-    if (!(x > 0.0) || !std::isfinite(x))
-        throw std::invalid_argument("scaled_K2 requires finite x > 0");
-
-    if (x < 50.0) {
-        return std::exp(x) * boost::math::cyl_bessel_k(2, x);
-    }
-
-    // Large-x asymptotic: kve(nu, x) ~ sqrt(pi/(2x)) * sum
-    // mu = 4*nu^2 = 16 for nu=2
-    const double inv8x = 1.0 / (8.0 * x);
-    constexpr double mu = 16.0;
-
-    double term = 1.0;
-    double sum = 1.0;
-
-    term *= (mu - 1.0) * inv8x;
-    sum += term;
-
-    term *= (mu - 9.0) * inv8x / 2.0;
-    sum += term;
-
-    term *= (mu - 25.0) * inv8x / 3.0;
-    sum += term;
-
-    term *= (mu - 49.0) * inv8x / 4.0;
-    sum += term;
-
-    return std::sqrt(std::numbers::pi / (2.0 * x)) * sum;
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Gauss-Laguerre integration helpers
@@ -115,8 +73,6 @@ static double laguerre_integrate(F&& integrand, const GaussLaguerreRule& rule) {
     return sum;
 }
 
-// Lazily-initialized static cache of quadrature rules.
-// Computing a 256-point rule via tql2 takes ~ms; caching avoids repetition.
 static const GaussLaguerreRule& get_rule(int N) {
     static const GaussLaguerreRule rule_32 = compute_gauss_laguerre(32);
     static const GaussLaguerreRule rule_64 = compute_gauss_laguerre(64);
@@ -143,102 +99,6 @@ ComptonKernelQuadrature::ComptonKernelQuadrature(int NL, QuadratureForm form)
         throw std::invalid_argument("NL must be one of: 64, 128, 256");
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// compute_params: derive all kinematic intermediates from (γ, γ', ξ, τ).
-//
-// Key derived quantities and their physical meaning:
-//   a = 1−ξ ∈ (0,2]        : proportional to squared momentum transfer
-//   q = √(Δγ² + 2γγ'a)    : 3-momentum transfer in electron rest frame
-//   λ₊                     : minimum electron Lorentz factor that can
-//                             produce the (E→E',ξ) transition
-//   Ψ                      : boundary-evaluation term arising from IBP
-// ─────────────────────────────────────────────────────────────────────────
-KershawParams ComptonKernelQuadrature::compute_params(
-    double gamma, double gamma_p, double xi, double tau) const
-{
-    KershawParams p{};
-
-    p.a = 1.0 - xi;
-    p.s = 1.0 / gamma + 1.0 / gamma_p;
-
-    // Stable q^2
-    double dg = gamma_p - gamma;
-    double q2 = dg * dg + 2.0 * gamma * gamma_p * p.a;
-    p.q = std::sqrt(q2);
-
-    // omega^2
-    p.omega2 = (1.0 + xi) / p.a;
-
-    // Delta
-    double gg_a = gamma * gamma_p * p.a;
-    double factor1 = 1.0 + gg_a / 2.0;
-    double factor2 = 1.0 + (dg * dg) / (2.0 * gg_a);
-    p.Delta = std::sqrt(factor1 * factor2);
-
-    // lambda_+, rho_+, rho_-
-    p.lambda_plus = dg / 2.0 + p.Delta;
-
-    if (p.lambda_plus < 1.0 - 1e-12)
-        throw std::runtime_error("lambda_plus significantly below 1");
-    if (p.lambda_plus < 1.0)
-        p.lambda_plus = 1.0;
-
-    p.rho_plus = p.lambda_plus + gamma;
-    p.rho_minus = p.lambda_plus - gamma_p;
-
-    // alpha_+/-
-    double Rp0 = p.rho_plus * p.rho_plus + p.omega2;
-    double Rm0 = p.rho_minus * p.rho_minus + p.omega2;
-    p.alpha_plus = 1.0 / std::sqrt(Rp0);
-    p.alpha_minus = 1.0 / std::sqrt(Rm0);
-
-    // G
-    double a2 = p.a * p.a;
-    p.G = -gamma * gamma_p + 2.0 / p.a + 2.0 / (gamma * gamma_p * a2);
-
-    // A_+, A_-
-    double s_over_tau_a2 = p.s / (tau * a2);
-    p.A_plus = p.G - s_over_tau_a2;
-    p.A_minus = p.G + s_over_tau_a2;
-
-    // Psi
-    p.Psi = 2.0 * tau * gamma * gamma_p / p.q
-           + p.s / a2 * (p.alpha_plus + p.alpha_minus)
-           + (p.rho_plus * p.alpha_plus - p.rho_minus * p.alpha_minus) / p.a;
-
-    return p;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// stable_sigma0_E:  prefactor  σ₀ = Nₑ r_e² m_e c² / (4E²τ)
-//                                    × exp(−(λ₊−1)/τ) / K̃₂(1/τ)
-//
-// The factor exp(−(λ₊−1)/τ) provides exponential suppression for
-// inelastic transitions (λ₊ > 1).  For elastic scattering (E≈E', ξ≈1),
-// λ₊ → 1 and the suppression vanishes.
-// ─────────────────────────────────────────────────────────────────────────
-double ComptonKernelQuadrature::stable_sigma0_E(
-    double E, double tau, double lambda_plus, double Ne) const
-{
-    return Ne * units::r_e2 * units::me_c2
-           / (4.0 * E * E * tau)
-           * std::exp(-(lambda_plus - 1.0) / tau)
-           / scaled_K2(1.0 / tau);
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// Post-IBP quadrature form.
-//
-// After integration by parts the original 1/R^{3/2} integrand becomes
-// a 1/√R integrand (less singular, faster Gauss-Laguerre convergence)
-// plus a boundary term Ψ evaluated at ρ = λ₊ (already computed in params).
-//
-// The integrand (as a function of x, where ρ = τx + ρ_offset):
-//
-//    H(x) = [(A₊ − ρ₊/τa) / √R₊  +  (−A₋ + ρ₋/τa) / √R₋] · τ
-//
-// where R± = (τx + ρ±)² + ω²  are always > 0.
-// ─────────────────────────────────────────────────────────────────────────
 double ComptonKernelQuadrature::compute_IQ_post_ibp(
     const KershawParams& p, double tau, int NL) const
 {
@@ -264,22 +124,6 @@ double ComptonKernelQuadrature::compute_IQ_post_ibp(
     return laguerre_integrate(integrand, get_rule(NL));
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Pre-IBP quadrature form.
-//
-// The original integrand before integration by parts, containing terms
-// with 1/R±^{3/2} (from the derivative of 1/√R±).  More terms but no
-// boundary contribution (no Ψ), and converges uniformly even at low τ
-// where the post-IBP form suffers cancellation between Ψ and I_Q.
-//
-// The integrand structure:
-//   F(x) = const_term + bracket_{3/2}(x) + bracket_{1/2}(x)
-//
-// where:
-//   const_term = 2γγ'/q  (angle-dependent Klein-Nishina-like factor)
-//   bracket_{3/2} contains numerator polynomials divided by R±^{3/2}
-//   bracket_{1/2} contains G·(1/√R₊ − 1/√R₋)
-// ─────────────────────────────────────────────────────────────────────────
 double ComptonKernelQuadrature::compute_IQ_pre_ibp(
     const KershawParams& p, double tau, int NL) const
 {
@@ -314,14 +158,6 @@ double ComptonKernelQuadrature::compute_IQ_pre_ibp(
     return laguerre_integrate(integrand, get_rule(NL));
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// sigma_E:  top-level entry point combining prefactor and quadrature.
-//
-// Evaluates at a single phase-space point.  For bin-integrated quantities
-// (as needed for multigroup transport), the caller must perform the outer
-// integration over ξ ∈ (−1,1) and E' ∈ [E'_lo, E'_hi] externally
-// (typically via scipy.integrate in Python).
-// ─────────────────────────────────────────────────────────────────────────
 SigmaResult ComptonKernelQuadrature::sigma_E(
     double E, double E_prime, double xi, double tau, double Ne) const
 {

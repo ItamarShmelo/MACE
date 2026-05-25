@@ -28,7 +28,9 @@ sys.path.insert(0, os.path.join(ROOT, 'external', 'CMMC', 'cpp_modules'))
 sys.path.insert(0, os.path.join(ROOT, 'src', 'python'))
 
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
+from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
 from pycompton.compton_kernel_quadrature import sigma_E as py_sigma_E
+from pycompton.compton_kernel_series import sigma_E_series as py_sigma_E_series
 
 ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2
 KEV = 1.602176634e-9
@@ -419,6 +421,238 @@ def section_pomraning(report):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Section 4: Python vs C++ series pointwise agreement
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def section_series_pointwise(report):
+    report.append("## 4. Python vs C++ Series Pointwise Agreement\n")
+    report.append("Compares C++ series (`_compton_kernel_series.ComptonKernelSeries`) vs")
+    report.append("Python series (`pycompton.compton_kernel_series.sigma_E_series`).\n")
+
+    cpp_series = ComptonKernelSeries(SeriesMethod.Auto)
+
+    report.append("| # | E [keV] | E' [keV] | xi | T [keV] | C++ series | Python series | rel diff | method | terms |")
+    report.append("|---|---|---|---|---|---|---|---|---|---|")
+
+    rel_diffs = []
+    methods = []
+
+    for i, (E_kev, Ep_kev, xi, T_kev) in enumerate(POINTWISE_CASES):
+        E = E_kev * KEV
+        Ep = Ep_kev * KEV
+        tau = T_kev * KEV / ME_C2
+
+        cr = cpp_series.sigma_E(E, Ep, xi, tau, 1.0)
+        pr = py_sigma_E_series(E, Ep, xi, tau, 1.0, method="auto")
+
+        scale = max(abs(cr.value), abs(pr.value), 1e-300)
+        rd = abs(cr.value - pr.value) / scale
+        rel_diffs.append(max(rd, 1e-16))
+        methods.append(str(cr.method_used).replace('SeriesMethod.', ''))
+
+        report.append(
+            f"| {i+1} | {E_kev} | {Ep_kev} | {xi} | {T_kev} | "
+            f"{cr.value:.4e} | {pr.value:.4e} | {rd:.2e} | "
+            f"{methods[-1]} | {cr.terms_used} |"
+        )
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    x = np.arange(len(POINTWISE_CASES))
+    colors = ['steelblue' if m == 'PowerSeries' else 'coral' for m in methods]
+    ax.bar(x, rel_diffs, color=colors, edgecolor='k', linewidth=0.5)
+    ax.set_yscale('log')
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(i+1) for i in x], fontsize=8)
+    ax.set_xlabel("Test case #")
+    ax.set_ylabel("Relative difference (Python vs C++)")
+    ax.set_title("Python vs C++ Series Agreement")
+    ax.grid(True, alpha=0.3, axis='y')
+    handles = [plt.Rectangle((0,0),1,1, fc='steelblue', ec='k'),
+               plt.Rectangle((0,0),1,1, fc='coral', ec='k')]
+    ax.legend(handles, ['PowerSeries', 'Asymptotic'], fontsize=9)
+    fig.tight_layout()
+
+    plot_name = "series_python_cpp_agreement.png"
+    fig.savefig(os.path.join(FIGS_DIR, plot_name), dpi=150)
+    plt.close(fig)
+
+    report.append(f"\n![Series Python vs C++](figs/{plot_name})\n")
+    report.append("")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Section 5: Series in Pomraning multigroup plots
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def integrate_bin_series(engine, E_in, E_lo, E_hi, tau):
+    def integrand(Ep, xi):
+        return engine.sigma_E(E_in, Ep, xi, tau, 1.0).value
+    val, _ = dblquad(integrand, -1.0 + XI_EPS, 1.0 - XI_EPS,
+                     lambda xi: E_lo, lambda xi: E_hi,
+                     epsabs=1e-35, epsrel=1e-2)
+    return 2.0 * np.pi * val
+
+
+def section_pomraning_with_series(report):
+    report.append("## 5. Pomraning Multigroup with Series\n")
+    report.append("Extends the Pomraning comparison plots with C++ series (dash-dot).\n")
+    report.append("- **Solid**: C++ quadrature (NL=64)")
+    report.append("- **Dashed**: Python quadrature (NL=128)")
+    report.append("- **Dotted**: CMMC Monte Carlo")
+    report.append("- **Dash-dot**: C++ series (Auto)\n")
+
+    cpp_engine = ComptonKernelQuadrature(NL=64, form=QuadratureForm.PostIBP)
+    cpp_series = ComptonKernelSeries(SeriesMethod.Auto)
+
+    selected_cases = [POMRANING_CASES[0], POMRANING_CASES[2]]
+
+    for case in selected_cases:
+        name = case["name"]
+        T_kev = case["T_kev"]
+        emax = case["emax"]
+        ein_kev = case["ein_kev"]
+        ylim = case["ylim"]
+        ref_dir = case.get("ref_dir")
+        tau = T_kev * KEV / ME_C2
+
+        eb_erg = make_energy_bins(emax, n_bins=40)
+        eb_kev_arr = eb_erg / KEV
+        ec_erg = 0.5 * (eb_erg[:-1] + eb_erg[1:])
+        ewid_kev = np.diff(eb_erg) / KEV
+        num_groups = len(eb_erg) - 1
+
+        print(f"    {name} ({num_groups} groups)...")
+        S_mc = get_cmmc_matrix(T_kev, eb_erg)
+        ref_data = load_pomraning_reference(ref_dir)
+
+        fig, ax = plt.subplots(figsize=(10, 7))
+        colors = plt.cm.tab10(np.linspace(0, 1, max(len(ein_kev), 10)))
+
+        for idx, e0_kev in enumerate(ein_kev):
+            g = np.argmin(np.abs(ec_erg - e0_kev * KEV))
+            E_in = ec_erg[g]
+            e_label = f"{ec_erg[g] / KEV:.4g}"
+            color = colors[idx]
+
+            row_cpp = np.zeros(num_groups)
+            row_py = np.zeros(num_groups)
+            row_series = np.zeros(num_groups)
+            for gp in range(num_groups):
+                row_cpp[gp] = integrate_bin_cpp(cpp_engine, E_in, eb_erg[gp], eb_erg[gp+1], tau)
+                row_py[gp] = integrate_bin_py(E_in, eb_erg[gp], eb_erg[gp+1], tau)
+                row_series[gp] = integrate_bin_series(cpp_series, E_in, eb_erg[gp], eb_erg[gp+1], tau)
+
+            sigma_cpp = row_cpp / ewid_kev / MBARN
+            ax.stairs(sigma_cpp, edges=eb_kev_arr, color=color, linewidth=1.8,
+                      label=f"$E_{{\\mathrm{{in}}}}$={e_label} keV")
+
+            sigma_py = row_py / ewid_kev / MBARN
+            ax.stairs(sigma_py, edges=eb_kev_arr, color=color, linewidth=1.2, linestyle='--')
+
+            sigma_series = row_series / ewid_kev / MBARN
+            ax.stairs(sigma_series, edges=eb_kev_arr, color=color, linewidth=1.2, linestyle='-.')
+
+            if S_mc is not None:
+                sigma_mc = S_mc[g, :] / ewid_kev / MBARN
+                ax.stairs(sigma_mc, edges=eb_kev_arr, color=color, linewidth=1.0, linestyle=':')
+
+        if ref_data:
+            ref_plotted = False
+            for e_ref, pts in sorted(ref_data.items()):
+                lbl = "Pomraning (book)" if not ref_plotted else None
+                ax.plot(pts[:, 0], pts[:, 1], 'o', markersize=4, color='k', label=lbl)
+                ref_plotted = True
+
+        ax.set_yscale('log')
+        ax.set_ylim(ylim)
+        ax.set_xlim([0.0, emax])
+        ax.grid(True, which='both', alpha=0.3)
+        ax.set_title(f"{name} (T = {T_kev} keV) — All Methods")
+        ax.set_xlabel("final photon energy $E$ [keV]")
+        ax.set_ylabel("$\\sigma(E)$ [mbarn/keV]")
+
+        handles, _ = ax.get_legend_handles_labels()
+        handles += [
+            Line2D([0],[0], color='gray', lw=1.8, ls='-',  label='C++ quadrature'),
+            Line2D([0],[0], color='gray', lw=1.2, ls='--', label='Python quadrature'),
+            Line2D([0],[0], color='gray', lw=1.2, ls='-.', label='C++ series'),
+            Line2D([0],[0], color='gray', lw=1.0, ls=':',  label='CMMC Monte Carlo'),
+        ]
+        ax.legend(handles=handles, loc='best', fontsize=9)
+        fig.tight_layout()
+
+        plot_name = f"pomraning_all_{name}.png"
+        fig.savefig(os.path.join(FIGS_DIR, plot_name), dpi=150)
+        plt.close(fig)
+
+        report.append(f"\n### {name} (T = {T_kev} keV)\n")
+        report.append(f"![{name} All Methods](figs/{plot_name})\n")
+
+    report.append("")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Section 6: Series timing comparison
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def section_series_timing(report):
+    report.append("## 6. Series Timing Comparison\n")
+
+    n_repeats = 20
+    cpp_quad = ComptonKernelQuadrature(128, QuadratureForm.PostIBP)
+    cpp_series = ComptonKernelSeries(SeriesMethod.Auto)
+
+    def bench(func):
+        t0 = time.perf_counter()
+        for _ in range(n_repeats):
+            for E_kev, Ep_kev, xi, T_kev in POINTWISE_CASES:
+                E = E_kev * KEV
+                Ep = Ep_kev * KEV
+                tau = T_kev * KEV / ME_C2
+                func(E, Ep, xi, tau)
+        return time.perf_counter() - t0
+
+    t_cpp_quad = bench(lambda E, Ep, xi, tau: cpp_quad.sigma_E(E, Ep, xi, tau, 1.0))
+    t_py_quad = bench(lambda E, Ep, xi, tau: py_sigma_E(E, Ep, xi, tau, 1.0, NL=128, method="fixed"))
+    t_cpp_series = bench(lambda E, Ep, xi, tau: cpp_series.sigma_E(E, Ep, xi, tau, 1.0))
+    t_py_series = bench(lambda E, Ep, xi, tau: py_sigma_E_series(E, Ep, xi, tau, 1.0, method="auto"))
+
+    n_total = len(POINTWISE_CASES) * n_repeats
+
+    report.append("| Method | Total [s] | Per call [us] | Speedup vs C++ quad |")
+    report.append("|---|---|---|---|")
+    for label, t in [("C++ quadrature NL=128", t_cpp_quad),
+                     ("Python quadrature NL=128", t_py_quad),
+                     ("C++ series (Auto)", t_cpp_series),
+                     ("Python series (Auto)", t_py_series)]:
+        per_call = t / n_total * 1e6
+        speedup = t_cpp_quad / t if t > 0 else 0
+        report.append(f"| {label} | {t:.4f} | {per_call:.1f} | {speedup:.2f}x |")
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    labels = ['C++ quad', 'Python quad', 'C++ series', 'Python series']
+    times_us = [t_cpp_quad/n_total*1e6, t_py_quad/n_total*1e6,
+                t_cpp_series/n_total*1e6, t_py_series/n_total*1e6]
+    colors_l = ['#2ecc71', 'steelblue', '#e74c3c', 'coral']
+    bars = ax.bar(labels, times_us, color=colors_l, edgecolor='k', linewidth=0.5)
+    for bar, t in zip(bars, times_us):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() * 1.05,
+                f"{t:.1f}", ha='center', fontsize=9)
+    ax.set_ylabel("Time per evaluation [us]")
+    ax.set_title("Quad vs Series Timing (All Methods)")
+    ax.grid(True, alpha=0.3, axis='y')
+    plt.xticks(rotation=15)
+    fig.tight_layout()
+
+    plot_name = "series_timing_comparison.png"
+    fig.savefig(os.path.join(FIGS_DIR, plot_name), dpi=150)
+    plt.close(fig)
+
+    report.append(f"\n![Series Timing](figs/{plot_name})\n")
+    report.append("")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -429,24 +663,40 @@ def main():
     report.append("This report compares the pure Python (`pycompton`) implementation of the")
     report.append("Compton scattering kernel against the C++ pybind11 implementation and the")
     report.append("CMMC Monte Carlo reference, covering pointwise accuracy, timing, and")
-    report.append("multigroup Pomraning comparisons with plots.\n")
+    report.append("multigroup Pomraning comparisons with plots. It also includes the series")
+    report.append("expansion comparisons.\n")
     report.append("---\n")
 
     print("Running Python vs C++ comparison report...")
 
-    print("  [1/3] Pointwise kernel agreement...")
+    print("  [1/6] Pointwise kernel agreement...")
     t0 = time.time()
     section_pointwise(report)
     print(f"        Done ({time.time()-t0:.1f}s)")
 
-    print("  [2/3] Pointwise timing...")
+    print("  [2/6] Pointwise timing...")
     t0 = time.time()
     section_timing(report)
     print(f"        Done ({time.time()-t0:.1f}s)")
 
-    print("  [3/3] Pomraning multigroup comparison...")
+    print("  [3/6] Pomraning multigroup comparison...")
     t0 = time.time()
     section_pomraning(report)
+    print(f"        Done ({time.time()-t0:.1f}s)")
+
+    print("  [4/6] Python vs C++ series pointwise...")
+    t0 = time.time()
+    section_series_pointwise(report)
+    print(f"        Done ({time.time()-t0:.1f}s)")
+
+    print("  [5/6] Pomraning with series...")
+    t0 = time.time()
+    section_pomraning_with_series(report)
+    print(f"        Done ({time.time()-t0:.1f}s)")
+
+    print("  [6/6] Series timing comparison...")
+    t0 = time.time()
+    section_series_timing(report)
     print(f"        Done ({time.time()-t0:.1f}s)")
 
     outpath = os.path.join(GEN_DIR, "python_cpp_comparison.md")

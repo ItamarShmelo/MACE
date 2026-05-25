@@ -191,7 +191,72 @@ Use the built-in error estimate (`estimated_rel_error`) to detect cases where co
 
 ---
 
+---
+
+## Series-Specific Failure Modes
+
+The series module (`ComptonKernelSeries`) provides an alternative evaluation method.  It has its own failure modes distinct from quadrature.
+
+### Power Series Non-Convergence
+
+**Regime:** Very low τ (cold plasmas) with moderate-to-large energy transfers.
+
+At low temperatures, the power series terms involve large, nearly-cancelling contributions (Ψ and the P± sums have opposite signs).  This is the same catastrophic cancellation that affects post-IBP quadrature, but manifests differently:
+
+- **Poisson weight underflow:** When `y± > 500`, the Poisson weights `exp(−y) · y^n / n!` underflow to zero.  The series returns `converged = false` immediately (with only the boundary term Ψ as a partial result).
+- **Slow convergence / many terms:** Even when weights don't underflow, large `y±` values require many terms before the Poisson distribution peaks, leading to slow convergence or hitting `n_max`.
+
+**Symptom:** `converged = false`, or large `estimated_rel_error`, or disagreement with quadrature.
+
+**Workaround:** Auto mode selects the asymptotic series for low τ, which avoids this regime.  If forced to use the power series (via `method = "power"`), fall back to quadrature when `converged = false`.
+
+### Asymptotic Series Non-Convergence
+
+**Regime:** Moderate-to-high τ (warm/hot plasmas).
+
+The asymptotic series diverges by design (it is an asymptotic, not convergent, expansion).  The useful accuracy depends on how small `τ · α±` is:
+
+| τ · max(α₊, α₋) | Typical accuracy | Behavior |
+|-------------------|-----------------|----------|
+| < 0.01 | 10⁻¹² or better | Rapid convergence, few terms |
+| 0.01 – 0.05 | 10⁻⁸ to 10⁻¹² | Good, more terms needed |
+| 0.05 – 0.2 | 10⁻⁴ to 10⁻⁸ | Marginal accuracy |
+| > 0.2 | Unreliable | Series diverges before reaching useful accuracy |
+
+**Symptom:** `converged = false` (reached `n_max` without meeting stopping criteria), or factorial overflow, or large error estimate.
+
+**Workaround:** Auto mode uses `τ · max(α₊, α₋) < 0.05` as the decision boundary.  Above this threshold, the power series is selected.
+
+### The `converged` Flag
+
+The `converged` flag in `SeriesResult` has precise semantics:
+
+| Value | Meaning | Action |
+|-------|---------|--------|
+| `true` | Series met its convergence criterion (relative tolerance or smallest-term truncation) | Result is reliable |
+| `false` | Series failed: hit `n_max`, Poisson weight underflow, or factorial overflow | Fall back to quadrature |
+
+Auto mode never silently falls back to quadrature — it always returns `SeriesResult` with the `converged` flag, and the **caller** decides on fallback.
+
+### Quadrature Fallback Strategy
+
+For production use, the recommended pattern is:
+
+```python
+result = series_engine.sigma_E(E, E_prime, xi, tau, Ne)
+if not result.converged:
+    result = quadrature_engine.sigma_E(E, E_prime, xi, tau, Ne)
+```
+
+The series module is complementary to quadrature:
+- **Series excels** at moderate temperatures and standard kinematics (fast, no quadrature nodes needed).
+- **Quadrature excels** at extreme parameters where series methods break down.
+
+---
+
 ## Summary: Safe Operating Envelope
+
+### Quadrature
 
 | Parameter | Safe range | Marginal | Unreliable/Fails |
 |-----------|-----------|----------|-------------------|
@@ -204,3 +269,15 @@ Use the built-in error estimate (`estimated_rel_error`) to detect cases where co
 | N (quadrature order) | 128–256 | 64 | 32 (inaccurate) |
 
 **The recommended default:** N = 64 with `PreIBP` form covers the widest range of conditions with acceptable accuracy.  Switch to N = 128 or 256 for precision-critical applications.
+
+### Series
+
+| Parameter | Power series | Asymptotic series | Auto |
+|-----------|-------------|-------------------|------|
+| τ < 0.01 | Unreliable (cancellation) | Best regime | Selects asymptotic |
+| 0.01 < τ < 0.1 | Good (fast) | Good | Depends on α± |
+| τ > 0.1 | Best regime | May diverge early | Selects power |
+| y± > 500 | Fails (underflow) | N/A | Falls through |
+| τ·α± > 0.2 | N/A | Unreliable | Avoids asymptotic |
+
+**The recommended default:** `SeriesMethod::Auto` with fallback to quadrature when `converged = false`.

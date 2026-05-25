@@ -322,3 +322,219 @@ $$
 They differ only in numerical conditioning:
 - **Post-IBP**: smooth integrand ($1/\sqrt{R}$), but $\Psi$ and $I_Q^{\text{post}}$ cancel at low $\tau$
 - **Pre-IBP**: sharper integrand ($1/R^{3/2}$), but no cancellation at any $\tau$
+
+---
+
+# Series Evaluation
+
+This section documents the equations implemented in `src/compton_kernel_series/compton_kernel_series.cpp`.  The series provide an alternative to Gauss-Laguerre quadrature for evaluating the same kernel $\Sigma_E$.
+
+The kernel factorization is identical:
+
+$$
+\Sigma_E = \sigma_0 \cdot \frac{\Sigma_E}{\sigma_0}
+$$
+
+where $\sigma_0$ is computed by `stable_sigma0_E` (same as quadrature), and the normalized ratio $\Sigma_E / \sigma_0$ is evaluated by one of the two series methods.
+
+---
+
+## Scaled Exponential Integral
+
+The power series requires the **scaled exponential integral**:
+
+$$
+\hat{E}_m(x) = e^x \cdot E_m(x)
+$$
+
+where $E_m(x) = \int_1^\infty t^{-m} e^{-xt}\, dt$ is the generalized exponential integral.
+
+### Implementation (`ehat_expn`)
+
+| $x$ range | Method |
+|-----------|--------|
+| $x < 50$ | $e^x \cdot \texttt{boost::expint}(m, x)$ |
+| $x \geq 50$ | Asymptotic expansion |
+
+Asymptotic expansion for large $x$:
+
+$$
+\hat{E}_m(x) \sim \frac{1}{x}\left[1 - \frac{m}{x} + \frac{m(m+1)}{x^2} - \frac{m(m+1)(m+2)}{x^3} + \cdots\right]
+$$
+
+Terms are accumulated until $|\text{term}| < 10^{-15} |\text{partial sum}|$ or 15 terms.
+
+---
+
+## Power Series
+
+### Hyperbolic substitution
+
+Define $\omega = \sqrt{\omega^2}$ and
+
+$$
+b = \frac{\omega}{2\tau}
+$$
+
+$$
+\theta_\pm = \operatorname{arcsinh}\!\left(\frac{\rho_\pm}{\omega}\right)
+$$
+
+$$
+x_\pm = b \cdot e^{\theta_\pm}, \qquad y_\pm = b \cdot e^{-\theta_\pm}
+$$
+
+### Poisson weight guard
+
+If $y_+ > 500$ or $y_- > 500$, the Poisson weights $e^{-y} \cdot y^n / n!$ will underflow.  The series returns `converged = false` immediately.
+
+### Series summation
+
+$$
+P_\pm = \sum_{n=0}^{N} w_n^\pm \cdot c_n^\pm \cdot \hat{E}_{n+1}(x_\pm)
+$$
+
+where the Poisson weights are updated incrementally:
+
+$$
+w_0^\pm = e^{-y_\pm}, \qquad w_{n+1}^\pm = w_n^\pm \cdot \frac{y_\pm}{n+1}
+$$
+
+and the coefficients are:
+
+$$
+c_n^\pm = A_\pm + \frac{2n}{a}
+$$
+
+### Normalized result
+
+$$
+\frac{\Sigma_E}{\sigma_0} = \Psi + P_+ - P_-
+$$
+
+### Stopping rule
+
+Convergence is declared when, for $n \geq n_{\min}$:
+
+$$
+\frac{|t_+^{(n)}| + |t_-^{(n)}|}{|P_+| + |P_-| + 10^{-300}} < \varepsilon_{\text{rel}}
+$$
+
+where $t_\pm^{(n)} = w_n^\pm \cdot c_n^\pm \cdot \hat{E}_{n+1}(x_\pm)$ is the $n$-th term.
+
+### Error estimate
+
+$$
+\varepsilon_{\text{abs}} = |\sigma_0| \cdot (|t_+^{(\text{last})}| + |t_-^{(\text{last})}|)
+$$
+
+$$
+\varepsilon_{\text{rel}} = \frac{\varepsilon_{\text{abs}}}{|\Sigma_E| + 10^{-300}}
+$$
+
+---
+
+## Low-Temperature Asymptotic Series
+
+### Setup
+
+$$
+\zeta_\pm = \rho_\pm \cdot \alpha_\pm
+$$
+
+$$
+\eta_+ = \alpha_+\!\left(\frac{s}{a^2} + \frac{\rho_+}{a}\right), \qquad \eta_- = \alpha_-\!\left(-\frac{s}{a^2} + \frac{\rho_-}{a}\right)
+$$
+
+$$
+\text{base\_term} = \frac{2\tau\,\gamma\,\gamma'}{q}
+$$
+
+### Legendre polynomial recurrence
+
+The Legendre polynomials $P_n(\zeta_\pm)$ are computed via the standard three-term recurrence:
+
+$$
+P_0(z) = 1, \qquad P_1(z) = z
+$$
+
+$$
+P_{k+1}(z) = \frac{(2k+1)\,z\,P_k(z) - k\,P_{k-1}(z)}{k+1}
+$$
+
+All polynomials up to degree $n_{\max} + 1$ are pre-computed for both $\zeta_+$ and $\zeta_-$.
+
+### Term structure
+
+Define incremental powers and factorials:
+
+$$
+p_0^\pm = -\tau\alpha_\pm, \qquad p_{n+1}^\pm = p_n^\pm \cdot (-\tau\alpha_\pm)
+$$
+
+$$
+(n!)_0 = 1, \qquad (n!)_{k} = (n!)_{k-1} \cdot k
+$$
+
+The $n$-th term:
+
+$$
+T_n^+ = p_n^+ \cdot \left[(-G \cdot n! + (n+1)!/a) \cdot P_n(\zeta_+) - \eta_+ \cdot (n+1)! \cdot P_{n+1}(\zeta_+)\right]
+$$
+
+$$
+T_n^- = p_n^- \cdot \left[(G \cdot n! - (n+1)!/a) \cdot P_n(\zeta_-) + \eta_- \cdot (n+1)! \cdot P_{n+1}(\zeta_-)\right]
+$$
+
+### Partial sums
+
+$$
+S_\pm = \sum_{n=0}^{N} T_n^\pm
+$$
+
+### Normalized result
+
+$$
+\frac{\Sigma_E}{\sigma_0} = \text{base\_term} + S_+ + S_-
+$$
+
+### Stopping rules
+
+**Primary (convergent regime):** For $n \geq n_{\min}$, if
+
+$$
+\frac{|T_n^+| + |T_n^-|}{|S_+| + |S_-| + 10^{-300}} < \varepsilon_{\text{rel}}
+$$
+
+return with `converged = true`.
+
+**Secondary (asymptotic truncation):** Track the smallest term magnitude and the corresponding partial sums.  If the term magnitude increases for two consecutive terms after $n_{\min}$, truncate at the best point and return with `converged = true`.
+
+**Failure:** If $n_{\max}$ is reached without either stopping rule triggering, or if $n!$ overflows, return with `converged = false`.
+
+### Error estimate
+
+$$
+\varepsilon_{\text{abs}} = |\sigma_0| \cdot \min_n(|T_n^+| + |T_n^-|)
+$$
+
+The error is estimated by the magnitude of the smallest term in the asymptotic expansion — a standard heuristic.
+
+---
+
+## Auto Switching Logic
+
+The `Auto` mode selects between power and asymptotic series based on:
+
+$$
+\tau \cdot \max(\alpha_+, \alpha_-) \lessgtr 0.05
+$$
+
+| Condition | Selected method |
+|-----------|----------------|
+| $\tau \cdot \max(\alpha_+, \alpha_-) < 0.05$ | Asymptotic series |
+| $\tau \cdot \max(\alpha_+, \alpha_-) \geq 0.05$ | Power series |
+
+The threshold 0.05 is chosen so that the asymptotic series achieves at least $\sim 10^{-8}$ relative accuracy before diverging.  The power series is reliable whenever Poisson weights don't underflow.
+
+If the selected method returns `converged = false`, Auto mode does **not** internally fall back to quadrature.  It returns `SeriesResult` with `converged = false` and lets the caller decide.

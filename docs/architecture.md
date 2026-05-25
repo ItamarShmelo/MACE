@@ -5,18 +5,28 @@
 ```
 compton_cross_section/
 ├── src/
-│   ├── compton_kernel_quadrature/          # C++ kernel implementation
-│   │   ├── compton_kernel_quadrature.hpp   # Public API: classes, structs, enums
-│   │   ├── compton_kernel_quadrature.cpp   # Implementation of the Compton kernel
+│   ├── compton_common/                     # Shared kinematics and normalization
+│   │   ├── compton_common.hpp             # KershawParams, compute_params, etc.
+│   │   └── compton_common.cpp             # Implementations
+│   ├── compton_kernel_quadrature/          # C++ quadrature kernel
+│   │   ├── compton_kernel_quadrature.hpp   # QuadratureForm, ComptonKernelQuadrature
+│   │   ├── compton_kernel_quadrature.cpp   # Gauss-Laguerre evaluation
 │   │   ├── gauss_laguerre.hpp              # Custom Gauss-Laguerre quadrature (header-only)
 │   │   └── bind/
 │   │       └── _compton_kernel_quadrature.cpp  # pybind11 bindings
+│   ├── compton_kernel_series/              # C++ series kernel
+│   │   ├── compton_kernel_series.hpp       # SeriesMethod, SeriesResult, ComptonKernelSeries
+│   │   ├── compton_kernel_series.cpp       # Power series + asymptotic series
+│   │   └── bind/
+│   │       └── _compton_kernel_series.cpp  # pybind11 bindings
 │   └── python/
 │       └── pycompton/                      # Pure Python reimplementation
 │           ├── __init__.py
-│           └── compton_kernel_quadrature.py
+│           ├── compton_kernel_quadrature.py
+│           └── compton_kernel_series.py
 ├── cpp_modules/                        # Build output (shared libraries)
-│   └── _compton_kernel_quadrature.cpython-*.so
+│   ├── _compton_kernel_quadrature.cpython-*.so
+│   └── _compton_kernel_series.cpython-*.so
 ├── external/
 │   └── CMMC/                           # Reference Monte Carlo implementation
 │       ├── src/
@@ -28,6 +38,8 @@ compton_cross_section/
 │   ├── conftest.py                     # pytest --run-slow flag
 │   ├── test_deterministic.py           # Fast unit tests (+ GL nodes vs scipy)
 │   ├── test_python_vs_cpp.py           # Python vs C++ pointwise comparison
+│   ├── test_series_python.py           # Python series validation (Phase 2f)
+│   ├── test_series.py                  # C++ series tests (Phase 4)
 │   ├── test_vs_mc.py                   # Slow MC comparison tests (+ Pomraning)
 │   ├── plot_comparison.py              # Generate comparison plots
 │   └── output/                         # Plot outputs (PNG, PDF)
@@ -36,6 +48,7 @@ compton_cross_section/
 ├── reports/
 │   ├── convergence_analysis.py         # Convergence report generator (with plots)
 │   ├── python_cpp_comparison.py        # Python vs C++ report generator (with plots)
+│   ├── series_validation.py            # Series validation report (with plots)
 │   └── generated/                      # Generated reports and plots (gitignored)
 ├── docs/
 │   ├── quadrature.md                   # Main documentation
@@ -45,6 +58,7 @@ compton_cross_section/
 │   ├── final_equations.md              # Step-by-step equations matching code
 │   ├── cmmc_comparison.md              # CMMC comparison and artifacts
 │   ├── python_implementation.md        # Pure Python pycompton package
+│   ├── series.md                       # Series methods documentation
 │   ├── reports.md                      # Report generation scripts
 │   └── architecture.md                 # This file
 ├── CMakeLists.txt                      # Build configuration
@@ -59,55 +73,90 @@ compton_cross_section/
 units/units.hpp  (from CMMC: physical constants)
        │
        ▼
-compton_kernel_quadrature.hpp  (API declarations)
+compton_common.hpp  (shared kinematics & normalization)
        │
-       ├──────────────────────┐
-       ▼                      ▼
-gauss_laguerre.hpp     boost/math/bessel.hpp
-       │                      │
-       └──────────┬───────────┘
-                  ▼
-compton_kernel_quadrature.cpp  (implementation)
-                  │
-                  ▼
-bind/_compton_kernel_quadrature.cpp  (pybind11)
-                  │
-                  ▼
-_compton_kernel_quadrature.so  (Python module)
+       ├────────────────────────────────┐
+       ▼                                ▼
+compton_kernel_quadrature.hpp    compton_kernel_series.hpp
+       │                                │
+       ├────────┐                       ├────────┐
+       ▼        ▼                       ▼        ▼
+gauss_laguerre  boost/bessel      boost/expint   <cmath>
+       │                                │
+       ▼                                ▼
+*.cpp (implementation)           *.cpp (implementation)
+       │                                │
+       ▼                                ▼
+bind/_compton_kernel_quadrature  bind/_compton_kernel_series
+       │                                │
+       ▼                                ▼
+_compton_kernel_quadrature.so    _compton_kernel_series.so
 ```
 
 ---
 
 ## Source Files
 
-### C++ Kernel (`src/compton_kernel_quadrature/`)
+### Shared Kinematics (`src/compton_common/`)
+
+#### `compton_common.hpp`
+
+**Role:** Shared interface for kinematics and normalization used by both quadrature and series modules.
+
+Declares:
+- `scaled_K2(x)` — scaled Bessel function K̃₂(x) = exp(x) K₂(x)
+- `KershawParams` — kinematic intermediates struct
+- `SigmaResult` — return type with value + error estimates
+- `compute_params(gamma, gamma_p, xi, tau)` — free function deriving all kinematic quantities
+- `stable_sigma0_E(E, tau, lambda_plus, Ne)` — prefactor computation
+
+#### `compton_common.cpp`
+
+**Role:** Implementations of scaled_K2, compute_params, and stable_sigma0_E.
+
+### C++ Quadrature Kernel (`src/compton_kernel_quadrature/`)
 
 #### `compton_kernel_quadrature.hpp`
 
-**Role:** Public interface.
+**Role:** Public interface for quadrature evaluation.
 
 Declares:
-- `r_e2` — classical electron radius squared (constexpr)
-- `scaled_K2(x)` — scaled Bessel function
-- `KershawParams` — kinematic intermediates struct
-- `SigmaResult` — return type with value + error estimates
 - `QuadratureForm` — enum selecting post-IBP vs pre-IBP
 - `ComptonKernelQuadrature` — main evaluation class
 
-No implementation details are exposed.  The header depends only on `<cmath>`, `<numbers>`, `<stdexcept>`, and `units/units.hpp` (for physical constants).
+Includes `compton_common.hpp` for shared types.
 
 #### `compton_kernel_quadrature.cpp`
 
-**Role:** Core physics and numerics.
+**Role:** Gauss-Laguerre quadrature evaluation.
 
-Contains all the heavy computation:
-- `scaled_K2` with Boost + asymptotic paths
-- `compute_params` deriving kinematic quantities
-- `stable_sigma0_E` computing the prefactor
+Contains:
 - `compute_IQ_post_ibp` and `compute_IQ_pre_ibp` performing the quadrature
-- `sigma_E` tying everything together
+- `sigma_E` tying prefactor and quadrature together
 - Static rule cache (`get_rule`)
 - Gauss-Laguerre integration helper template
+
+### C++ Series Kernel (`src/compton_kernel_series/`)
+
+#### `compton_kernel_series.hpp`
+
+**Role:** Public interface for series evaluation.
+
+Declares:
+- `SeriesMethod` — enum: PowerSeries, Asymptotic, Auto
+- `SeriesResult` — struct with value, error estimates, terms_used, method_used, converged
+- `ComptonKernelSeries` — main evaluation class
+- `ehat_expn(m, x)` — scaled exponential integral Ê_m(x) = exp(x) E_m(x)
+
+#### `compton_kernel_series.cpp`
+
+**Role:** Power series and asymptotic series implementations.
+
+Contains:
+- `ehat_expn` with two-regime strategy (direct for x<50, asymptotic for x≥50)
+- Power series loop with Poisson weights and per-term Boost `expint` calls
+- Asymptotic series with Legendre recurrence and smallest-term truncation
+- Auto switching based on tau*alpha threshold
 
 #### `gauss_laguerre.hpp`
 
@@ -137,13 +186,24 @@ The vectorized `sigma_E_vec` loops in C++ over an input NumPy array, avoiding pe
 
 #### `compton_kernel_quadrature.py`
 
-**Role:** Complete reimplementation of the C++ kernel using only numpy and scipy.
+**Role:** Complete reimplementation of the C++ quadrature kernel using only numpy and scipy.
 
 Provides two integration modes:
 - **Fixed Gauss-Laguerre** (`method="fixed"`): uses `scipy.special.roots_laguerre` for direct comparison with C++
 - **Adaptive quadrature** (`method="adaptive"`): uses `scipy.integrate.quad` with explicit e^{-x} weight as a diagnostic cross-check
 
 See [Python Implementation](python_implementation.md) for details.
+
+#### `compton_kernel_series.py`
+
+**Role:** Pure Python reimplementation of the C++ series kernel.
+
+Key components:
+- `ehat_expn(m, x)` — scaled exponential integral with two-regime strategy (direct for x<50, asymptotic for x≥50)
+- `sigma_E_series(gamma, gamma_p, xi, tau, ...)` — top-level function with power series, asymptotic series, and auto-switching
+- `SeriesResult` dataclass — output with value, error estimates, convergence flag, method used, terms count
+
+See [Series Methods](series.md) for algorithmic details.
 
 ---
 
@@ -154,7 +214,8 @@ See [Python Implementation](python_implementation.md) for details.
 - Requires CMake ≥ 3.22 and a C++20 compiler
 - Finds Boost (header-only) and pybind11 via `find_package`
 - Includes `external/CMMC/src` (for `units/units.hpp`)
-- Produces a single shared library target: `_compton_kernel_quadrature`
+- Produces two shared library targets: `_compton_kernel_quadrature` and `_compton_kernel_series`
+- Both link against `compton_common.cpp` (compiled into each module)
 - Output goes to `cpp_modules/` for direct Python import
 - Compiler flags: `-O3 -Wall -Wextra -Wpedantic`
 
@@ -199,6 +260,32 @@ Pointwise correctness comparison between the pure Python and C++ implementations
 | `TestFixedRuleAgreement.test_error_estimates` | Richardson error estimates agree in order of magnitude |
 | `TestAdaptiveDiagnostic` | Python adaptive quad agrees with C++ within 1e-4 |
 
+### Layer 2b: Python Series Validation (`test_series_python.py`)
+
+Python-first tests that validate the series formulas against quadrature, without requiring the C++ series module.
+
+| Test | What it verifies |
+|------|------------------|
+| `TestEhatExpn` | `ehat_expn` matches scipy across all regimes and orders |
+| `TestPowerSeriesVsQuadrature` | Python power series agrees with Python quadrature (warm/hot τ) |
+| `TestAsymptoticSeriesVsQuadrature` | Python asymptotic series agrees at low τ |
+| `TestAutoSeriesVsQuadrature` | Auto switching produces correct results across all test points |
+| `TestDetailedBalanceSeries` | Detailed balance holds for series results |
+| `TestPositivitySeries` | Series returns non-negative values |
+
+### Layer 2c: C++ Series Tests (`test_series.py`)
+
+C++ series validation, including cross-module and cross-language comparisons.
+
+| Test | What it verifies |
+|------|------------------|
+| `TestEhatExpn` | C++ `ehat_expn` matches scipy for all orders and x ranges |
+| `TestSeriesVsQuadrature` | C++ series vs C++ quadrature agreement |
+| `TestPythonVsCpp` | Python and C++ series produce consistent results |
+| `TestDetailedBalance` | Detailed balance for C++ series |
+| `TestPositivity` | Non-negativity for C++ series |
+| `TestConvergenceFlags` | Convergence flags are consistent with method selection |
+
 ### Layer 3: Slow MC Comparison Tests (`test_vs_mc.py`)
 
 Run with `--run-slow`.  Compare multigroup S-matrices against CMMC.
@@ -230,3 +317,8 @@ Report-generating scripts that produce markdown documents with embedded plots.  
 | No GIL release | Simplicity over threading; vectorization in C++ loop suffices |
 | Pre- and post-IBP forms | Cross-validation and regime-appropriate convergence |
 | Richardson error estimate | Cheap (one extra half-order evaluation), practical indicator |
+| compton_common extraction | Shared kinematics avoids duplication between quadrature and series modules |
+| Direct Boost `expint` calls | Per-term `boost::math::expint(n, x)` is simple and correct; forward recurrence deferred as optimization |
+| Python-first validation | Series formulas validated in Python (scipy) before C++ port, catching formula bugs early |
+| Series-or-fail Auto | Auto mode returns `converged = false` rather than silently falling back to quadrature, keeping module boundaries clean |
+| Smallest-term truncation | Standard optimal truncation for asymptotic (non-convergent) series, with two-consecutive-increase safeguard |

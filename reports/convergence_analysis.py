@@ -1,5 +1,5 @@
 """
-Tolerance and convergence analysis for the Compton kernel quadrature.
+Tolerance and convergence analysis for the Compton kernel.
 
 Generates a comprehensive markdown report with embedded plots covering:
   1. Gauss-Laguerre quadrature order convergence (NL=64 vs 128 vs 256)
@@ -7,6 +7,8 @@ Generates a comprehensive markdown report with embedded plots covering:
   3. Post-IBP vs Pre-IBP agreement across temperature regimes
   4. Pointwise kernel error estimates from the C++ Richardson indicator
   5. Performance benchmarks
+  6. Power series convergence vs number of terms
+  7. Asymptotic series convergence and optimal truncation
 
 Usage:
     python3 reports/convergence_analysis.py
@@ -27,6 +29,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm, scaled_K2
+from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
 
 ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2
 KEV = 1.602176634e-9
@@ -465,6 +468,202 @@ def section_timing(report):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Section 6: Power series convergence vs number of terms
+# ═══════════════════════════════════════════════════════════════════════════════
+
+POWER_SERIES_CASES = [
+    # (T_kev, E_kev, Ep_kev, xi) — warm/hot cases where power series converges well
+    (20.0,  10.0,  10.5,  0.0),
+    (50.0,  10.0,  10.5,  0.0),
+    (100.0, 50.0,  55.0,  0.0),
+    (100.0, 100.0, 80.0,  0.0),
+    (20.0,  50.0,  55.0,  0.3),
+    (10.0,  10.0,  9.5,   0.0),
+]
+
+
+def section_power_series_convergence(report):
+    report.append("## 6. Power Series Convergence vs Number of Terms\n")
+    report.append("Shows how the power series partial sum converges as `n_max` increases.")
+    report.append("The reference value is from C++ quadrature (NL=256, PreIBP).")
+    report.append("Each curve traces the relative error of the series truncated at n_max terms.\n")
+
+    quad_eng = ComptonKernelQuadrature(NL=256, form=QuadratureForm.PreIBP)
+    n_max_values = list(range(1, 81))
+
+    fig, axes = plt.subplots(2, 3, figsize=(15, 9))
+    axes = axes.flatten()
+
+    report.append("| Case | T [keV] | E [keV] | E' [keV] | xi | Quad ref | Series (converged) | Terms | Rel err vs quad |")
+    report.append("|---|---|---|---|---|---|---|---|---|")
+
+    for ci, (T_kev, E_kev, Ep_kev, xi) in enumerate(POWER_SERIES_CASES):
+        tau = T_kev * KEV / ME_C2
+        E = E_kev * KEV
+        Ep = Ep_kev * KEV
+
+        ref = quad_eng.sigma_E(E, Ep, xi, tau, 1.0)
+        ref_val = ref.value
+
+        rel_errors = []
+        values = []
+        for nm in n_max_values:
+            eng = ComptonKernelSeries(method=SeriesMethod.PowerSeries, eps_rel=1e-15, n_min=nm+1, n_max=nm)
+            r = eng.sigma_E(E, Ep, xi, tau, 1.0)
+            values.append(r.value)
+            if abs(ref_val) > 1e-300:
+                rel_errors.append(abs(r.value - ref_val) / abs(ref_val))
+            else:
+                rel_errors.append(0.0)
+
+        conv_eng = ComptonKernelSeries(method=SeriesMethod.PowerSeries)
+        conv_r = conv_eng.sigma_E(E, Ep, xi, tau, 1.0)
+        if abs(ref_val) > 1e-300:
+            conv_rel = abs(conv_r.value - ref_val) / abs(ref_val)
+        else:
+            conv_rel = 0.0
+
+        report.append(
+            f"| {ci+1} | {T_kev} | {E_kev} | {Ep_kev} | {xi} | {ref_val:.6e} | "
+            f"{conv_r.value:.6e} | {conv_r.terms_used} | {conv_rel:.2e} |"
+        )
+
+        ax = axes[ci]
+        plot_errs = [max(e, 1e-16) for e in rel_errors]
+        ax.semilogy(n_max_values, plot_errs, '-', color='steelblue', linewidth=1.5)
+        if conv_r.converged:
+            ax.axvline(conv_r.terms_used, color='red', linestyle='--', alpha=0.7,
+                       label=f'Converged at n={conv_r.terms_used}')
+        ax.set_xlabel("n_max (terms)")
+        ax.set_ylabel("Rel error vs quadrature")
+        ax.set_title(f"T={T_kev}, E={E_kev}, E'={Ep_kev}, ξ={xi}", fontsize=9)
+        ax.grid(True, alpha=0.3)
+        ax.set_ylim(bottom=1e-16, top=1e2)
+        ax.legend(fontsize=7)
+
+    fig.suptitle("Power Series: Convergence vs Number of Terms", fontsize=14)
+    fig.tight_layout()
+    plot_name = "power_series_convergence.png"
+    fig.savefig(os.path.join(FIGS_DIR, plot_name), dpi=150)
+    plt.close(fig)
+
+    report.append(f"\n![Power Series Convergence](figs/{plot_name})\n")
+    report.append("")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Section 7: Asymptotic series convergence and optimal truncation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+ASYMPTOTIC_SERIES_CASES = [
+    # (T_kev, E_kev, Ep_kev, xi) — cases where asymptotic series is the preferred method
+    (0.1,   1.0,  1.01,  0.0),
+    (1.0,   1.0,  1.01,  0.0),
+    (0.5,   5.0,  5.5,   0.0),
+    (0.1,   1.0,  0.99, -0.5),
+    (2.0,  10.0, 10.5,   0.0),
+    (5.0,  10.0, 10.5,   0.3),
+]
+
+
+def section_asymptotic_series_convergence(report):
+    report.append("## 7. Asymptotic Series Convergence and Optimal Truncation\n")
+    report.append("The asymptotic series is non-convergent: terms first decrease, reach a minimum,")
+    report.append("then diverge. The optimal truncation is at the smallest term.")
+    report.append("Top panels show the relative error of the partial sum vs quadrature reference.")
+    report.append("Bottom panels show the term magnitude at each order, revealing the U-shape.\n")
+
+    quad_eng = ComptonKernelQuadrature(NL=256, form=QuadratureForm.PreIBP)
+    n_max_values = list(range(1, 61))
+
+    fig, axes = plt.subplots(2, len(ASYMPTOTIC_SERIES_CASES),
+                             figsize=(4 * len(ASYMPTOTIC_SERIES_CASES), 8))
+
+    report.append("| Case | T [keV] | E [keV] | E' [keV] | xi | τ·α_max | Quad ref | Series (converged) | Optimal n | Rel err vs quad |")
+    report.append("|---|---|---|---|---|---|---|---|---|---|")
+
+    for ci, (T_kev, E_kev, Ep_kev, xi) in enumerate(ASYMPTOTIC_SERIES_CASES):
+        tau = T_kev * KEV / ME_C2
+        E = E_kev * KEV
+        Ep = Ep_kev * KEV
+
+        ref = quad_eng.sigma_E(E, Ep, xi, tau, 1.0)
+        ref_val = ref.value
+
+        rel_errors = []
+        term_mags = []
+        for nm in n_max_values:
+            eng = ComptonKernelSeries(method=SeriesMethod.Asymptotic, eps_rel=1e-15, n_min=nm+1, n_max=nm)
+            r = eng.sigma_E(E, Ep, xi, tau, 1.0)
+            if abs(ref_val) > 1e-300:
+                rel_errors.append(abs(r.value - ref_val) / abs(ref_val))
+            else:
+                rel_errors.append(0.0)
+            term_mags.append(r.estimated_abs_error)
+
+        conv_eng = ComptonKernelSeries(method=SeriesMethod.Asymptotic)
+        conv_r = conv_eng.sigma_E(E, Ep, xi, tau, 1.0)
+        if abs(ref_val) > 1e-300:
+            conv_rel = abs(conv_r.value - ref_val) / abs(ref_val)
+        else:
+            conv_rel = 0.0
+
+        gamma = E / ME_C2
+        gamma_p = Ep / ME_C2
+        a = 1.0 - xi
+        dg = gamma_p - gamma
+        q2 = dg**2 + 2*gamma*gamma_p*a
+        delta = np.sqrt((1 + gamma*gamma_p*a/2) * (1 + dg**2/(2*gamma*gamma_p*a)))
+        lp = dg/2 + delta
+        rho_p = lp + gamma
+        rho_m = lp - gamma_p
+        omega2 = (1 + xi) / a
+        alpha_p = 1.0 / np.sqrt(rho_p**2 + omega2)
+        alpha_m = 1.0 / np.sqrt(rho_m**2 + omega2)
+        tau_alpha_max = tau * max(alpha_p, alpha_m)
+
+        report.append(
+            f"| {ci+1} | {T_kev} | {E_kev} | {Ep_kev} | {xi} | {tau_alpha_max:.4f} | "
+            f"{ref_val:.6e} | {conv_r.value:.6e} | {conv_r.terms_used} | {conv_rel:.2e} |"
+        )
+
+        ax_err = axes[0, ci]
+        plot_errs = [max(e, 1e-16) for e in rel_errors]
+        ax_err.semilogy(n_max_values, plot_errs, '-', color='coral', linewidth=1.5)
+        if conv_r.converged:
+            ax_err.axvline(conv_r.terms_used, color='green', linestyle='--', alpha=0.7,
+                           label=f'Truncated at n={conv_r.terms_used}')
+        best_n = n_max_values[np.argmin(rel_errors)]
+        ax_err.axvline(best_n, color='blue', linestyle=':', alpha=0.5,
+                       label=f'Best n={best_n}')
+        ax_err.set_ylabel("Rel error vs quadrature")
+        ax_err.set_title(f"T={T_kev}, E={E_kev}, E'={Ep_kev}\nξ={xi}, τα={tau_alpha_max:.3f}",
+                         fontsize=8)
+        ax_err.grid(True, alpha=0.3)
+        ax_err.set_ylim(bottom=1e-16, top=1e2)
+        ax_err.legend(fontsize=6)
+
+        ax_term = axes[1, ci]
+        plot_terms = [max(t, 1e-300) for t in term_mags]
+        ax_term.semilogy(n_max_values, plot_terms, '-', color='darkorange', linewidth=1.5)
+        if conv_r.converged:
+            ax_term.axvline(conv_r.terms_used, color='green', linestyle='--', alpha=0.7)
+        ax_term.set_xlabel("n_max (terms)")
+        ax_term.set_ylabel("| σ₀ × smallest term |")
+        ax_term.set_title("Term magnitude", fontsize=9)
+        ax_term.grid(True, alpha=0.3)
+
+    fig.suptitle("Asymptotic Series: Convergence, Divergence, and Optimal Truncation", fontsize=13)
+    fig.tight_layout()
+    plot_name = "asymptotic_series_convergence.png"
+    fig.savefig(os.path.join(FIGS_DIR, plot_name), dpi=150)
+    plt.close(fig)
+
+    report.append(f"\n![Asymptotic Series Convergence](figs/{plot_name})\n")
+    report.append("")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -473,35 +672,45 @@ def main():
     report.append("# Convergence and Tolerance Analysis Report\n")
     report.append(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
     report.append("This report quantifies the numerical accuracy of the Compton kernel")
-    report.append("quadrature across parameter regimes, covering both the internal")
-    report.append("Gauss-Laguerre convergence and the external scipy integration.\n")
+    report.append("across parameter regimes, covering the Gauss-Laguerre quadrature")
+    report.append("convergence, external scipy integration, and series term convergence.\n")
     report.append("---\n")
 
     print("Running convergence analysis...")
 
-    print("  [1/5] Quadrature order convergence...")
+    print("  [1/7] Quadrature order convergence...")
     t0 = time.time()
     section_quadrature_order_convergence(report)
     print(f"        Done ({time.time()-t0:.1f}s)")
 
-    print("  [2/5] Scipy tolerance sensitivity...")
+    print("  [2/7] Scipy tolerance sensitivity...")
     t0 = time.time()
     section_scipy_tolerance_sensitivity(report)
     print(f"        Done ({time.time()-t0:.1f}s)")
 
-    print("  [3/5] Post-IBP vs Pre-IBP agreement...")
+    print("  [3/7] Post-IBP vs Pre-IBP agreement...")
     t0 = time.time()
     section_post_vs_pre_ibp(report)
     print(f"        Done ({time.time()-t0:.1f}s)")
 
-    print("  [4/5] Pointwise error estimates...")
+    print("  [4/7] Pointwise error estimates...")
     t0 = time.time()
     section_pointwise_error_estimates(report)
     print(f"        Done ({time.time()-t0:.1f}s)")
 
-    print("  [5/5] Performance benchmarks...")
+    print("  [5/7] Performance benchmarks...")
     t0 = time.time()
     section_timing(report)
+    print(f"        Done ({time.time()-t0:.1f}s)")
+
+    print("  [6/7] Power series convergence...")
+    t0 = time.time()
+    section_power_series_convergence(report)
+    print(f"        Done ({time.time()-t0:.1f}s)")
+
+    print("  [7/7] Asymptotic series convergence...")
+    t0 = time.time()
+    section_asymptotic_series_convergence(report)
     print(f"        Done ({time.time()-t0:.1f}s)")
 
     outpath = os.path.join(GEN_DIR, "convergence_analysis.md")
