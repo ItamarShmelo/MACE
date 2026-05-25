@@ -12,8 +12,8 @@ include_directories(${Boost_INCLUDE_DIRS})
 include_directories(src)
 
 pybind11_add_module(_compton_kernel_quadrature
-    src/compton_kernel_quadrature.cpp
-    src/bind/_compton_kernel_quadrature.cpp
+    src/compton_kernel_quadrature/compton_kernel_quadrature.cpp
+    src/compton_kernel_quadrature/bind/_compton_kernel_quadrature.cpp
 )
 target_compile_options(_compton_kernel_quadrature PRIVATE
     -O3 -Wall -Wextra -Wpedantic

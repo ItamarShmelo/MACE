@@ -88,6 +88,31 @@ def get_quad_matrix(T_kev, eb_erg, angular_norm_mode="moment0"):
     return S_quad
 
 
+def _assert_matrix_agreement(S_mc, S_quad, num_groups, rtol=0.5,
+                              skip_small_frac=1e-3, label=""):
+    """Compare two S-matrices element-wise with tolerance."""
+    for g in range(num_groups):
+        for gp in range(num_groups):
+            mc_val = S_mc[g, gp]
+            quad_val = S_quad[g, gp]
+
+            if abs(mc_val) < 1e-30 and abs(quad_val) < 1e-30:
+                continue
+
+            diag_scale = max(S_mc[g, g], S_quad[g, g])
+            if max(abs(mc_val), abs(quad_val)) < skip_small_frac * diag_scale:
+                continue
+
+            scale = max(abs(mc_val), abs(quad_val))
+            rel_diff = abs(mc_val - quad_val) / scale
+
+            assert rel_diff < rtol, (
+                f"{label}MC comparison failed at g={g}, gp={gp}: "
+                f"mc={mc_val:.4e}, quad={quad_val:.4e}, "
+                f"rel_diff={rel_diff:.4f}"
+            )
+
+
 @pytest.mark.slow
 class TestVsMonteCarlo:
     """Compare quadrature S-matrix against CMMC Monte Carlo results."""
@@ -182,3 +207,65 @@ class TestVsMonteCarlo:
                 f"mc={mc_val:.4e}, quad={quad_val:.4e}, "
                 f"rel_diff={rel_diff:.4f}"
             )
+
+    def test_pomraning_1kev_low(self):
+        """Pomraning T=1 keV, low-energy incoming photons."""
+        T_kev = 1.0
+        eb_kev = np.array([0.5, 2.0, 5.0, 10.0, 20.0, 40.0, 60.0, 75.0])
+        eb_erg = eb_kev * KEV
+
+        S_mc = get_cmmc_matrix(T_kev, eb_erg, num_samples=1000000)
+        S_quad = get_quad_matrix(T_kev, eb_erg, "moment0")
+
+        num_groups = len(eb_kev) - 1
+        _assert_matrix_agreement(S_mc, S_quad, num_groups, rtol=0.7,
+                                  skip_small_frac=0.1,
+                                  label="Pomraning 1keV low: ")
+
+    def test_pomraning_1kev_high(self):
+        """Pomraning T=1 keV, high-energy incoming photons.
+
+        At T=1 keV the scattering kernel is very narrow, so off-diagonal
+        bins in this coarse grid are dominated by MC noise.  We use a
+        generous skip threshold to test only the dynamically significant
+        matrix elements.
+        """
+        T_kev = 1.0
+        eb_kev = np.array([10.0, 40.0, 80.0, 120.0, 200.0, 300.0, 340.0])
+        eb_erg = eb_kev * KEV
+
+        S_mc = get_cmmc_matrix(T_kev, eb_erg, num_samples=1000000)
+        S_quad = get_quad_matrix(T_kev, eb_erg, "moment0")
+
+        num_groups = len(eb_kev) - 1
+        _assert_matrix_agreement(S_mc, S_quad, num_groups, rtol=0.7,
+                                  skip_small_frac=0.25,
+                                  label="Pomraning 1keV high: ")
+
+    def test_pomraning_20kev_low(self):
+        """Pomraning T=20 keV, low-energy incoming photons."""
+        T_kev = 20.0
+        eb_kev = np.array([1.0, 5.0, 10.0, 20.0, 40.0, 60.0, 100.0, 140.0])
+        eb_erg = eb_kev * KEV
+
+        S_mc = get_cmmc_matrix(T_kev, eb_erg, num_samples=1000000)
+        S_quad = get_quad_matrix(T_kev, eb_erg, "moment0")
+
+        num_groups = len(eb_kev) - 1
+        _assert_matrix_agreement(S_mc, S_quad, num_groups, rtol=0.7,
+                                  skip_small_frac=0.1,
+                                  label="Pomraning 20keV low: ")
+
+    def test_pomraning_20kev_high(self):
+        """Pomraning T=20 keV, high-energy incoming photons."""
+        T_kev = 20.0
+        eb_kev = np.array([10.0, 40.0, 80.0, 120.0, 200.0, 300.0, 440.0])
+        eb_erg = eb_kev * KEV
+
+        S_mc = get_cmmc_matrix(T_kev, eb_erg, num_samples=1000000)
+        S_quad = get_quad_matrix(T_kev, eb_erg, "moment0")
+
+        num_groups = len(eb_kev) - 1
+        _assert_matrix_agreement(S_mc, S_quad, num_groups, rtol=0.7,
+                                  skip_small_frac=0.1,
+                                  label="Pomraning 20keV high: ")

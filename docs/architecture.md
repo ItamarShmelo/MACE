@@ -5,11 +5,16 @@
 ```
 compton_cross_section/
 ├── src/
-│   ├── compton_kernel_quadrature.hpp   # Public API: classes, structs, enums
-│   ├── compton_kernel_quadrature.cpp   # Implementation of the Compton kernel
-│   ├── gauss_laguerre.hpp              # Custom Gauss-Laguerre quadrature (header-only)
-│   └── bind/
-│       └── _compton_kernel_quadrature.cpp  # pybind11 bindings
+│   ├── compton_kernel_quadrature/          # C++ kernel implementation
+│   │   ├── compton_kernel_quadrature.hpp   # Public API: classes, structs, enums
+│   │   ├── compton_kernel_quadrature.cpp   # Implementation of the Compton kernel
+│   │   ├── gauss_laguerre.hpp              # Custom Gauss-Laguerre quadrature (header-only)
+│   │   └── bind/
+│   │       └── _compton_kernel_quadrature.cpp  # pybind11 bindings
+│   └── python/
+│       └── pycompton/                      # Pure Python reimplementation
+│           ├── __init__.py
+│           └── compton_kernel_quadrature.py
 ├── cpp_modules/                        # Build output (shared libraries)
 │   └── _compton_kernel_quadrature.cpython-*.so
 ├── external/
@@ -21,16 +26,27 @@ compton_cross_section/
 │       └── cpp_modules/                # CMMC build output
 ├── tests/
 │   ├── conftest.py                     # pytest --run-slow flag
-│   ├── test_deterministic.py           # Fast unit tests
-│   ├── test_vs_mc.py                   # Slow MC comparison tests
+│   ├── test_deterministic.py           # Fast unit tests (+ GL nodes vs scipy)
+│   ├── test_python_vs_cpp.py           # Python vs C++ pointwise comparison
+│   ├── test_vs_mc.py                   # Slow MC comparison tests (+ Pomraning)
 │   ├── plot_comparison.py              # Generate comparison plots
 │   └── output/                         # Plot outputs (PNG, PDF)
+├── scripts/
+│   └── benchmark_python_cpp_mc.py      # Timing + accuracy benchmark
+├── reports/
+│   ├── convergence_analysis.py         # Convergence report generator (with plots)
+│   ├── python_cpp_comparison.py        # Python vs C++ report generator (with plots)
+│   └── generated/                      # Generated reports and plots (gitignored)
 ├── docs/
 │   ├── quadrature.md                   # Main documentation
-│   ├── gauss_laguerre.md              # Quadrature algorithm details
+│   ├── gauss_laguerre.md               # Quadrature algorithm details
 │   ├── numerical_stability.md          # Stability techniques
-│   ├── cmmc_comparison.md             # CMMC comparison and artifacts
-│   └── architecture.md                # This file
+│   ├── edge_cases.md                   # Failure modes and safe operating envelope
+│   ├── final_equations.md              # Step-by-step equations matching code
+│   ├── cmmc_comparison.md              # CMMC comparison and artifacts
+│   ├── python_implementation.md        # Pure Python pycompton package
+│   ├── reports.md                      # Report generation scripts
+│   └── architecture.md                 # This file
 ├── CMakeLists.txt                      # Build configuration
 └── build/                              # CMake build directory
 ```
@@ -64,7 +80,9 @@ _compton_kernel_quadrature.so  (Python module)
 
 ## Source Files
 
-### `src/compton_kernel_quadrature.hpp`
+### C++ Kernel (`src/compton_kernel_quadrature/`)
+
+#### `compton_kernel_quadrature.hpp`
 
 **Role:** Public interface.
 
@@ -78,7 +96,7 @@ Declares:
 
 No implementation details are exposed.  The header depends only on `<cmath>`, `<numbers>`, `<stdexcept>`, and `units/units.hpp` (for physical constants).
 
-### `src/compton_kernel_quadrature.cpp`
+#### `compton_kernel_quadrature.cpp`
 
 **Role:** Core physics and numerics.
 
@@ -91,7 +109,7 @@ Contains all the heavy computation:
 - Static rule cache (`get_rule`)
 - Gauss-Laguerre integration helper template
 
-### `src/gauss_laguerre.hpp`
+#### `gauss_laguerre.hpp`
 
 **Role:** Header-only quadrature rule generation.
 
@@ -102,7 +120,7 @@ Self-contained implementation of:
 
 No external dependencies beyond the standard library.
 
-### `src/bind/_compton_kernel_quadrature.cpp`
+#### `bind/_compton_kernel_quadrature.cpp`
 
 **Role:** Python ↔ C++ bridge via pybind11.
 
@@ -111,8 +129,21 @@ Exposes:
 - `SigmaResult` struct → Python object with readonly attributes
 - `ComptonKernelQuadrature` class → Python class with `sigma_E` and `sigma_E_vec`
 - `scaled_K2` → standalone Python function
+- `gauss_laguerre_rule(N)` → returns (nodes, weights) tuple for testing
 
 The vectorized `sigma_E_vec` loops in C++ over an input NumPy array, avoiding per-element Python overhead.  GIL is held (no threading benefit) for simplicity.
+
+### Pure Python (`src/python/pycompton/`)
+
+#### `compton_kernel_quadrature.py`
+
+**Role:** Complete reimplementation of the C++ kernel using only numpy and scipy.
+
+Provides two integration modes:
+- **Fixed Gauss-Laguerre** (`method="fixed"`): uses `scipy.special.roots_laguerre` for direct comparison with C++
+- **Adaptive quadrature** (`method="adaptive"`): uses `scipy.integrate.quad` with explicit e^{-x} weight as a diagnostic cross-check
+
+See [Python Implementation](python_implementation.md) for details.
 
 ---
 
@@ -156,18 +187,34 @@ Run in < 5 seconds.  No randomness, no external dependencies beyond the C++ modu
 | `TestNLConvergence` | NL=128 and NL=256 agree to 5×10⁻⁶ |
 | `TestPostVsPreIBP` | Both forms agree (relaxed tolerance for small τ) |
 | `TestAngularNormalization` | Total cross section ~ σ_Thomson for low-energy photons |
+| `TestGaussLaguerreVsScipy` | C++ GL nodes/weights match scipy to rtol=1e-11 |
 
-### Layer 2: Slow MC Comparison Tests (`test_vs_mc.py`)
+### Layer 2: Python vs C++ Tests (`test_python_vs_cpp.py`)
+
+Pointwise correctness comparison between the pure Python and C++ implementations.
+
+| Test | What it verifies |
+|------|------------------|
+| `TestFixedRuleAgreement` | Python fixed-GL matches C++ for post/pre-IBP at NL=64,128,256 |
+| `TestFixedRuleAgreement.test_error_estimates` | Richardson error estimates agree in order of magnitude |
+| `TestAdaptiveDiagnostic` | Python adaptive quad agrees with C++ within 1e-4 |
+
+### Layer 3: Slow MC Comparison Tests (`test_vs_mc.py`)
 
 Run with `--run-slow`.  Compare multigroup S-matrices against CMMC.
 
 - T = 100 keV: off-diagonal elements, wide bins
 - T = 20 keV: neighboring groups, wide bins
 - T = 1 keV: diagonal elements only (exponentially suppressed off-diagonal)
+- Pomraning cases: T=1 keV (low/high) and T=20 keV (low/high) with coarse bins
 
-### Layer 3: Comparison Plots (`plot_comparison.py`)
+### Layer 4: Comparison Plots (`plot_comparison.py`)
 
 Visual validation.  Generates σ(E') vs E' for multiple incident energies at each temperature.
+
+### Layer 5: Reports (`reports/`)
+
+Report-generating scripts that produce markdown documents with embedded plots.  See [Reports](reports.md) for details.
 
 ---
 

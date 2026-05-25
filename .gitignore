@@ -5,7 +5,7 @@
 *.synctex.gz
 
 build/
-reports/
+reports/generated/
 tests/output/
 **__pycache__**
 references/

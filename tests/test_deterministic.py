@@ -9,7 +9,8 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'cpp_modules'))
 from _compton_kernel_quadrature import (
-    ComptonKernelQuadrature, QuadratureForm, SigmaResult, scaled_K2
+    ComptonKernelQuadrature, QuadratureForm, SigmaResult, scaled_K2,
+    gauss_laguerre_rule,
 )
 
 ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2  # erg
@@ -263,3 +264,23 @@ class TestAngularNormalization:
             f"Total cross section {total_sigma} is not within "
             f"order-of-magnitude of sigma_T={SIGMA_T}, ratio={ratio}"
         )
+
+
+class TestGaussLaguerreVsScipy:
+    """Compare C++ Gauss-Laguerre nodes/weights against scipy."""
+
+    def test_nodes_and_weights(self):
+        from scipy.special import roots_laguerre
+
+        for NL in [32, 64, 128, 256]:
+            cpp_nodes, cpp_weights = gauss_laguerre_rule(NL)
+            scipy_nodes, scipy_weights = roots_laguerre(NL)
+
+            np.testing.assert_allclose(
+                cpp_nodes, scipy_nodes, rtol=1e-11,
+                err_msg=f"Nodes differ at NL={NL}"
+            )
+            np.testing.assert_allclose(
+                cpp_weights, scipy_weights, rtol=1e-11,
+                err_msg=f"Weights differ at NL={NL}"
+            )

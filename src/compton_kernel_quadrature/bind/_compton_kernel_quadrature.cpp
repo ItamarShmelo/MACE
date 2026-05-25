@@ -1,7 +1,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 
-#include "compton_kernel_quadrature.hpp"
+#include "compton_kernel_quadrature/compton_kernel_quadrature.hpp"
+#include "compton_kernel_quadrature/gauss_laguerre.hpp"
 
 namespace py = pybind11;
 using namespace compton;
@@ -48,4 +49,21 @@ PYBIND11_MODULE(_compton_kernel_quadrature, m) {
 
     m.def("scaled_K2", &scaled_K2, py::arg("x"),
           "Returns kve(2, x) = exp(x) * K_2(x)");
+
+    m.def("gauss_laguerre_rule", [](int N) {
+        auto rule = compton::compute_gauss_laguerre(N);
+
+        py::array_t<double> nodes(rule.nodes.size());
+        py::array_t<double> weights(rule.weights.size());
+
+        auto nodes_buf = nodes.mutable_unchecked<1>();
+        auto weights_buf = weights.mutable_unchecked<1>();
+
+        for (py::ssize_t i = 0; i < static_cast<py::ssize_t>(rule.nodes.size()); ++i) {
+            nodes_buf(i) = rule.nodes[i];
+            weights_buf(i) = rule.weights[i];
+        }
+
+        return py::make_tuple(nodes, weights);
+    }, py::arg("N"), "Compute N-point Gauss-Laguerre nodes and weights");
 }
