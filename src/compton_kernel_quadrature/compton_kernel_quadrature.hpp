@@ -66,9 +66,6 @@
 
 namespace compton {
 
-/// Classical electron radius squared: r_e² = σ_T / (8π/3)
-static constexpr double r_e2 = units::sigma_thomson / (8.0 * std::numbers::pi / 3.0);
-
 /**
  * @brief Scaled modified Bessel function: K̃₂(x) = exp(x) · K₂(x).
  *

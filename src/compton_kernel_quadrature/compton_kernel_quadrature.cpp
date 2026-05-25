@@ -220,7 +220,7 @@ KershawParams ComptonKernelQuadrature::compute_params(
 double ComptonKernelQuadrature::stable_sigma0_E(
     double E, double tau, double lambda_plus, double Ne) const
 {
-    return Ne * r_e2 * units::me_c2
+    return Ne * units::r_e2 * units::me_c2
            / (4.0 * E * E * tau)
            * std::exp(-(lambda_plus - 1.0) / tau)
            / scaled_K2(1.0 / tau);
