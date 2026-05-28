@@ -19,6 +19,11 @@ compton_cross_section/
 │   │   ├── compton_kernel_series.cpp       # Power series + asymptotic series
 │   │   └── bind/
 │   │       └── _compton_kernel_series.cpp  # pybind11 bindings
+│   ├── compton_kernel_solver/              # Robust adaptive solver
+│   │   ├── compton_kernel_solver.hpp       # SolverMethod, SolverResult, ComptonKernelSolver
+│   │   ├── compton_kernel_solver.cpp       # Cascade logic: asymptotic → power → quadrature
+│   │   └── bind/
+│   │       └── _compton_kernel_solver.cpp  # pybind11 bindings
 │   └── python/
 │       └── pycompton/                      # Pure Python reimplementation
 │           ├── __init__.py
@@ -26,7 +31,8 @@ compton_cross_section/
 │           └── compton_kernel_series.py
 ├── cpp_modules/                        # Build output (shared libraries)
 │   ├── _compton_kernel_quadrature.cpython-*.so
-│   └── _compton_kernel_series.cpython-*.so
+│   ├── _compton_kernel_series.cpython-*.so
+│   └── _compton_kernel_solver.cpython-*.so
 ├── external/
 │   └── CMMC/                           # Reference Monte Carlo implementation
 │       ├── src/
@@ -49,6 +55,7 @@ compton_cross_section/
 │   ├── convergence_analysis.py         # Convergence report generator (with plots)
 │   ├── python_cpp_comparison.py        # Python vs C++ report generator (with plots)
 │   ├── series_validation.py            # Series validation report (with plots)
+│   ├── solver_validation.py            # Solver validation report (with plots)
 │   └── generated/                      # Generated reports and plots (gitignored)
 ├── docs/
 │   ├── quadrature.md                   # Main documentation
@@ -59,6 +66,7 @@ compton_cross_section/
 │   ├── cmmc_comparison.md              # CMMC comparison and artifacts
 │   ├── python_implementation.md        # Pure Python pycompton package
 │   ├── series.md                       # Series methods documentation
+│   ├── solver.md                       # Robust solver documentation
 │   ├── reports.md                      # Report generation scripts
 │   └── architecture.md                 # This file
 ├── CMakeLists.txt                      # Build configuration
@@ -91,6 +99,19 @@ bind/_compton_kernel_quadrature  bind/_compton_kernel_series
        │                                │
        ▼                                ▼
 _compton_kernel_quadrature.so    _compton_kernel_series.so
+
+       ├────────────────────────────────┤
+       ▼                                ▼
+       compton_kernel_solver.hpp ────────┘
+                │
+                ▼
+       compton_kernel_solver.cpp (cascade logic)
+                │
+                ▼
+       bind/_compton_kernel_solver.cpp
+                │
+                ▼
+       _compton_kernel_solver.so
 ```
 
 ---
@@ -182,6 +203,35 @@ Exposes:
 
 The vectorized `sigma_E_vec` loops in C++ over an input NumPy array, avoiding per-element Python overhead.  GIL is held (no threading benefit) for simplicity.
 
+### Robust Solver (`src/compton_kernel_solver/`)
+
+#### `compton_kernel_solver.hpp`
+
+**Role:** Public interface for the adaptive solver.
+
+Declares:
+- `SolverMethod` — enum: Asymptotic, PowerSeries, Quadrature
+- `SolverResult` — struct with value, error estimates, method_used, target_met, diagnostics
+- `ComptonKernelSolver` — main class with cascade evaluation logic
+
+#### `compton_kernel_solver.cpp`
+
+**Role:** Cascade method selection for robust kernel evaluation.
+
+The solver tries methods in order of preference (asymptotic first for low tau_alpha_max,
+then power series, then asymptotic as fallback for cancellation cases, then quadrature).
+Each attempt is locally validated via estimated_rel_error before acceptance. Includes
+non-negative clamping, negligibility detection, and diagnostic reporting.
+
+See [Solver Documentation](solver.md) for full algorithmic details.
+
+#### `bind/_compton_kernel_solver.cpp`
+
+**Role:** Python bindings for the solver via pybind11.
+
+Exposes `ComptonKernelSolver` class with scalar `sigma_E` and vectorized `sigma_E_vec`,
+plus `SolverResult` and `SolverMethod` types.
+
 ### Pure Python (`src/python/pycompton/`)
 
 #### `compton_kernel_quadrature.py`
@@ -214,8 +264,9 @@ See [Series Methods](series.md) for algorithmic details.
 - Requires CMake ≥ 3.22 and a C++20 compiler
 - Finds Boost (header-only) and pybind11 via `find_package`
 - Includes `external/CMMC/src` (for `units/units.hpp`)
-- Produces two shared library targets: `_compton_kernel_quadrature` and `_compton_kernel_series`
-- Both link against `compton_common.cpp` (compiled into each module)
+- Produces three shared library targets: `_compton_kernel_quadrature`, `_compton_kernel_series`, and `_compton_kernel_solver`
+- Each links against `compton_common.cpp` (compiled into each module)
+- The solver module links both series and quadrature source files
 - Output goes to `cpp_modules/` for direct Python import
 - Compiler flags: `-O3 -Wall -Wextra -Wpedantic`
 
@@ -286,6 +337,20 @@ C++ series validation, including cross-module and cross-language comparisons.
 | `TestPositivity` | Non-negativity for C++ series |
 | `TestConvergenceFlags` | Convergence flags are consistent with method selection |
 
+### Layer 2d: Solver Tests (`test_solver.py`)
+
+Validates the adaptive solver's cascade logic, accuracy, and edge-case handling.
+
+| Test | What it verifies |
+|------|------------------|
+| `TestDomainValidation` | Exceptions for invalid inputs (E<=0, tau<=0, xi=+-1) |
+| `TestMethodSelection` | Correct dispatch (low tau → asymptotic, high tau → power/quad) |
+| `TestAccuracy` | Solver vs Q256 agreement; target_met semantics |
+| `TestEdgeCases` | xi near +-1, near-elastic, sigma0 underflow, high tau |
+| `TestOutOfDomain` | Beyond calibration grid: still works, reports honestly |
+| `TestPhysicalConsistency` | Non-negativity; Q256/Q128 convergence cross-check |
+| `TestVectorized` | sigma_E_vec matches scalar sigma_E |
+
 ### Layer 3: Slow MC Comparison Tests (`test_vs_mc.py`)
 
 Run with `--run-slow`.  Compare multigroup S-matrices against CMMC.
@@ -323,3 +388,6 @@ Report-generating scripts that produce markdown documents with embedded plots.  
 | Python-first validation | Series formulas validated in Python (scipy) before C++ port, catching formula bugs early |
 | Series-or-fail Auto | Auto mode returns `converged = false` rather than silently falling back to quadrature, keeping module boundaries clean |
 | Smallest-term truncation | Standard optimal truncation for asymptotic (non-convergent) series, with two-consecutive-increase safeguard |
+| Solver cascade with local validation | Dispatch threshold decides what to try first (performance); validity threshold decides acceptance (correctness). Two distinct concepts documented separately. |
+| Conditioning-aware power series error | Error = max(truncation, conditioning * eps * safety_factor). Prevents accepting results with hidden cancellation-driven inaccuracy. |
+| Honest quadrature error reporting | Solver does not claim 1e-8 if quadrature fallback cannot achieve it; `target_met` flag exposes this to callers. |

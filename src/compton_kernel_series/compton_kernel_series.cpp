@@ -141,8 +141,14 @@ SeriesResult ComptonKernelSeries::power_series(
     const bool converged = terms_used <= n_max_;
     const double normalized_ratio = p.Psi + P_plus - P_minus;
     const double value = sigma0 * normalized_ratio;
-    const double abs_error = std::abs(sigma0) * last_term_mag;
-    const double rel_error = abs_error / (std::abs(value) + eps_tiny);
+
+    const double sum_abs = std::abs(P_plus) + std::abs(P_minus) + std::abs(p.Psi);
+    const double norm_abs = std::abs(normalized_ratio) + eps_tiny;
+    const double conditioning = sum_abs / norm_abs;
+    const double cond_error = 10.0 * conditioning * 2.2e-16;
+    const double trunc_error = last_term_mag / norm_abs;
+    const double rel_error = std::max(trunc_error, cond_error);
+    const double abs_error = std::abs(sigma0) * rel_error * norm_abs;
 
     return SeriesResult{value, abs_error, rel_error, terms_used,
                         SeriesMethod::PowerSeries, converged};
@@ -231,8 +237,8 @@ SeriesResult ComptonKernelSeries::asymptotic_series(
             best_terms = terms_used;
         }
 
-        const double S_n = std::abs(S_plus) + std::abs(S_minus);
-        if (n >= n_min_ && term_mag / (S_n + 1e-300) < eps_rel_) {
+        const double norm_so_far = std::abs(base_term + S_plus + S_minus);
+        if (n >= n_min_ && term_mag / (norm_so_far + 1e-300) < eps_rel_) {
             const double normalized = base_term + S_plus + S_minus;
             const double value = sigma0 * normalized;
             const double abs_error = std::abs(sigma0) * term_mag;

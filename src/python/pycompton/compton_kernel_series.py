@@ -162,7 +162,17 @@ def _power_series_normalized(p: KershawParams, gamma: float, gamma_p: float,
 
     converged = terms_used <= n_max
     normalized_ratio = p.Psi + P_plus - P_minus
-    return normalized_ratio, last_term_mag, terms_used, converged
+
+    eps_tiny = 1e-300
+    norm_abs = abs(normalized_ratio) + eps_tiny
+    sum_abs = abs(P_plus) + abs(P_minus) + abs(p.Psi)
+    conditioning = sum_abs / norm_abs
+    cond_error = 10.0 * conditioning * 2.2e-16
+    trunc_error = last_term_mag / norm_abs
+    rel_error = max(trunc_error, cond_error)
+    norm_err = rel_error * norm_abs
+
+    return normalized_ratio, norm_err, terms_used, converged
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -255,8 +265,8 @@ def _asymptotic_series_normalized(p: KershawParams, gamma: float, gamma_p: float
             best_S_minus = S_minus
             best_terms = terms_used
 
-        S_n = abs(S_plus) + abs(S_minus)
-        if n >= n_min and term_mag / (S_n + 1e-300) < eps_rel:
+        norm_so_far = abs(base_term + S_plus + S_minus)
+        if n >= n_min and term_mag / (norm_so_far + 1e-300) < eps_rel:
             normalized = base_term + S_plus + S_minus
             return normalized, term_mag, terms_used, True
 
