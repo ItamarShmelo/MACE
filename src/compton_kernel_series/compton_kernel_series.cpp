@@ -9,7 +9,6 @@
 #include "compton_kernel_series.hpp"
 
 #include <boost/math/special_functions/expint.hpp>
-#include <boost/math/special_functions/legendre.hpp>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -60,6 +59,9 @@ ComptonKernelSeries::ComptonKernelSeries(
 
 static constexpr double POISSON_Y_MAX = 500.0;
 
+// rel_tol / eps_machine / safety_factor = 1e-13 / 1e-16 / 10
+static constexpr double EHAT_AMPLIFICATION_BUDGET = 1e2;
+
 SeriesResult ComptonKernelSeries::power_series(
     const KershawParams& p, double /*gamma*/, double /*gamma_p*/,
     double tau, double sigma0) const
@@ -91,15 +93,17 @@ SeriesResult ComptonKernelSeries::power_series(
     double last_term_mag = 0.0;
     int terms_used = 0;
 
+    double ehat_plus_curr = ehat_expn(1, x_plus);
+    double ehat_minus_curr = ehat_expn(1, x_minus);
+    double amp_plus = 1.0;
+    double amp_minus = 1.0;
+
     for (int n = 0; n <= n_max_; ++n) {
         const double coeff_plus = p.A_plus + 2.0 * n / p.a;
         const double coeff_minus = p.A_minus + 2.0 * n / p.a;
 
-        const double ehat_p = ehat_expn(n + 1, x_plus);
-        const double ehat_m = ehat_expn(n + 1, x_minus);
-
-        const double t_plus = w_plus * coeff_plus * ehat_p;
-        const double t_minus = w_minus * coeff_minus * ehat_m;
+        const double t_plus = w_plus * coeff_plus * ehat_plus_curr;
+        const double t_minus = w_minus * coeff_minus * ehat_minus_curr;
 
         P_plus += t_plus;
         P_minus += t_minus;
@@ -115,6 +119,22 @@ SeriesResult ComptonKernelSeries::power_series(
         if (n < n_max_) {
             w_plus *= y_plus / (n + 1);
             w_minus *= y_minus / (n + 1);
+
+            amp_plus *= x_plus / (n + 1);
+            if (amp_plus < EHAT_AMPLIFICATION_BUDGET) {
+                ehat_plus_curr = (1.0 - x_plus * ehat_plus_curr) / (n + 1);
+            } else {
+                ehat_plus_curr = ehat_expn(n + 2, x_plus);
+                amp_plus = 1.0;
+            }
+
+            amp_minus *= x_minus / (n + 1);
+            if (amp_minus < EHAT_AMPLIFICATION_BUDGET) {
+                ehat_minus_curr = (1.0 - x_minus * ehat_minus_curr) / (n + 1);
+            } else {
+                ehat_minus_curr = ehat_expn(n + 2, x_minus);
+                amp_minus = 1.0;
+            }
         }
     }
 
@@ -139,8 +159,13 @@ SeriesResult ComptonKernelSeries::asymptotic_series(
     const double a = p.a;
     const double a2 = a * a;
 
-    const double zeta_plus = p.rho_plus * p.alpha_plus;
-    const double zeta_minus = p.rho_minus * p.alpha_minus;
+    double zeta_plus = p.rho_plus * p.alpha_plus;
+    double zeta_minus = p.rho_minus * p.alpha_minus;
+
+    if (zeta_plus > 1.0) zeta_plus = 1.0;
+    else if (zeta_plus < -1.0) zeta_plus = -1.0;
+    if (zeta_minus > 1.0) zeta_minus = 1.0;
+    else if (zeta_minus < -1.0) zeta_minus = -1.0;
 
     const double eta_plus = p.alpha_plus * (p.s / a2 + p.rho_plus / a);
     const double eta_minus = p.alpha_minus * (-p.s / a2 + p.rho_minus / a);
@@ -164,6 +189,9 @@ SeriesResult ComptonKernelSeries::asymptotic_series(
     double power_plus = neg_tau_alpha_plus;
     double power_minus = neg_tau_alpha_minus;
 
+    double Pp_prev = 1.0, Pp_curr = zeta_plus;
+    double Pm_prev = 1.0, Pm_curr = zeta_minus;
+
     int terms_used = 0;
 
     for (int n = 0; n <= n_max_; ++n) {
@@ -175,10 +203,10 @@ SeriesResult ComptonKernelSeries::asymptotic_series(
 
         const double factorial_n1 = factorial_n * (n + 1);
 
-        const double Pp_n  = boost::math::legendre_p(n, zeta_plus);
-        const double Pp_n1 = boost::math::legendre_p(n + 1, zeta_plus);
-        const double Pm_n  = boost::math::legendre_p(n, zeta_minus);
-        const double Pm_n1 = boost::math::legendre_p(n + 1, zeta_minus);
+        const double Pp_n  = Pp_prev;
+        const double Pp_n1 = Pp_curr;
+        const double Pm_n  = Pm_prev;
+        const double Pm_n1 = Pm_curr;
 
         const double term_plus = power_plus * (
             (-p.G * factorial_n + factorial_n1 / a) * Pp_n
@@ -231,6 +259,14 @@ SeriesResult ComptonKernelSeries::asymptotic_series(
 
         if (!std::isfinite(factorial_n) || !std::isfinite(term_mag))
             break;
+
+        const double Pp_next = ((2.0*n + 3.0) * zeta_plus * Pp_curr - (n + 1.0) * Pp_prev) / (n + 2.0);
+        Pp_prev = Pp_curr;
+        Pp_curr = Pp_next;
+
+        const double Pm_next = ((2.0*n + 3.0) * zeta_minus * Pm_curr - (n + 1.0) * Pm_prev) / (n + 2.0);
+        Pm_prev = Pm_curr;
+        Pm_curr = Pm_next;
     }
 
     const double normalized = base_term + best_S_plus + best_S_minus;

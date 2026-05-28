@@ -318,7 +318,8 @@ Report-generating scripts that produce markdown documents with embedded plots.  
 | Pre- and post-IBP forms | Cross-validation and regime-appropriate convergence |
 | Richardson error estimate | Cheap (one extra half-order evaluation), practical indicator |
 | compton_common extraction | Shared kinematics avoids duplication between quadrature and series modules |
-| Direct Boost `expint` calls | Per-term `boost::math::expint(n, x)` is simple and correct; forward recurrence deferred as optimization |
+| Stepwise-guarded forward recurrence for ehat_expn | In-loop recurrence `Ê_{m+1} = (1 - x·Ê_m)/m` with per-chain amplification budget (1e2). After fallback, `amp` resets to allow recurrence to resume from fresh seed. Standalone `ehat_expn()` retained for external use and as per-step fallback. |
+| Legendre three-term recurrence | In-loop `P_{n+2} = ((2n+3)·z·P_{n+1} - (n+1)·P_n) / (n+2)` replaces per-term `boost::math::legendre_p` calls. Boost Legendre header removed from series module. |
 | Python-first validation | Series formulas validated in Python (scipy) before C++ port, catching formula bugs early |
 | Series-or-fail Auto | Auto mode returns `converged = false` rather than silently falling back to quadrature, keeping module boundaries clean |
 | Smallest-term truncation | Standard optimal truncation for asymptotic (non-convergent) series, with two-consecutive-increase safeguard |

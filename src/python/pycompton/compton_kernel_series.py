@@ -79,6 +79,9 @@ class SeriesResult:
 
 _POISSON_Y_MAX = 500.0
 
+# rel_tol / eps_machine / safety_factor = 1e-13 / 1e-16 / 10
+EHAT_AMPLIFICATION_BUDGET = 1e2
+
 def _power_series_normalized(p: KershawParams, gamma: float, gamma_p: float,
                               tau: float, eps_rel: float = 1e-12,
                               n_min: int = 4, n_max: int = 200):
@@ -116,15 +119,17 @@ def _power_series_normalized(p: KershawParams, gamma: float, gamma_p: float,
     last_term_mag = 0.0
     terms_used = 0
 
+    ehat_plus_curr = ehat_expn(1, x_plus)
+    ehat_minus_curr = ehat_expn(1, x_minus)
+    amp_plus = 1.0
+    amp_minus = 1.0
+
     for n in range(n_max + 1):
         coeff_plus = p.A_plus + 2.0 * n / a
         coeff_minus = p.A_minus + 2.0 * n / a
 
-        ehat_p = ehat_expn(n + 1, x_plus)
-        ehat_m = ehat_expn(n + 1, x_minus)
-
-        t_plus = w_plus * coeff_plus * ehat_p
-        t_minus = w_minus * coeff_minus * ehat_m
+        t_plus = w_plus * coeff_plus * ehat_plus_curr
+        t_minus = w_minus * coeff_minus * ehat_minus_curr
 
         P_plus += t_plus
         P_minus += t_minus
@@ -140,6 +145,20 @@ def _power_series_normalized(p: KershawParams, gamma: float, gamma_p: float,
         if n < n_max:
             w_plus *= y_plus / (n + 1)
             w_minus *= y_minus / (n + 1)
+
+            amp_plus *= x_plus / (n + 1)
+            if amp_plus < EHAT_AMPLIFICATION_BUDGET:
+                ehat_plus_curr = (1.0 - x_plus * ehat_plus_curr) / (n + 1)
+            else:
+                ehat_plus_curr = ehat_expn(n + 2, x_plus)
+                amp_plus = 1.0
+
+            amp_minus *= x_minus / (n + 1)
+            if amp_minus < EHAT_AMPLIFICATION_BUDGET:
+                ehat_minus_curr = (1.0 - x_minus * ehat_minus_curr) / (n + 1)
+            else:
+                ehat_minus_curr = ehat_expn(n + 2, x_minus)
+                amp_minus = 1.0
 
     converged = terms_used <= n_max
     normalized_ratio = p.Psi + P_plus - P_minus
@@ -165,6 +184,15 @@ def _asymptotic_series_normalized(p: KershawParams, gamma: float, gamma_p: float
     zeta_plus = p.rho_plus * p.alpha_plus
     zeta_minus = p.rho_minus * p.alpha_minus
 
+    if zeta_plus > 1.0:
+        zeta_plus = 1.0
+    elif zeta_plus < -1.0:
+        zeta_plus = -1.0
+    if zeta_minus > 1.0:
+        zeta_minus = 1.0
+    elif zeta_minus < -1.0:
+        zeta_minus = -1.0
+
     eta_plus = p.alpha_plus * (p.s / a2 + p.rho_plus / a)
     eta_minus = p.alpha_minus * (-p.s / a2 + p.rho_minus / a)
 
@@ -187,6 +215,9 @@ def _asymptotic_series_normalized(p: KershawParams, gamma: float, gamma_p: float
     power_plus = neg_tau_alpha_plus
     power_minus = neg_tau_alpha_minus
 
+    Pp_prev, Pp_curr = 1.0, zeta_plus
+    Pm_prev, Pm_curr = 1.0, zeta_minus
+
     terms_used = 0
 
     for n in range(n_max + 1):
@@ -197,10 +228,10 @@ def _asymptotic_series_normalized(p: KershawParams, gamma: float, gamma_p: float
 
         factorial_n1 = factorial_n * (n + 1)
 
-        Pp_n = float(eval_legendre(n, zeta_plus))
-        Pp_n1 = float(eval_legendre(n + 1, zeta_plus))
-        Pm_n = float(eval_legendre(n, zeta_minus))
-        Pm_n1 = float(eval_legendre(n + 1, zeta_minus))
+        Pp_n = Pp_prev
+        Pp_n1 = Pp_curr
+        Pm_n = Pm_prev
+        Pm_n1 = Pm_curr
 
         term_plus = power_plus * (
             (-p.G * factorial_n + factorial_n1 / a) * Pp_n
@@ -241,6 +272,14 @@ def _asymptotic_series_normalized(p: KershawParams, gamma: float, gamma_p: float
 
         if not math.isfinite(factorial_n) or not math.isfinite(term_mag):
             break
+
+        Pp_next = ((2.0*n + 3.0) * zeta_plus * Pp_curr - (n + 1.0) * Pp_prev) / (n + 2.0)
+        Pp_prev = Pp_curr
+        Pp_curr = Pp_next
+
+        Pm_next = ((2.0*n + 3.0) * zeta_minus * Pm_curr - (n + 1.0) * Pm_prev) / (n + 2.0)
+        Pm_prev = Pm_curr
+        Pm_curr = Pm_next
 
     normalized = base_term + best_S_plus + best_S_minus
     return normalized, smallest_term_mag, best_terms, False

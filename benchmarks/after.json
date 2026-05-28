@@ -1,0 +1,812 @@
+{
+  "schema_version": 1,
+  "implementation_mode": "recurrence",
+  "vector_sizes": [
+    1000,
+    10000,
+    100000
+  ],
+  "tolerance_settings": {
+    "rel_tol": 1e-14,
+    "abs_floor": 1e-30,
+    "scale_aware": true
+  },
+  "amplification_budget": 100.0,
+  "git_commit_hash": "496118c",
+  "timestamp_utc": "2026-05-28T09:11:55.973658+00:00",
+  "points": [
+    {
+      "label": "power_near_elastic",
+      "inputs": {
+        "E_keV": 1,
+        "Ep_keV": 1.01,
+        "xi": 0.0,
+        "T_keV": 100
+      },
+      "diagnostics": {
+        "tau": 0.195695118090399,
+        "method": "power",
+        "tau_alpha_plus": 0.13823955845798344,
+        "tau_alpha_minus": 0.13851170652393469,
+        "zeta_plus": 0.7078101688246109,
+        "zeta_minus": 0.706419528139876,
+        "x_plus": 6.176995166487322,
+        "y_plus": 1.0568242348090156,
+        "x_minus": 6.159838655388337,
+        "y_minus": 1.0597677237100303
+      },
+      "single_call": {
+        "cpp_value": 1.3871587622511154e-17,
+        "cpp_terms": 16,
+        "cpp_single_call_us": 6.420013960450888,
+        "python_value": 1.3871587014494384e-17,
+        "python_terms": 16,
+        "python_time_us": 69.13900142535567
+      },
+      "vectorized_identical": {
+        "1000": {
+          "N": 1000,
+          "total_time_ms": 1.1887800064869225,
+          "per_eval_us": 1.1887800064869225,
+          "value_first": 1.3871587622511154e-17
+        },
+        "10000": {
+          "N": 10000,
+          "total_time_ms": 15.616831980878487,
+          "per_eval_us": 1.5616831980878487,
+          "value_first": 1.3871587622511154e-17
+        },
+        "100000": {
+          "N": 100000,
+          "total_time_ms": 100.55406100582331,
+          "per_eval_us": 1.0055406100582331,
+          "value_first": 1.3871587622511154e-17
+        }
+      },
+      "vectorized_heterogeneous": {
+        "N": 10000,
+        "total_time_ms": 7.749668002361432,
+        "per_eval_us": 0.7749668002361432,
+        "vector_type": "heterogeneous"
+      }
+    },
+    {
+      "label": "power_moderate",
+      "inputs": {
+        "E_keV": 10,
+        "Ep_keV": 10.5,
+        "xi": 0.0,
+        "T_keV": 20
+      },
+      "diagnostics": {
+        "tau": 0.0391390236180798,
+        "method": "asymptotic",
+        "tau_alpha_plus": 0.027389780298472825,
+        "tau_alpha_minus": 0.027944694606666605,
+        "zeta_plus": 0.7143315291008284,
+        "zeta_minus": 0.7001605050397561
+      },
+      "single_call": {
+        "cpp_value": 3.490971076417163e-18,
+        "cpp_terms": 16,
+        "cpp_single_call_us": 1.4230026863515377,
+        "python_value": 3.490971076417163e-18,
+        "python_terms": 16,
+        "python_time_us": 21.154992282390594
+      },
+      "vectorized_identical": {
+        "1000": {
+          "N": 1000,
+          "total_time_ms": 0.488811987452209,
+          "per_eval_us": 0.48881198745220905,
+          "value_first": 3.490971076417163e-18
+        },
+        "10000": {
+          "N": 10000,
+          "total_time_ms": 5.477430997416377,
+          "per_eval_us": 0.5477430997416377,
+          "value_first": 3.490971076417163e-18
+        },
+        "100000": {
+          "N": 100000,
+          "total_time_ms": 61.624002002645284,
+          "per_eval_us": 0.6162400200264528,
+          "value_first": 3.490971076417163e-18
+        }
+      },
+      "vectorized_heterogeneous": {
+        "N": 10000,
+        "total_time_ms": 7.176986982813105,
+        "per_eval_us": 0.7176986982813105,
+        "vector_type": "heterogeneous"
+      }
+    },
+    {
+      "label": "power_high_T",
+      "inputs": {
+        "E_keV": 100,
+        "Ep_keV": 101,
+        "xi": 0.0,
+        "T_keV": 100
+      },
+      "diagnostics": {
+        "tau": 0.195695118090399,
+        "method": "power",
+        "tau_alpha_plus": 0.12489222126690779,
+        "tau_alpha_minus": 0.15184641662588472,
+        "zeta_plus": 0.769872320038119,
+        "zeta_minus": 0.6308145965198502,
+        "x_plus": 7.085598694956814,
+        "y_plus": 0.9213050966163614,
+        "x_minus": 5.369947585058293,
+        "y_minus": 1.2156539867178402
+      },
+      "single_call": {
+        "cpp_value": 1.3515250091769603e-19,
+        "cpp_terms": 17,
+        "cpp_single_call_us": 2.173997927457094,
+        "python_value": 1.35152500917696e-19,
+        "python_terms": 17,
+        "python_time_us": 41.054998291656375
+      },
+      "vectorized_identical": {
+        "1000": {
+          "N": 1000,
+          "total_time_ms": 1.389728975482285,
+          "per_eval_us": 1.389728975482285,
+          "value_first": 1.3515250091769603e-19
+        },
+        "10000": {
+          "N": 10000,
+          "total_time_ms": 18.663334980374202,
+          "per_eval_us": 1.8663334980374202,
+          "value_first": 1.3515250091769603e-19
+        },
+        "100000": {
+          "N": 100000,
+          "total_time_ms": 136.99495201581158,
+          "per_eval_us": 1.3699495201581158,
+          "value_first": 1.3515250091769603e-19
+        }
+      },
+      "vectorized_heterogeneous": {
+        "N": 10000,
+        "total_time_ms": 16.189279995160177,
+        "per_eval_us": 1.6189279995160177,
+        "vector_type": "heterogeneous"
+      }
+    },
+    {
+      "label": "asymp_cold_elastic",
+      "inputs": {
+        "E_keV": 1,
+        "Ep_keV": 1.01,
+        "xi": 0.0,
+        "T_keV": 0.1
+      },
+      "diagnostics": {
+        "tau": 0.00019569511809039902,
+        "method": "asymptotic",
+        "tau_alpha_plus": 0.00013823955845798346,
+        "tau_alpha_minus": 0.00013851170652393472,
+        "zeta_plus": 0.7078101688246109,
+        "zeta_minus": 0.706419528139876
+      },
+      "single_call": {
+        "cpp_value": 4.1888861326125885e-16,
+        "cpp_terms": 5,
+        "cpp_single_call_us": 1.1179945431649685,
+        "python_value": 4.1888861326125875e-16,
+        "python_terms": 5,
+        "python_time_us": 11.961004929617047
+      },
+      "vectorized_identical": {
+        "1000": {
+          "N": 1000,
+          "total_time_ms": 0.07769902003929019,
+          "per_eval_us": 0.07769902003929019,
+          "value_first": 4.1888861326125885e-16
+        },
+        "10000": {
+          "N": 10000,
+          "total_time_ms": 0.7975219923537225,
+          "per_eval_us": 0.07975219923537225,
+          "value_first": 4.1888861326125885e-16
+        },
+        "100000": {
+          "N": 100000,
+          "total_time_ms": 16.577054018853232,
+          "per_eval_us": 0.16577054018853232,
+          "value_first": 4.1888861326125885e-16
+        }
+      },
+      "vectorized_heterogeneous": {
+        "N": 10000,
+        "total_time_ms": 0.8570450008846819,
+        "per_eval_us": 0.0857045000884682,
+        "vector_type": "heterogeneous"
+      }
+    },
+    {
+      "label": "asymp_inelastic",
+      "inputs": {
+        "E_keV": 1,
+        "Ep_keV": 2.0,
+        "xi": 0.0,
+        "T_keV": 1.0
+      },
+      "diagnostics": {
+        "tau": 0.00195695118090399,
+        "method": "asymptotic",
+        "tau_alpha_plus": 0.0013027314290890001,
+        "tau_alpha_minus": 0.0013065373672553025,
+        "zeta_plus": 0.7462244801193225,
+        "zeta_minus": 0.7444849675884263
+      },
+      "single_call": {
+        "cpp_value": 7.831377293331225e-43,
+        "cpp_terms": 6,
+        "cpp_single_call_us": 1.2439850252121687,
+        "python_value": 7.831377293331338e-43,
+        "python_terms": 6,
+        "python_time_us": 15.7149916049093
+      },
+      "vectorized_identical": {
+        "1000": {
+          "N": 1000,
+          "total_time_ms": 0.09364198194816709,
+          "per_eval_us": 0.09364198194816709,
+          "value_first": 7.831377293331225e-43
+        },
+        "10000": {
+          "N": 10000,
+          "total_time_ms": 1.2117500009480864,
+          "per_eval_us": 0.12117500009480864,
+          "value_first": 7.831377293331225e-43
+        },
+        "100000": {
+          "N": 100000,
+          "total_time_ms": 17.165733996080235,
+          "per_eval_us": 0.17165733996080235,
+          "value_first": 7.831377293331225e-43
+        }
+      },
+      "vectorized_heterogeneous": {
+        "N": 10000,
+        "total_time_ms": 1.356179011054337,
+        "per_eval_us": 0.1356179011054337,
+        "vector_type": "heterogeneous"
+      }
+    },
+    {
+      "label": "asymp_mid_T",
+      "inputs": {
+        "E_keV": 10,
+        "Ep_keV": 10.5,
+        "xi": 0.0,
+        "T_keV": 5.0
+      },
+      "diagnostics": {
+        "tau": 0.00978475590451995,
+        "method": "asymptotic",
+        "tau_alpha_plus": 0.006847445074618206,
+        "tau_alpha_minus": 0.006986173651666651,
+        "zeta_plus": 0.7143315291008284,
+        "zeta_minus": 0.7001605050397561
+      },
+      "single_call": {
+        "cpp_value": 6.417345864828441e-18,
+        "cpp_terms": 8,
+        "cpp_single_call_us": 1.553999027237296,
+        "python_value": 6.41734586511371e-18,
+        "python_terms": 8,
+        "python_time_us": 23.411004804074764
+      },
+      "vectorized_identical": {
+        "1000": {
+          "N": 1000,
+          "total_time_ms": 0.16335002146661282,
+          "per_eval_us": 0.16335002146661282,
+          "value_first": 6.417345864828441e-18
+        },
+        "10000": {
+          "N": 10000,
+          "total_time_ms": 3.1709609902463853,
+          "per_eval_us": 0.31709609902463853,
+          "value_first": 6.417345864828441e-18
+        },
+        "100000": {
+          "N": 100000,
+          "total_time_ms": 22.290298016741872,
+          "per_eval_us": 0.22290298016741872,
+          "value_first": 6.417345864828441e-18
+        }
+      },
+      "vectorized_heterogeneous": {
+        "N": 10000,
+        "total_time_ms": 1.7887080030050129,
+        "per_eval_us": 0.1788708003005013,
+        "vector_type": "heterogeneous"
+      }
+    },
+    {
+      "label": "asymp_high_E",
+      "inputs": {
+        "E_keV": 100,
+        "Ep_keV": 101,
+        "xi": 0.0,
+        "T_keV": 5.0
+      },
+      "diagnostics": {
+        "tau": 0.00978475590451995,
+        "method": "asymptotic",
+        "tau_alpha_plus": 0.006244611063345389,
+        "tau_alpha_minus": 0.007592320831294236,
+        "zeta_plus": 0.769872320038119,
+        "zeta_minus": 0.6308145965198502
+      },
+      "single_call": {
+        "cpp_value": 2.4881186377928953e-19,
+        "cpp_terms": 8,
+        "cpp_single_call_us": 2.7590140234678984,
+        "python_value": 2.4881186379034995e-19,
+        "python_terms": 8,
+        "python_time_us": 50.00300006940961
+      },
+      "vectorized_identical": {
+        "1000": {
+          "N": 1000,
+          "total_time_ms": 0.3584480145946145,
+          "per_eval_us": 0.3584480145946145,
+          "value_first": 2.4881186377928953e-19
+        },
+        "10000": {
+          "N": 10000,
+          "total_time_ms": 1.6964449896477163,
+          "per_eval_us": 0.16964449896477163,
+          "value_first": 2.4881186377928953e-19
+        },
+        "100000": {
+          "N": 100000,
+          "total_time_ms": 24.52227598405443,
+          "per_eval_us": 0.24522275984054434,
+          "value_first": 2.4881186377928953e-19
+        }
+      },
+      "vectorized_heterogeneous": {
+        "N": 10000,
+        "total_time_ms": 1.8640290072653443,
+        "per_eval_us": 0.18640290072653443,
+        "vector_type": "heterogeneous"
+      }
+    },
+    {
+      "label": "forward_1",
+      "inputs": {
+        "E_keV": 1,
+        "Ep_keV": 1.5,
+        "xi": 0.95,
+        "T_keV": 100
+      },
+      "diagnostics": {
+        "tau": 0.195695118090399,
+        "method": "asymptotic",
+        "tau_alpha_plus": 0.030314048928017652,
+        "tau_alpha_minus": 0.030319861939252526,
+        "zeta_plus": 0.2533368871859282,
+        "zeta_minus": 0.25262747042878114
+      },
+      "single_call": {
+        "cpp_value": 2.608929089115627e-18,
+        "cpp_terms": 19,
+        "cpp_single_call_us": 1.867010723799467,
+        "python_value": 2.608929089115627e-18,
+        "python_terms": 19,
+        "python_time_us": 35.03100015223026
+      },
+      "vectorized_identical": {
+        "1000": {
+          "N": 1000,
+          "total_time_ms": 0.8419959922321141,
+          "per_eval_us": 0.8419959922321141,
+          "value_first": 2.608929089115627e-18
+        },
+        "10000": {
+          "N": 10000,
+          "total_time_ms": 9.45294601842761,
+          "per_eval_us": 0.945294601842761,
+          "value_first": 2.608929089115627e-18
+        },
+        "100000": {
+          "N": 100000,
+          "total_time_ms": 68.05511799757369,
+          "per_eval_us": 0.6805511799757369,
+          "value_first": 2.608929089115627e-18
+        }
+      },
+      "vectorized_heterogeneous": {
+        "N": 10000,
+        "total_time_ms": 6.650763010839,
+        "per_eval_us": 0.6650763010839,
+        "vector_type": "heterogeneous"
+      }
+    },
+    {
+      "label": "forward_2",
+      "inputs": {
+        "E_keV": 10,
+        "Ep_keV": 12,
+        "xi": 0.9,
+        "T_keV": 50
+      },
+      "diagnostics": {
+        "tau": 0.0978475590451995,
+        "method": "asymptotic",
+        "tau_alpha_plus": 0.02176343883216726,
+        "tau_alpha_minus": 0.021813680665860903,
+        "zeta_plus": 0.24503381378199385,
+        "zeta_minus": 0.23600146537694794
+      },
+      "single_call": {
+        "cpp_value": 4.6110915239288e-18,
+        "cpp_terms": 14,
+        "cpp_single_call_us": 1.3179960660636425,
+        "python_value": 4.611091523928799e-18,
+        "python_terms": 14,
+        "python_time_us": 18.570979591459036
+      },
+      "vectorized_identical": {
+        "1000": {
+          "N": 1000,
+          "total_time_ms": 0.6012619996909052,
+          "per_eval_us": 0.6012619996909052,
+          "value_first": 4.6110915239288e-18
+        },
+        "10000": {
+          "N": 10000,
+          "total_time_ms": 5.808328976854682,
+          "per_eval_us": 0.5808328976854682,
+          "value_first": 4.6110915239288e-18
+        },
+        "100000": {
+          "N": 100000,
+          "total_time_ms": 86.44349599489942,
+          "per_eval_us": 0.8644349599489942,
+          "value_first": 4.6110915239288e-18
+        }
+      },
+      "vectorized_heterogeneous": {
+        "N": 10000,
+        "total_time_ms": 11.613126989686862,
+        "per_eval_us": 1.1613126989686862,
+        "vector_type": "heterogeneous"
+      }
+    },
+    {
+      "label": "backscatter_1",
+      "inputs": {
+        "E_keV": 1,
+        "Ep_keV": 0.5,
+        "xi": -0.95,
+        "T_keV": 100
+      },
+      "diagnostics": {
+        "tau": 0.195695118090399,
+        "method": "power",
+        "tau_alpha_plus": 0.18193625644696332,
+        "tau_alpha_minus": 0.1824285491504983,
+        "zeta_plus": 0.9888567876554961,
+        "zeta_minus": 0.9887960601878967,
+        "x_plus": 5.465806614074397,
+        "y_plus": 0.030623946436295325,
+        "x_minus": 5.450890415587303,
+        "y_minus": 0.03070774794919966
+      },
+      "single_call": {
+        "cpp_value": 5.3944943685575774e-18,
+        "cpp_terms": 7,
+        "cpp_single_call_us": 5.651003448292613,
+        "python_value": 5.394495255994907e-18,
+        "python_terms": 7,
+        "python_time_us": 55.73200178332627
+      },
+      "vectorized_identical": {
+        "1000": {
+          "N": 1000,
+          "total_time_ms": 2.511973987566307,
+          "per_eval_us": 2.511973987566307,
+          "value_first": 5.3944943685575774e-18
+        },
+        "10000": {
+          "N": 10000,
+          "total_time_ms": 12.66125199617818,
+          "per_eval_us": 1.266125199617818,
+          "value_first": 5.3944943685575774e-18
+        },
+        "100000": {
+          "N": 100000,
+          "total_time_ms": 88.47168600186706,
+          "per_eval_us": 0.8847168600186706,
+          "value_first": 5.3944943685575774e-18
+        }
+      },
+      "vectorized_heterogeneous": {
+        "N": 10000,
+        "total_time_ms": 8.491558983223513,
+        "per_eval_us": 0.8491558983223513,
+        "vector_type": "heterogeneous"
+      }
+    },
+    {
+      "label": "backscatter_2",
+      "inputs": {
+        "E_keV": 10,
+        "Ep_keV": 8,
+        "xi": -0.9,
+        "T_keV": 50
+      },
+      "diagnostics": {
+        "tau": 0.0978475590451995,
+        "method": "power",
+        "tau_alpha_plus": 0.09321538756662119,
+        "tau_alpha_minus": 0.09636841447597175,
+        "zeta_plus": 0.9758246242663835,
+        "zeta_minus": 0.9741394349148939,
+        "x_plus": 10.5981677266227,
+        "y_plus": 0.12967481209225404,
+        "x_minus": 10.24266843887486,
+        "y_minus": 0.13417552434441157
+      },
+      "single_call": {
+        "cpp_value": 1.702701980011202e-18,
+        "cpp_terms": 10,
+        "cpp_single_call_us": 2.915010554715991,
+        "python_value": 1.702701980011202e-18,
+        "python_terms": 10,
+        "python_time_us": 25.142013328149915
+      },
+      "vectorized_identical": {
+        "1000": {
+          "N": 1000,
+          "total_time_ms": 1.6605010023340583,
+          "per_eval_us": 1.6605010023340583,
+          "value_first": 1.702701980011202e-18
+        },
+        "10000": {
+          "N": 10000,
+          "total_time_ms": 17.649756016908213,
+          "per_eval_us": 1.7649756016908213,
+          "value_first": 1.702701980011202e-18
+        },
+        "100000": {
+          "N": 100000,
+          "total_time_ms": 219.47046997956932,
+          "per_eval_us": 2.194704699795693,
+          "value_first": 1.702701980011202e-18
+        }
+      },
+      "vectorized_heterogeneous": {
+        "N": 10000,
+        "total_time_ms": 14.640432986197993,
+        "per_eval_us": 1.4640432986197993,
+        "vector_type": "heterogeneous"
+      }
+    },
+    {
+      "label": "regime_switch_1",
+      "inputs": {
+        "E_keV": 1,
+        "Ep_keV": 1.5,
+        "xi": 0.0,
+        "T_keV": 40
+      },
+      "diagnostics": {
+        "tau": 0.0782780472361596,
+        "method": "power",
+        "tau_alpha_plus": 0.05416634664435669,
+        "tau_alpha_minus": 0.05429890353053855,
+        "zeta_plus": 0.7219227502924631,
+        "zeta_minus": 0.7202957715398397,
+        "x_plus": 15.894765449091455,
+        "y_plus": 2.566882085784055,
+        "x_minus": 15.840980753619808,
+        "y_minus": 2.575597390312405
+      },
+      "single_call": {
+        "cpp_value": 1.6831965797366528e-17,
+        "cpp_terms": 22,
+        "cpp_single_call_us": 2.841989044100046,
+        "python_value": 1.6831966227160814e-17,
+        "python_terms": 22,
+        "python_time_us": 26.63000486791134
+      },
+      "vectorized_identical": {
+        "1000": {
+          "N": 1000,
+          "total_time_ms": 1.9672999915201217,
+          "per_eval_us": 1.9672999915201217,
+          "value_first": 1.6831965797366528e-17
+        },
+        "10000": {
+          "N": 10000,
+          "total_time_ms": 34.14598500239663,
+          "per_eval_us": 3.414598500239663,
+          "value_first": 1.6831965797366528e-17
+        },
+        "100000": {
+          "N": 100000,
+          "total_time_ms": 274.6752969978843,
+          "per_eval_us": 2.746752969978843,
+          "value_first": 1.6831965797366528e-17
+        }
+      },
+      "vectorized_heterogeneous": {
+        "N": 10000,
+        "total_time_ms": 20.512677991064265,
+        "per_eval_us": 2.0512677991064265,
+        "vector_type": "heterogeneous"
+      }
+    },
+    {
+      "label": "regime_switch_2",
+      "inputs": {
+        "E_keV": 5,
+        "Ep_keV": 5.5,
+        "xi": 0.3,
+        "T_keV": 40
+      },
+      "diagnostics": {
+        "tau": 0.0782780472361596,
+        "method": "asymptotic",
+        "tau_alpha_plus": 0.046090635033895856,
+        "tau_alpha_minus": 0.046423622263175916,
+        "zeta_plus": 0.5967755527672295,
+        "zeta_minus": 0.5889008272949192
+      },
+      "single_call": {
+        "cpp_value": 6.089677975103524e-18,
+        "cpp_terms": 23,
+        "cpp_single_call_us": 1.5380210243165493,
+        "python_value": 6.0896779751035205e-18,
+        "python_terms": 23,
+        "python_time_us": 42.553001549094915
+      },
+      "vectorized_identical": {
+        "1000": {
+          "N": 1000,
+          "total_time_ms": 0.7305709877982736,
+          "per_eval_us": 0.7305709877982736,
+          "value_first": 6.089677975103524e-18
+        },
+        "10000": {
+          "N": 10000,
+          "total_time_ms": 6.5149469883181155,
+          "per_eval_us": 0.6514946988318115,
+          "value_first": 6.089677975103524e-18
+        },
+        "100000": {
+          "N": 100000,
+          "total_time_ms": 77.61320300051011,
+          "per_eval_us": 0.7761320300051011,
+          "value_first": 6.089677975103524e-18
+        }
+      },
+      "vectorized_heterogeneous": {
+        "N": 10000,
+        "total_time_ms": 6.786120997276157,
+        "per_eval_us": 0.6786120997276157,
+        "vector_type": "heterogeneous"
+      }
+    },
+    {
+      "label": "large_x_1",
+      "inputs": {
+        "E_keV": 100,
+        "Ep_keV": 200,
+        "xi": -0.5,
+        "T_keV": 40
+      },
+      "diagnostics": {
+        "tau": 0.0782780472361596,
+        "method": "power",
+        "tau_alpha_plus": 0.05155598147090361,
+        "tau_alpha_minus": 0.07823493715610488,
+        "zeta_plus": 0.9248804215806166,
+        "zeta_minus": 0.8167213227247762,
+        "x_plus": 18.66786710933776,
+        "y_plus": 0.7285243756030355,
+        "x_minus": 11.610677970507021,
+        "y_minus": 1.171335236772297
+      },
+      "single_call": {
+        "cpp_value": 2.32243925323068e-20,
+        "cpp_terms": 17,
+        "cpp_single_call_us": 2.620014129206538,
+        "python_value": 2.3224392532312988e-20,
+        "python_terms": 17,
+        "python_time_us": 23.28300615772605
+      },
+      "vectorized_identical": {
+        "1000": {
+          "N": 1000,
+          "total_time_ms": 1.7414769972674549,
+          "per_eval_us": 1.7414769972674549,
+          "value_first": 2.32243925323068e-20
+        },
+        "10000": {
+          "N": 10000,
+          "total_time_ms": 24.46078899083659,
+          "per_eval_us": 2.446078899083659,
+          "value_first": 2.32243925323068e-20
+        },
+        "100000": {
+          "N": 100000,
+          "total_time_ms": 218.3495950012002,
+          "per_eval_us": 2.183495950012002,
+          "value_first": 2.32243925323068e-20
+        }
+      },
+      "vectorized_heterogeneous": {
+        "N": 10000,
+        "total_time_ms": 24.29680500063114,
+        "per_eval_us": 2.429680500063114,
+        "vector_type": "heterogeneous"
+      }
+    },
+    {
+      "label": "large_x_2",
+      "inputs": {
+        "E_keV": 100,
+        "Ep_keV": 500,
+        "xi": -0.9,
+        "T_keV": 30
+      },
+      "diagnostics": {
+        "tau": 0.05870853542711971,
+        "method": "power",
+        "tau_alpha_plus": 0.028288655497386447,
+        "tau_alpha_minus": 0.06398118992895523,
+        "zeta_plus": 0.9938712570436544,
+        "zeta_minus": 0.9682407444252262,
+        "x_plus": 35.24153449477063,
+        "y_plus": 0.10832510150423653,
+        "x_minus": 15.381401522937933,
+        "y_minus": 0.24819212967154303
+      },
+      "single_call": {
+        "cpp_value": 2.746781510747412e-25,
+        "cpp_terms": 11,
+        "cpp_single_call_us": 3.509980160742998,
+        "python_value": 2.746781510747576e-25,
+        "python_terms": 11,
+        "python_time_us": 28.629001462832093
+      },
+      "vectorized_identical": {
+        "1000": {
+          "N": 1000,
+          "total_time_ms": 2.4047050101216882,
+          "per_eval_us": 2.4047050101216882,
+          "value_first": 2.746781510747412e-25
+        },
+        "10000": {
+          "N": 10000,
+          "total_time_ms": 25.188527011778206,
+          "per_eval_us": 2.5188527011778206,
+          "value_first": 2.746781510747412e-25
+        },
+        "100000": {
+          "N": 100000,
+          "total_time_ms": 224.5127100031823,
+          "per_eval_us": 2.245127100031823,
+          "value_first": 2.746781510747412e-25
+        }
+      },
+      "vectorized_heterogeneous": {
+        "N": 10000,
+        "total_time_ms": 27.846268989378586,
+        "per_eval_us": 2.7846268989378586,
+        "vector_type": "heterogeneous"
+      }
+    }
+  ]
+}

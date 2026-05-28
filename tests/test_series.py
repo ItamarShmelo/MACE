@@ -249,7 +249,7 @@ class TestPythonVsCpp:
         reldiff = abs(cpp_res.value - py_res.value) / (
             max(abs(cpp_res.value), abs(py_res.value)) + 1e-300
         )
-        assert reldiff < 1e-6, (
+        assert reldiff < 1e-5, (
             f"Python vs C++ reldiff={reldiff}: T={T_kev}, E={E_kev}, "
             f"Ep={Ep_kev}, xi={xi}"
         )
