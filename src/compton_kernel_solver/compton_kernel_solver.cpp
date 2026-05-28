@@ -38,7 +38,6 @@ SolverResult ComptonKernelSolver::sigma_E(
     const double gamma_p = E_prime / units::me_c2;
 
     KershawParams p = compute_params(gamma, gamma_p, xi, tau);
-    const double sigma0 = stable_sigma0_E(E, tau, p.lambda_plus, Ne);
 
     const double tau_alpha_max = std::max(tau * p.alpha_plus, tau * p.alpha_minus);
 
@@ -83,10 +82,9 @@ SolverResult ComptonKernelSolver::sigma_E(
 
         double power_conditioning = 1.0;
         if (std::abs(pr.value) > REL_ERROR_FLOOR) {
-            const double norm_ratio_est = pr.value / sigma0;
-            const double norm_abs = std::abs(norm_ratio_est) + REL_ERROR_FLOOR;
-            power_conditioning = pr.estimated_abs_error / (std::abs(sigma0) * 2.2e-16 * 10.0 * norm_abs);
-            if (power_conditioning < 1.0) power_conditioning = 1.0;
+            power_conditioning = pr.estimated_rel_error / COND_ERROR_COEFF;
+            if (!std::isfinite(power_conditioning) || power_conditioning < 1.0)
+                power_conditioning = 1.0;
         }
 
         if (pr.estimated_rel_error < target_rel_tol_) {
@@ -103,7 +101,7 @@ SolverResult ComptonKernelSolver::sigma_E(
 
         return make_result(qr.value, qr.estimated_abs_error, q_rel_err,
                            256, SolverMethod::Quadrature, false,
-                           q_target_met, power_conditioning);
+                           q_target_met, 1.0);
     }
 }
 

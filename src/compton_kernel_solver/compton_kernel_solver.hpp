@@ -16,6 +16,8 @@
 #include "compton_kernel_series/compton_kernel_series.hpp"
 #include "compton_kernel_quadrature/compton_kernel_quadrature.hpp"
 
+#include <limits>
+
 namespace compton {
 
 enum class SolverMethod {
@@ -56,6 +58,9 @@ private:
 
     static constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.2;
     static constexpr double REL_ERROR_FLOOR = 1e-300;
+    static constexpr double ACCUMULATION_SAFETY_FACTOR = 10.0;
+    static constexpr double COND_ERROR_COEFF = ACCUMULATION_SAFETY_FACTOR
+                                             * std::numeric_limits<double>::epsilon();
 };
 
 } // namespace compton

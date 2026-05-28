@@ -78,6 +78,8 @@ class SeriesResult:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _POISSON_Y_MAX = 500.0
+_ACCUMULATION_SAFETY_FACTOR = 10.0
+COND_ERROR_COEFF = _ACCUMULATION_SAFETY_FACTOR * np.finfo(np.float64).eps
 
 # rel_tol / eps_machine / safety_factor = 1e-13 / 1e-16 / 10
 EHAT_AMPLIFICATION_BUDGET = 1e2
@@ -167,7 +169,7 @@ def _power_series_normalized(p: KershawParams, gamma: float, gamma_p: float,
     norm_abs = abs(normalized_ratio) + eps_tiny
     sum_abs = abs(P_plus) + abs(P_minus) + abs(p.Psi)
     conditioning = sum_abs / norm_abs
-    cond_error = 10.0 * conditioning * 2.2e-16
+    cond_error = COND_ERROR_COEFF * conditioning
     trunc_error = last_term_mag / norm_abs
     rel_error = max(trunc_error, cond_error)
     norm_err = rel_error * norm_abs

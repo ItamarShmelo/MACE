@@ -145,7 +145,7 @@ SeriesResult ComptonKernelSeries::power_series(
     const double sum_abs = std::abs(P_plus) + std::abs(P_minus) + std::abs(p.Psi);
     const double norm_abs = std::abs(normalized_ratio) + eps_tiny;
     const double conditioning = sum_abs / norm_abs;
-    const double cond_error = 10.0 * conditioning * 2.2e-16;
+    const double cond_error = COND_ERROR_COEFF * conditioning;
     const double trunc_error = last_term_mag / norm_abs;
     const double rel_error = std::max(trunc_error, cond_error);
     const double abs_error = std::abs(sigma0) * rel_error * norm_abs;
