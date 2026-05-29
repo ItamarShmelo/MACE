@@ -1,2 +1,4 @@
 CompileFlags:
   CompilationDatabase: build/
+  Add:
+    - -I./build/_deps/doubledouble-src/include

@@ -15,7 +15,7 @@
 #include <stdexcept>
 
 #include "units/units.hpp"
-#include "compton_kernel_series/double_double.hpp"
+#include "compton_kernel_series/dd_extras.hpp"
 
 namespace compton {
 
@@ -69,10 +69,10 @@ KershawParams compute_params(double gamma, double gamma_p, double xi, double tau
  * Used by the power series to achieve eps^2 conditioning error.
  */
 struct KershawParamsDD {
-    dd a, s, q, omega2;
-    dd Delta, lambda_plus, rho_plus, rho_minus;
-    dd alpha_plus, alpha_minus;
-    dd G, A_plus, A_minus, Psi;
+    DD a, s, q, omega2;
+    DD Delta, lambda_plus, rho_plus, rho_minus;
+    DD alpha_plus, alpha_minus;
+    DD G, A_plus, A_minus, Psi;
 };
 
 /**

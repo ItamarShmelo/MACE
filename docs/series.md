@@ -196,7 +196,7 @@ result = sigma_E_series(E, E_prime, xi, tau, Ne=1.0, method="auto")
 | **Low τ** | Asymptotic series excels | Pre-IBP works; post-IBP has cancellation |
 | **High τ** | Power series works well | Reliable with enough nodes |
 | **Extreme kinematics** | May fail (`converged = false`) | More robust in edge cases |
-| **Dependencies** | `boost::expint` for power series | `boost::cyl_bessel_k` + GL nodes |
+| **Dependencies** | `boost::expint` + `doubledouble` for power series | `boost::cyl_bessel_k` + GL nodes |
 | **Error estimate** | Last/smallest term magnitude | N vs N/2 Richardson comparison |
 
 ### Recommended Usage
@@ -236,12 +236,50 @@ Measured speedups (C++ vectorized throughput): 3-13x for asymptotic series,
 
 ---
 
+## Double-Double Precision
+
+The power series loop performs all arithmetic in **double-double precision** (~32 significant digits) to handle the severe cancellation in $P_+ - P_-$.  This uses the [WarrenWeckesser/doubledouble](https://github.com/WarrenWeckesser/doubledouble) library (fetched at build time via CMake FetchContent), with two domain-specific extensions in `dd_extras.hpp`:
+
+- `dd_asinh(x)` — needed for the hyperbolic substitution $\theta_\pm = \text{arcsinh}(\rho_\pm / \omega)$
+- `dd_ehat_cf(m, x)` — Ehat_m via modified Lentz continued fraction (DLMF 8.9.2)
+
+The kinematic parameters are also computed in double-double precision (`compute_params_dd()`) to avoid seeding the series with truncated inputs.
+
+---
+
+## Error Estimation
+
+The power series reports a two-component error:
+
+```
+rel_error = max(trunc_rel, round_rel)
+```
+
+- **Truncation** (`last_term_mag / |result|`): the magnitude of the last terms added to P+ and P-, divided by the result. This is the standard convergent-series bound.
+- **Rounding** (`N * eps_DD * max(|P+|, |P-|) / |result|`): models accumulated double-double roundoff (one eps_DD per iteration) amplified by any cancellation in P+ - P-.
+
+In practice, for the Kershaw parameterization used here, the conditioning (`max(|P+|, |P-|) / |result|`) is benign (1-3x) across the entire calibrated domain. The rounding term is always negligible (~10⁻³⁰), and the truncation term dominates at ~10⁻¹³ to 10⁻¹⁶.
+
+### Series vs Quadrature Accuracy at High τ
+
+For τ > 20, the power series converges in 6-7 terms (due to rapidly decaying Poisson weights) and is *more accurate* than Gauss-Laguerre quadrature:
+
+| τ | Series terms | Series-vs-Quad diff | Quad self-reported error |
+|---|---|---|---|
+| 5 | 9 | 6×10⁻⁹ | 4×10⁻⁸ |
+| 20 | 7 | 8×10⁻⁶ | 2×10⁻⁷ |
+| 50 | 6 | 4×10⁻⁴ | 7×10⁻⁴ |
+| 100 | 6 | 2×10⁻³ | 1×10⁻⁴ |
+
+At τ=100, the discrepancy is dominated by the quadrature's difficulty with sharply peaked integrands — both PostIBP and PreIBP forms at 256 points give different answers, and neither matches the series. The series is the trusted result in this regime.
+
+---
+
 ## Known Limitations
 
 1. **No vectorized interface** — unlike quadrature's `sigma_E_vec`, the series module evaluates one point at a time.
 2. **Poisson weight underflow** — the power series cannot represent the Poisson distribution for $y > 500$.  A log-space implementation could extend this range.
 3. **Asymptotic accuracy ceiling** — the asymptotic series accuracy is bounded by the smallest term magnitude.  For $\tau \alpha \sim 0.1$, this may be only $10^{-4}$.
-4. **Series conditioning** — when P_plus ≈ P_minus (severe cancellation), the intrinsic precision of both series is limited regardless of term-level accuracy.  The recurrence does not worsen this, but any change in floating-point operation order reveals it.
 
 ---
 

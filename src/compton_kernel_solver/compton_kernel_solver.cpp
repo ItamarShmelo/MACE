@@ -43,7 +43,7 @@ SolverResult ComptonKernelSolver::sigma_E(
 
     auto make_result = [&](double value, double abs_err, double rel_err,
                            int terms, SolverMethod method, bool fallback,
-                           bool target_met_val, double cond) -> SolverResult {
+                           bool target_met_val) -> SolverResult {
         bool clamped = false;
         if (value < 0.0 && std::abs(value) < abs_err) {
             clamped = true;
@@ -51,7 +51,7 @@ SolverResult ComptonKernelSolver::sigma_E(
         }
         return SolverResult{value, abs_err, rel_err, terms, method,
                             fallback, target_met_val, clamped,
-                            tau_alpha_max, cond};
+                            tau_alpha_max};
     };
 
     // --- Phase 1: Try asymptotic if in its natural regime ---
@@ -61,37 +61,29 @@ SolverResult ComptonKernelSolver::sigma_E(
 
         if (std::abs(ar.value) < target_abs_tol_) {
             return make_result(0.0, 0.0, 0.0, ar.terms_used,
-                               SolverMethod::Asymptotic, false, true, 1.0);
+                               SolverMethod::Asymptotic, false, true);
         }
         if (ar.estimated_rel_error < target_rel_tol_) {
             return make_result(ar.value, ar.estimated_abs_error,
                                ar.estimated_rel_error, ar.terms_used,
-                               SolverMethod::Asymptotic, false, true, 1.0);
+                               SolverMethod::Asymptotic, false, true);
         }
     }
 
     // --- Phase 2: Try power series ---
     {
-        ComptonKernelSeries pow_series(SeriesMethod::PowerSeries, 1e-12, 4, 200);
+        ComptonKernelSeries pow_series(SeriesMethod::PowerSeries, 1e-12, 4, 1000);
         SeriesResult pr = pow_series.sigma_E(E, E_prime, xi, tau, Ne);
 
         if (std::abs(pr.value) < target_abs_tol_) {
             return make_result(0.0, 0.0, 0.0, pr.terms_used,
-                               SolverMethod::PowerSeries, false, true, 1.0);
-        }
-
-        double power_conditioning = 1.0;
-        if (std::abs(pr.value) > REL_ERROR_FLOOR) {
-            power_conditioning = pr.estimated_rel_error / COND_ERROR_COEFF;
-            if (!std::isfinite(power_conditioning) || power_conditioning < 1.0)
-                power_conditioning = 1.0;
+                               SolverMethod::PowerSeries, false, true);
         }
 
         if (pr.estimated_rel_error < target_rel_tol_) {
             return make_result(pr.value, pr.estimated_abs_error,
                                pr.estimated_rel_error, pr.terms_used,
-                               SolverMethod::PowerSeries, false, true,
-                               power_conditioning);
+                               SolverMethod::PowerSeries, false, true);
         }
 
         // --- Phase 3: Quadrature safety net ---
@@ -101,7 +93,7 @@ SolverResult ComptonKernelSolver::sigma_E(
 
         return make_result(qr.value, qr.estimated_abs_error, q_rel_err,
                            256, SolverMethod::Quadrature, false,
-                           q_target_met, 1.0);
+                           q_target_met);
     }
 }
 

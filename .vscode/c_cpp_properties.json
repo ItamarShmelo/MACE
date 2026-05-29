@@ -5,6 +5,7 @@
             "includePath": [
                 "${workspaceFolder}/src",
                 "${workspaceFolder}/external/CMMC/src",
+                "${workspaceFolder}/build/_deps/doubledouble-src/include",
                 "/usr/include/python3.12",
                 "/usr/lib/python3/dist-packages/pybind11/include",
                 "/usr/include"

@@ -269,6 +269,35 @@ The asymptotic series is most accurate when `τ · α±` is small (low temperatu
 
 ---
 
+## Challenge 11: Power Series Cancellation (Double-Double Arithmetic)
+
+### Problem
+
+The power series computes $\Sigma_E / \sigma_0 = \Psi + P_+ - P_-$, where $P_+$ and $P_-$ are individually large sums that nearly cancel.  In standard double precision, the conditioning number (`sum_abs / |result|`) can exceed $10^6$, destroying all significant digits via catastrophic cancellation.
+
+### Solution: Double-Double Accumulation
+
+The entire power series loop — including kinematic parameters, Poisson weights, ehat evaluations, and partial sums — is computed in **double-double precision** (~32 significant digits) using the [WarrenWeckesser/doubledouble](https://github.com/WarrenWeckesser/doubledouble) library.  This provides:
+
+- ~$\varepsilon^2 \approx 4.9 \times 10^{-32}$ machine epsilon for intermediate arithmetic
+- Two-component error estimate: `rel_error = max(trunc_rel, round_rel)` where:
+  - `trunc_rel = |last_term| / |result|` — standard convergent-series truncation bound
+  - `round_rel = N × ε² × max(|P+|, |P-|) / |result|` — accumulated DD rounding scaled by cancellation
+
+The two domain-specific functions not in the external library are implemented in `dd_extras.hpp`:
+- `dd_asinh(x)` — inverse hyperbolic sine via `log(x + sqrt(x² + 1))`
+- `dd_ehat_cf(m, x)` — Ehat_m via modified Lentz continued fraction (DLMF 8.9.2)
+
+Only the final result is truncated to `double` at the end of the series loop.
+
+### Empirical Observation: Series vs Quadrature at High τ
+
+For large τ (e.g. τ=100), the power series converges in very few terms (6-7) due to the rapidly decaying Poisson weights, and the conditioning is benign (~1.2).  The series is actually *more accurate* than Gauss-Laguerre quadrature in this regime: the quadrature integrand becomes sharply peaked and 256-point quadrature can have ~0.1% error while the series achieves ~10⁻¹⁶ relative accuracy.
+
+This means the solver's fallback from series to quadrature at high τ is suboptimal — the series should be preferred.  The quadrature's self-reported error estimate also underestimates its true error for these sharply peaked integrands.
+
+---
+
 ## Summary Table
 
 | Challenge | Technique | Where |
@@ -283,3 +312,4 @@ The asymptotic series is most accurate when `τ · α±` is small (low temperatu
 | Ê_m overflow | Two-regime `ehat_expn` (direct × asymptotic) | `ehat_expn()` |
 | Poisson weight underflow | Bail-out when y± > 500 | Power series loop |
 | Asymptotic divergence | Smallest-term truncation with 2-increase rule | Asymptotic series loop |
+| P₊ − P₋ cancellation | Double-double accumulation (external `doubledouble` lib) | Power series loop |

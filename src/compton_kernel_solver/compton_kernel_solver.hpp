@@ -16,8 +16,6 @@
 #include "compton_kernel_series/compton_kernel_series.hpp"
 #include "compton_kernel_quadrature/compton_kernel_quadrature.hpp"
 
-#include <limits>
-
 namespace compton {
 
 enum class SolverMethod {
@@ -36,7 +34,6 @@ struct SolverResult {
     bool target_met;         ///< true if accepted path achieved rel_error < target (or negligible)
     bool clamped;            ///< true if negative value was clamped to zero
     double tau_alpha_max;    ///< diagnostic: max(tau*alpha_plus, tau*alpha_minus)
-    double conditioning;     ///< diagnostic: power-series conditioning number (1.0 if not applicable)
 };
 
 class ComptonKernelSolver {
@@ -57,10 +54,6 @@ private:
     ComptonKernelQuadrature quad256_;
 
     static constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.2;
-    static constexpr double REL_ERROR_FLOOR = 1e-300;
-    static constexpr double ACCUMULATION_SAFETY_FACTOR = 10.0;
-    static constexpr double COND_ERROR_COEFF = ACCUMULATION_SAFETY_FACTOR
-                                             * std::numeric_limits<double>::epsilon();
 };
 
 } // namespace compton

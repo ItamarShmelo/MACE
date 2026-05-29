@@ -107,61 +107,55 @@ KershawParams compute_params(double gamma, double gamma_p, double xi, double tau
 KershawParamsDD compute_params_dd(double gamma, double gamma_p, double xi, double tau) {
     KershawParamsDD p{};
 
-    dd gamma_dd   = dd_from_double(gamma);
-    dd gamma_p_dd = dd_from_double(gamma_p);
-    dd xi_dd      = dd_from_double(xi);
-    dd tau_dd     = dd_from_double(tau);
-    dd one        = dd_from_double(1.0);
-    dd two        = dd_from_double(2.0);
+    DD gamma_dd(gamma);
+    DD gamma_p_dd(gamma_p);
+    DD xi_dd(xi);
+    DD tau_dd(tau);
+    DD one(1.0);
+    DD two(2.0);
 
-    p.a = dd_sub(one, xi_dd);
-    p.s = dd_add(dd_div(one, gamma_dd), dd_div(one, gamma_p_dd));
+    p.a = one - xi_dd;
+    p.s = one / gamma_dd + one / gamma_p_dd;
 
-    dd dg  = dd_sub(gamma_p_dd, gamma_dd);
-    dd dg2 = dd_mul(dg, dg);
-    dd gg  = dd_mul(gamma_dd, gamma_p_dd);
-    dd q2  = dd_add(dg2, dd_mul(dd_mul(two, gg), p.a));
-    p.q    = dd_sqrt(q2);
+    DD dg  = gamma_p_dd - gamma_dd;
+    DD dg2 = dg * dg;
+    DD gg  = gamma_dd * gamma_p_dd;
+    DD q2  = dg2 + two * gg * p.a;
+    p.q    = q2.sqrt();
 
-    p.omega2 = dd_div(dd_add(one, xi_dd), p.a);
+    p.omega2 = (one + xi_dd) / p.a;
 
-    dd gg_a    = dd_mul(gg, p.a);
-    dd factor1 = dd_add(one, dd_div(gg_a, two));
-    dd factor2 = dd_add(one, dd_div(dg2, dd_mul(two, gg_a)));
-    p.Delta    = dd_sqrt(dd_mul(factor1, factor2));
+    DD gg_a    = gg * p.a;
+    DD factor1 = one + gg_a / two;
+    DD factor2 = one + dg2 / (two * gg_a);
+    p.Delta    = (factor1 * factor2).sqrt();
 
-    p.lambda_plus = dd_add(dd_div(dg, two), p.Delta);
+    p.lambda_plus = dg / two + p.Delta;
 
-    if (p.lambda_plus.hi < 1.0 - 1e-12)
+    if (p.lambda_plus.upper < 1.0 - 1e-12)
         throw std::runtime_error("lambda_plus significantly below 1");
-    if (p.lambda_plus.hi < 1.0)
+    if (p.lambda_plus.upper < 1.0)
         p.lambda_plus = one;
 
-    p.rho_plus  = dd_add(p.lambda_plus, gamma_dd);
-    p.rho_minus = dd_sub(p.lambda_plus, gamma_p_dd);
+    p.rho_plus  = p.lambda_plus + gamma_dd;
+    p.rho_minus = p.lambda_plus - gamma_p_dd;
 
-    dd Rp0 = dd_add(dd_mul(p.rho_plus, p.rho_plus), p.omega2);
-    dd Rm0 = dd_add(dd_mul(p.rho_minus, p.rho_minus), p.omega2);
-    p.alpha_plus  = dd_div(one, dd_sqrt(Rp0));
-    p.alpha_minus = dd_div(one, dd_sqrt(Rm0));
+    DD Rp0 = p.rho_plus * p.rho_plus + p.omega2;
+    DD Rm0 = p.rho_minus * p.rho_minus + p.omega2;
+    p.alpha_plus  = one / Rp0.sqrt();
+    p.alpha_minus = one / Rm0.sqrt();
 
-    dd a2 = dd_mul(p.a, p.a);
-    p.G = dd_add(dd_sub(dd_from_double(0.0), gg),
-                 dd_add(dd_div(two, p.a),
-                        dd_div(two, dd_mul(gg, a2))));
+    DD a2 = p.a * p.a;
+    p.G = -gg + two / p.a + two / (gg * a2);
 
-    dd s_over_tau_a2 = dd_div(p.s, dd_mul(tau_dd, a2));
-    p.A_plus  = dd_sub(p.G, s_over_tau_a2);
-    p.A_minus = dd_add(p.G, s_over_tau_a2);
+    DD s_over_tau_a2 = p.s / (tau_dd * a2);
+    p.A_plus  = p.G - s_over_tau_a2;
+    p.A_minus = p.G + s_over_tau_a2;
 
-    // Psi = 2*tau*gamma*gamma_p/q + s/a^2*(alpha+ + alpha-) + (rho+*alpha+ - rho-*alpha-)/a
-    dd term1 = dd_div(dd_mul(dd_mul(two, tau_dd), gg), p.q);
-    dd term2 = dd_mul(dd_div(p.s, a2),
-                      dd_add(p.alpha_plus, p.alpha_minus));
-    dd term3 = dd_div(dd_sub(dd_mul(p.rho_plus, p.alpha_plus),
-                             dd_mul(p.rho_minus, p.alpha_minus)),
-                      p.a);
-    p.Psi = dd_add(dd_add(term1, term2), term3);
+    DD term1 = (two * tau_dd * gg) / p.q;
+    DD term2 = (p.s / a2) * (p.alpha_plus + p.alpha_minus);
+    DD term3 = (p.rho_plus * p.alpha_plus - p.rho_minus * p.alpha_minus) / p.a;
+    p.Psi = term1 + term2 + term3;
 
     return p;
 }

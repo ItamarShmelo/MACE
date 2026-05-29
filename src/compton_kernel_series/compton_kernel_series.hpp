@@ -16,8 +16,6 @@
 
 #include "compton_common/compton_common.hpp"
 
-#include <limits>
-
 namespace compton {
 
 enum class SeriesMethod {
@@ -66,12 +64,6 @@ private:
     double eps_rel_;
     int n_min_, n_max_;
 
-    static constexpr double ACCUMULATION_SAFETY_FACTOR = 10.0;
-    static constexpr double COND_ERROR_COEFF = ACCUMULATION_SAFETY_FACTOR
-                                             * std::numeric_limits<double>::epsilon();
-    static constexpr double DD_EPS = std::numeric_limits<double>::epsilon()
-                                   * std::numeric_limits<double>::epsilon();
-    static constexpr double DD_COND_ERROR_COEFF = ACCUMULATION_SAFETY_FACTOR * DD_EPS;
 };
 
 } // namespace compton

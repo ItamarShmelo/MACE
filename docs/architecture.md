@@ -17,6 +17,7 @@ compton_cross_section/
 │   ├── compton_kernel_series/              # C++ series kernel
 │   │   ├── compton_kernel_series.hpp       # SeriesMethod, SeriesResult, ComptonKernelSeries
 │   │   ├── compton_kernel_series.cpp       # Power series + asymptotic series
+│   │   ├── dd_extras.hpp                   # DD adapter: asinh + ehat_cf on top of external doubledouble
 │   │   └── bind/
 │   │       └── _compton_kernel_series.cpp  # pybind11 bindings
 │   ├── compton_kernel_solver/              # Robust adaptive solver
@@ -82,7 +83,9 @@ units/units.hpp  (from CMMC: physical constants)
        │
        ▼
 compton_common.hpp  (shared kinematics & normalization)
-       │
+       │                       │
+       │                 dd_extras.hpp  (doubledouble + asinh + ehat_cf)
+       │                       │
        ├────────────────────────────────┐
        ▼                                ▼
 compton_kernel_quadrature.hpp    compton_kernel_series.hpp
@@ -175,9 +178,19 @@ Declares:
 
 Contains:
 - `ehat_expn` with two-regime strategy (direct for x<50, asymptotic for x≥50)
-- Power series loop with Poisson weights and per-term Boost `expint` calls
+- Power series loop with Poisson weights, double-double arithmetic via external `doubledouble` library, and in-loop ehat recurrence
 - Asymptotic series with Legendre recurrence and smallest-term truncation
 - Auto switching based on tau*alpha threshold
+
+#### `dd_extras.hpp`
+
+**Role:** Adapter header for the [WarrenWeckesser/doubledouble](https://github.com/WarrenWeckesser/doubledouble) library.
+
+Provides:
+- `DD` type alias for `doubledouble::DoubleDouble`
+- `dd_to_double(x)` — extracts both words for full precision: `x.upper + x.lower`
+- `dd_asinh(x)` — inverse hyperbolic sine in double-double precision
+- `dd_ehat_cf(m, x)` — Ehat_m(x) via modified Lentz continued fraction (DLMF 8.9.2) in double-double arithmetic
 
 #### `gauss_laguerre.hpp`
 
@@ -263,12 +276,13 @@ See [Series Methods](series.md) for algorithmic details.
 
 - Requires CMake ≥ 3.22 and a C++20 compiler
 - Finds Boost (header-only) and pybind11 via `find_package`
+- Fetches [WarrenWeckesser/doubledouble](https://github.com/WarrenWeckesser/doubledouble) (header-only double-double arithmetic) via CMake `FetchContent` at configure time
 - Includes `external/CMMC/src` (for `units/units.hpp`)
 - Produces three shared library targets: `_compton_kernel_quadrature`, `_compton_kernel_series`, and `_compton_kernel_solver`
 - Each links against `compton_common.cpp` (compiled into each module)
 - The solver module links both series and quadrature source files
 - Output goes to `cpp_modules/` for direct Python import
-- Compiler flags: `-O3 -Wall -Wextra -Wpedantic`
+- Compiler flags: `-O3 -Wall -Wextra -Wpedantic` (must NOT use `-ffast-math` or `-Ofast` as these break double-double arithmetic invariants)
 
 ### Building
 
@@ -378,7 +392,8 @@ Report-generating scripts that produce markdown documents with embedded plots.  
 | Header-only Gauss-Laguerre | Avoids extra translation unit; code is small and inlined |
 | Static rule cache | Rules are expensive (O(N²)) but only needed at a few fixed N |
 | pybind11 (not ctypes/cython) | Clean C++ → Python bridge with NumPy support |
-| Boost for K₂ only | Minimal dependency; rest is standard library |
+| Boost for K₂ and expint only | Minimal dependency; rest is standard library |
+| External doubledouble library | Well-tested double-double arithmetic (WarrenWeckesser/doubledouble) avoids maintaining custom implementation; `dd_extras.hpp` adds only the two domain-specific functions (asinh, ehat_cf) |
 | No GIL release | Simplicity over threading; vectorization in C++ loop suffices |
 | Pre- and post-IBP forms | Cross-validation and regime-appropriate convergence |
 | Richardson error estimate | Cheap (one extra half-order evaluation), practical indicator |

@@ -7,9 +7,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(pybind11 REQUIRED)
 find_package(Boost REQUIRED)
 
+include(FetchContent)
+FetchContent_Declare(
+  doubledouble
+  GIT_REPOSITORY https://github.com/WarrenWeckesser/doubledouble.git
+  GIT_TAG 3db2c175e9e1adf2b0b324a9f5514836c6c6bc21
+)
+FetchContent_Populate(doubledouble)
+
 include_directories(src)
 include_directories(external/CMMC/src)
 include_directories(${Boost_INCLUDE_DIRS})
+include_directories(${doubledouble_SOURCE_DIR}/include)
 
 pybind11_add_module(_compton_kernel_quadrature
     src/compton_common/compton_common.cpp

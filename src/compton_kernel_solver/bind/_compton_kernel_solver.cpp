@@ -23,8 +23,7 @@ PYBIND11_MODULE(_compton_kernel_solver, m) {
         .def_readonly("used_fallback", &SolverResult::used_fallback)
         .def_readonly("target_met", &SolverResult::target_met)
         .def_readonly("clamped", &SolverResult::clamped)
-        .def_readonly("tau_alpha_max", &SolverResult::tau_alpha_max)
-        .def_readonly("conditioning", &SolverResult::conditioning);
+        .def_readonly("tau_alpha_max", &SolverResult::tau_alpha_max);
 
     py::class_<ComptonKernelSolver>(m, "ComptonKernelSolver")
         .def(py::init<double, double>(),
