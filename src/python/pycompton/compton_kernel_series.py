@@ -26,6 +26,229 @@ from .compton_kernel_quadrature import (
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Double-double (dd) arithmetic helpers
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# dd values are represented as (hi, lo) tuples of floats.
+
+_DD_ZERO = (0.0, 0.0)
+_DD_ONE  = (1.0, 0.0)
+
+_has_fma = hasattr(math, 'fma')
+
+def _two_sum(a, b):
+    s = a + b
+    v = s - a
+    e = (a - (s - v)) + (b - v)
+    return (s, e)
+
+def _two_prod(a, b):
+    p = a * b
+    if _has_fma:
+        e = math.fma(a, b, -p)
+    else:
+        # Dekker splitting
+        _SPLIT = 134217729.0  # 2^27 + 1
+        ca = _SPLIT * a; ah = ca - (ca - a); al = a - ah
+        cb = _SPLIT * b; bh = cb - (cb - b); bl = b - bh
+        e = ((ah * bh - p) + ah * bl + al * bh) + al * bl
+    return (p, e)
+
+def _dd_from_double(x):
+    return (float(x), 0.0)
+
+def _dd_to_double(a):
+    return a[0] + a[1]
+
+def _dd_add_scalar(a, b):
+    s = _two_sum(a[0], b)
+    lo = s[1] + a[1]
+    return _two_sum(s[0], lo)
+
+def _dd_add(a, b):
+    s = _two_sum(a[0], b[0])
+    t = _two_sum(a[1], b[1])
+    lo = s[1] + t[0]
+    s = _two_sum(s[0], lo)
+    lo2 = s[1] + t[1]
+    return _two_sum(s[0], lo2)
+
+def _dd_sub(a, b):
+    return _dd_add(a, (-b[0], -b[1]))
+
+def _dd_mul(a, b):
+    p = _two_prod(a[0], b[0])
+    lo = p[1] + a[0] * b[1] + a[1] * b[0]
+    return _two_sum(p[0], lo)
+
+def _dd_mul_scalar(a, b):
+    p = _two_prod(a[0], b)
+    lo = p[1] + a[1] * b
+    return _two_sum(p[0], lo)
+
+def _dd_div(a, b):
+    q1 = a[0] / b[0]
+    r = _dd_sub(a, _dd_mul_scalar(b, q1))
+    q2 = r[0] / b[0]
+    r = _dd_sub(r, _dd_mul_scalar(b, q2))
+    q3 = r[0] / b[0]
+    q = _two_sum(q1, q2)
+    return _dd_add_scalar(q, q3)
+
+def _dd_div_scalar(a, b):
+    return _dd_div(a, _dd_from_double(b))
+
+def _dd_abs(a):
+    return (-a[0], -a[1]) if a[0] < 0.0 else a
+
+# ln(2) in dd
+_DD_LN2 = (6.931471805599452862e-01, 2.319046813023978449e-17)
+
+def _dd_exp(a):
+    if a[0] > 700.0:
+        return (math.inf, 0.0)
+    if a[0] < -700.0:
+        return _DD_ZERO
+
+    k = round(a[0] / _DD_LN2[0])
+    r = _dd_sub(a, _dd_mul_scalar(_DD_LN2, k))
+
+    s = _DD_ONE
+    term = _DD_ONE
+    for i in range(1, 13):
+        term = _dd_div_scalar(_dd_mul(term, r), float(i))
+        s = _dd_add(s, term)
+        if abs(term[0]) < 1e-32 * abs(s[0]):
+            break
+
+    ki = int(k)
+    return (math.ldexp(s[0], ki), math.ldexp(s[1], ki))
+
+def _dd_log(a):
+    y0 = math.log(a[0])
+    ey = _dd_exp((-y0, 0.0))
+    aey = _dd_mul(a, ey)
+    corr = _dd_sub(aey, _DD_ONE)
+    return _dd_add(_dd_from_double(y0), corr)
+
+def _dd_sqrt(a):
+    if a[0] <= 0.0 and a[1] == 0.0:
+        return _DD_ZERO
+    y0 = math.sqrt(a[0])
+    q = _dd_div(a, _dd_from_double(y0))
+    return _dd_mul_scalar(_dd_add(_dd_from_double(y0), q), 0.5)
+
+def _dd_asinh(x):
+    x2 = _dd_mul(x, x)
+    arg = _dd_sqrt(_dd_add_scalar(x2, 1.0))
+    return _dd_log(_dd_add(x, arg))
+
+def _dd_ehat_cf(m, x):
+    """Ehat_m(x) via modified Lentz CF in dd."""
+    TINY = 1e-300
+    CF_TOL = 1e-31
+    MAX_ITER = 200
+
+    b = _dd_add_scalar(x, float(m))
+    if abs(b[0]) < TINY:
+        b = (TINY, b[1])
+
+    f = b
+    C = b
+    D = _DD_ZERO
+
+    for j in range(1, MAX_ITER + 1):
+        aj = -float(m + j - 1) * float(j)
+        bj = _dd_add_scalar(x, float(m + 2 * j))
+
+        D = _dd_add(bj, _dd_mul_scalar(D, aj))
+        if abs(D[0]) < TINY:
+            D = (TINY, D[1])
+        D = _dd_div(_DD_ONE, D)
+
+        C = _dd_add(bj, _dd_div(_dd_from_double(aj), C))
+        if abs(C[0]) < TINY:
+            C = (TINY, C[1])
+
+        delta = _dd_mul(C, D)
+        f = _dd_mul(f, delta)
+
+        if abs(delta[0] - 1.0) + abs(delta[1]) < CF_TOL:
+            break
+
+    return _dd_div(_DD_ONE, f)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DD-precision compute_params
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class _KershawParamsDD:
+    __slots__ = ('a', 's', 'q', 'omega2', 'Delta', 'lambda_plus',
+                 'rho_plus', 'rho_minus', 'alpha_plus', 'alpha_minus',
+                 'G', 'A_plus', 'A_minus', 'Psi')
+
+def _compute_params_dd(gamma, gamma_p, xi, tau):
+    p = _KershawParamsDD()
+    gamma_dd   = _dd_from_double(gamma)
+    gamma_p_dd = _dd_from_double(gamma_p)
+    xi_dd      = _dd_from_double(xi)
+    tau_dd     = _dd_from_double(tau)
+    one = _DD_ONE
+    two = (2.0, 0.0)
+
+    p.a = _dd_sub(one, xi_dd)
+    p.s = _dd_add(_dd_div(one, gamma_dd), _dd_div(one, gamma_p_dd))
+
+    dg  = _dd_sub(gamma_p_dd, gamma_dd)
+    dg2 = _dd_mul(dg, dg)
+    gg  = _dd_mul(gamma_dd, gamma_p_dd)
+    q2  = _dd_add(dg2, _dd_mul(_dd_mul(two, gg), p.a))
+    p.q = _dd_sqrt(q2)
+
+    p.omega2 = _dd_div(_dd_add(one, xi_dd), p.a)
+
+    gg_a    = _dd_mul(gg, p.a)
+    factor1 = _dd_add(one, _dd_div(gg_a, two))
+    factor2 = _dd_add(one, _dd_div(dg2, _dd_mul(two, gg_a)))
+    p.Delta = _dd_sqrt(_dd_mul(factor1, factor2))
+
+    p.lambda_plus = _dd_add(_dd_div(dg, two), p.Delta)
+
+    if p.lambda_plus[0] < 1.0 - 1e-12:
+        raise RuntimeError("lambda_plus significantly below 1")
+    if p.lambda_plus[0] < 1.0:
+        p.lambda_plus = one
+
+    p.rho_plus  = _dd_add(p.lambda_plus, gamma_dd)
+    p.rho_minus = _dd_sub(p.lambda_plus, gamma_p_dd)
+
+    Rp0 = _dd_add(_dd_mul(p.rho_plus, p.rho_plus), p.omega2)
+    Rm0 = _dd_add(_dd_mul(p.rho_minus, p.rho_minus), p.omega2)
+    p.alpha_plus  = _dd_div(one, _dd_sqrt(Rp0))
+    p.alpha_minus = _dd_div(one, _dd_sqrt(Rm0))
+
+    a2 = _dd_mul(p.a, p.a)
+    p.G = _dd_add(_dd_sub(_DD_ZERO, gg),
+                  _dd_add(_dd_div(two, p.a),
+                          _dd_div(two, _dd_mul(gg, a2))))
+
+    s_over_tau_a2 = _dd_div(p.s, _dd_mul(tau_dd, a2))
+    p.A_plus  = _dd_sub(p.G, s_over_tau_a2)
+    p.A_minus = _dd_add(p.G, s_over_tau_a2)
+
+    term1 = _dd_div(_dd_mul(_dd_mul(two, tau_dd), gg), p.q)
+    term2 = _dd_mul(_dd_div(p.s, a2),
+                    _dd_add(p.alpha_plus, p.alpha_minus))
+    term3 = _dd_div(_dd_sub(_dd_mul(p.rho_plus, p.alpha_plus),
+                            _dd_mul(p.rho_minus, p.alpha_minus)),
+                    p.a)
+    p.Psi = _dd_add(_dd_add(term1, term2), term3)
+
+    return p
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Scaled exponential integral: Ehat_m(x) = exp(x) * E_m(x)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -80,97 +303,123 @@ class SeriesResult:
 _POISSON_Y_MAX = 500.0
 _ACCUMULATION_SAFETY_FACTOR = 10.0
 COND_ERROR_COEFF = _ACCUMULATION_SAFETY_FACTOR * np.finfo(np.float64).eps
+DD_COND_ERROR_COEFF = _ACCUMULATION_SAFETY_FACTOR * np.finfo(np.float64).eps ** 2
 
-# rel_tol / eps_machine / safety_factor = 1e-13 / 1e-16 / 10
 EHAT_AMPLIFICATION_BUDGET = 1e2
 
 def _power_series_normalized(p: KershawParams, gamma: float, gamma_p: float,
                               tau: float, eps_rel: float = 1e-12,
-                              n_min: int = 4, n_max: int = 200):
+                              n_min: int = 4, n_max: int = 200,
+                              xi: float = None):
     """
-    Compute the normalized ratio Sigma_E / Sigma_0 via power series.
+    Compute the normalized ratio Sigma_E / Sigma_0 via power series
+    using full double-double arithmetic.
 
     Returns (normalized_ratio, estimated_normalized_error, terms_used, converged).
     """
-    a = p.a
-    omega = math.sqrt(p.omega2)
-    b = omega / (2.0 * tau)
+    if xi is None:
+        xi = 1.0 - p.a
 
-    theta_plus = math.asinh(p.rho_plus / omega)
-    theta_minus = math.asinh(p.rho_minus / omega)
+    pd = _compute_params_dd(gamma, gamma_p, xi, tau)
 
-    x_plus = b * math.exp(theta_plus)
-    y_plus = b * math.exp(-theta_plus)
-    x_minus = b * math.exp(theta_minus)
-    y_minus = b * math.exp(-theta_minus)
+    omega_dd = _dd_sqrt(pd.omega2)
+    tau_dd   = _dd_from_double(tau)
+    b_dd     = _dd_div(omega_dd, _dd_mul_scalar(tau_dd, 2.0))
 
-    if y_plus > _POISSON_Y_MAX or y_minus > _POISSON_Y_MAX:
+    theta_plus_dd  = _dd_asinh(_dd_div(pd.rho_plus, omega_dd))
+    theta_minus_dd = _dd_asinh(_dd_div(pd.rho_minus, omega_dd))
+
+    neg_theta_plus  = (-theta_plus_dd[0], -theta_plus_dd[1])
+    neg_theta_minus = (-theta_minus_dd[0], -theta_minus_dd[1])
+
+    x_plus_dd  = _dd_mul(b_dd, _dd_exp(theta_plus_dd))
+    y_plus_dd  = _dd_mul(b_dd, _dd_exp(neg_theta_plus))
+    x_minus_dd = _dd_mul(b_dd, _dd_exp(theta_minus_dd))
+    y_minus_dd = _dd_mul(b_dd, _dd_exp(neg_theta_minus))
+
+    if y_plus_dd[0] > _POISSON_Y_MAX or y_minus_dd[0] > _POISSON_Y_MAX:
         return p.Psi, 0.0, 0, False
 
-    if x_plus <= 0.0 or x_minus <= 0.0:
+    if x_plus_dd[0] <= 0.0 or x_minus_dd[0] <= 0.0:
         return p.Psi, 0.0, 0, False
 
-    w_plus = math.exp(-y_plus)
-    w_minus = math.exp(-y_minus)
+    w_plus_dd  = _dd_exp((-y_plus_dd[0], -y_plus_dd[1]))
+    w_minus_dd = _dd_exp((-y_minus_dd[0], -y_minus_dd[1]))
 
-    P_plus = 0.0
-    P_minus = 0.0
+    P_plus_dd  = _DD_ZERO
+    P_minus_dd = _DD_ZERO
 
     eps_tiny = 1e-300
-
-    last_term_mag = 0.0
+    last_diff_change = 0.0
     terms_used = 0
 
-    ehat_plus_curr = ehat_expn(1, x_plus)
-    ehat_minus_curr = ehat_expn(1, x_minus)
-    amp_plus = 1.0
-    amp_minus = 1.0
+    ehat_plus_dd  = _dd_ehat_cf(1, x_plus_dd)
+    ehat_minus_dd = _dd_ehat_cf(1, x_minus_dd)
+    amp_plus_dd  = _DD_ONE
+    amp_minus_dd = _DD_ONE
 
     for n in range(n_max + 1):
-        coeff_plus = p.A_plus + 2.0 * n / a
-        coeff_minus = p.A_minus + 2.0 * n / a
+        coeff_plus_dd  = _dd_add(pd.A_plus,
+                                 _dd_div(_dd_from_double(2.0 * n), pd.a))
+        coeff_minus_dd = _dd_add(pd.A_minus,
+                                 _dd_div(_dd_from_double(2.0 * n), pd.a))
 
-        t_plus = w_plus * coeff_plus * ehat_plus_curr
-        t_minus = w_minus * coeff_minus * ehat_minus_curr
+        t_plus_dd  = _dd_mul(_dd_mul(w_plus_dd, coeff_plus_dd), ehat_plus_dd)
+        t_minus_dd = _dd_mul(_dd_mul(w_minus_dd, coeff_minus_dd), ehat_minus_dd)
 
-        P_plus += t_plus
-        P_minus += t_minus
+        prev_diff = _dd_to_double(_dd_sub(P_plus_dd, P_minus_dd))
+        P_plus_dd  = _dd_add(P_plus_dd, t_plus_dd)
+        P_minus_dd = _dd_add(P_minus_dd, t_minus_dd)
+        curr_diff = _dd_to_double(_dd_sub(P_plus_dd, P_minus_dd))
+        last_diff_change = abs(curr_diff - prev_diff)
 
-        term_mag = abs(t_plus) + abs(t_minus)
-        last_term_mag = term_mag
+        term_mag = abs(t_plus_dd[0]) + abs(t_minus_dd[0])
         terms_used = n + 1
 
-        S_n = abs(P_plus) + abs(P_minus)
+        S_n = abs(P_plus_dd[0]) + abs(P_minus_dd[0])
         if n >= n_min and term_mag / (S_n + eps_tiny) < eps_rel:
-            break
+            partial = abs(_dd_to_double(_dd_add(pd.Psi,
+                          _dd_sub(P_plus_dd, P_minus_dd))))
+            if last_diff_change / (partial + eps_tiny) < eps_rel:
+                break
 
         if n < n_max:
-            w_plus *= y_plus / (n + 1)
-            w_minus *= y_minus / (n + 1)
+            w_plus_dd  = _dd_div(_dd_mul(w_plus_dd, y_plus_dd),
+                                 _dd_from_double(n + 1.0))
+            w_minus_dd = _dd_div(_dd_mul(w_minus_dd, y_minus_dd),
+                                 _dd_from_double(n + 1.0))
 
-            amp_plus *= x_plus / (n + 1)
-            if amp_plus < EHAT_AMPLIFICATION_BUDGET:
-                ehat_plus_curr = (1.0 - x_plus * ehat_plus_curr) / (n + 1)
+            amp_plus_dd = _dd_mul(amp_plus_dd,
+                                  _dd_div(x_plus_dd, _dd_from_double(n + 1.0)))
+            if amp_plus_dd[0] < EHAT_AMPLIFICATION_BUDGET:
+                ehat_plus_dd = _dd_div_scalar(
+                    _dd_sub(_DD_ONE, _dd_mul(x_plus_dd, ehat_plus_dd)),
+                    n + 1)
             else:
-                ehat_plus_curr = ehat_expn(n + 2, x_plus)
-                amp_plus = 1.0
+                ehat_plus_dd = _dd_ehat_cf(n + 2, x_plus_dd)
+                amp_plus_dd = _DD_ONE
 
-            amp_minus *= x_minus / (n + 1)
-            if amp_minus < EHAT_AMPLIFICATION_BUDGET:
-                ehat_minus_curr = (1.0 - x_minus * ehat_minus_curr) / (n + 1)
+            amp_minus_dd = _dd_mul(amp_minus_dd,
+                                   _dd_div(x_minus_dd, _dd_from_double(n + 1.0)))
+            if amp_minus_dd[0] < EHAT_AMPLIFICATION_BUDGET:
+                ehat_minus_dd = _dd_div_scalar(
+                    _dd_sub(_DD_ONE, _dd_mul(x_minus_dd, ehat_minus_dd)),
+                    n + 1)
             else:
-                ehat_minus_curr = ehat_expn(n + 2, x_minus)
-                amp_minus = 1.0
+                ehat_minus_dd = _dd_ehat_cf(n + 2, x_minus_dd)
+                amp_minus_dd = _DD_ONE
 
     converged = terms_used <= n_max
-    normalized_ratio = p.Psi + P_plus - P_minus
+    diff = _dd_sub(P_plus_dd, P_minus_dd)
+    normalized_dd = _dd_add(pd.Psi, diff)
+    normalized_ratio = _dd_to_double(normalized_dd)
 
-    eps_tiny = 1e-300
+    psi_abs = abs(pd.Psi[0]) + abs(pd.Psi[1])
+    sum_abs = abs(P_plus_dd[0]) + abs(P_minus_dd[0]) + psi_abs
     norm_abs = abs(normalized_ratio) + eps_tiny
-    sum_abs = abs(P_plus) + abs(P_minus) + abs(p.Psi)
     conditioning = sum_abs / norm_abs
-    cond_error = COND_ERROR_COEFF * conditioning
-    trunc_error = last_term_mag / norm_abs
+    cond_error = DD_COND_ERROR_COEFF * conditioning
+    trunc_error = last_diff_change / norm_abs
     rel_error = max(trunc_error, cond_error)
     norm_err = rel_error * norm_abs
 
@@ -352,7 +601,7 @@ def sigma_E_series(E, E_prime, xi, tau, Ne=1.0, method="auto",
 
     if chosen == "power":
         norm_ratio, norm_err, terms, converged = _power_series_normalized(
-            p, gamma, gamma_p, tau, eps_rel, n_min, n_max)
+            p, gamma, gamma_p, tau, eps_rel, n_min, n_max, xi=xi)
     elif chosen == "asymptotic":
         norm_ratio, norm_err, terms, converged = _asymptotic_series_normalized(
             p, gamma, gamma_p, tau, eps_rel, n_min, n_max)

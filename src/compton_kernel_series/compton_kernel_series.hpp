@@ -57,7 +57,7 @@ public:
 
 private:
     SeriesResult power_series(const KershawParams& p,
-                              double gamma, double gamma_p,
+                              double gamma, double gamma_p, double xi,
                               double tau, double sigma0) const;
     SeriesResult asymptotic_series(const KershawParams& p,
                                    double gamma, double gamma_p,
@@ -69,6 +69,9 @@ private:
     static constexpr double ACCUMULATION_SAFETY_FACTOR = 10.0;
     static constexpr double COND_ERROR_COEFF = ACCUMULATION_SAFETY_FACTOR
                                              * std::numeric_limits<double>::epsilon();
+    static constexpr double DD_EPS = std::numeric_limits<double>::epsilon()
+                                   * std::numeric_limits<double>::epsilon();
+    static constexpr double DD_COND_ERROR_COEFF = ACCUMULATION_SAFETY_FACTOR * DD_EPS;
 };
 
 } // namespace compton

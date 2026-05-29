@@ -7,6 +7,7 @@
  */
 
 #include "compton_kernel_series.hpp"
+#include "double_double.hpp"
 
 #include <boost/math/special_functions/expint.hpp>
 #include <algorithm>
@@ -63,90 +64,113 @@ static constexpr double POISSON_Y_MAX = 500.0;
 static constexpr double EHAT_AMPLIFICATION_BUDGET = 1e2;
 
 SeriesResult ComptonKernelSeries::power_series(
-    const KershawParams& p, double /*gamma*/, double /*gamma_p*/,
+    const KershawParams& p, double gamma, double gamma_p, double xi,
     double tau, double sigma0) const
 {
-    const double omega = std::sqrt(p.omega2);
-    const double b = omega / (2.0 * tau);
+    KershawParamsDD pd = compute_params_dd(gamma, gamma_p, xi, tau);
 
-    const double theta_plus = std::asinh(p.rho_plus / omega);
-    const double theta_minus = std::asinh(p.rho_minus / omega);
+    const dd omega_dd = dd_sqrt(pd.omega2);
+    const dd tau_dd   = dd_from_double(tau);
+    const dd b_dd     = dd_div(omega_dd, dd_mul_scalar(tau_dd, 2.0));
 
-    const double x_plus = b * std::exp(theta_plus);
-    const double y_plus = b * std::exp(-theta_plus);
-    const double x_minus = b * std::exp(theta_minus);
-    const double y_minus = b * std::exp(-theta_minus);
+    const dd theta_plus_dd  = dd_asinh(dd_div(pd.rho_plus, omega_dd));
+    const dd theta_minus_dd = dd_asinh(dd_div(pd.rho_minus, omega_dd));
 
-    if (y_plus > POISSON_Y_MAX || y_minus > POISSON_Y_MAX ||
-        x_plus <= 0.0 || x_minus <= 0.0) {
+    const dd neg_theta_plus  = {-theta_plus_dd.hi, -theta_plus_dd.lo};
+    const dd neg_theta_minus = {-theta_minus_dd.hi, -theta_minus_dd.lo};
+
+    const dd x_plus_dd  = dd_mul(b_dd, dd_exp(theta_plus_dd));
+    const dd y_plus_dd  = dd_mul(b_dd, dd_exp(neg_theta_plus));
+    const dd x_minus_dd = dd_mul(b_dd, dd_exp(theta_minus_dd));
+    const dd y_minus_dd = dd_mul(b_dd, dd_exp(neg_theta_minus));
+
+    if (y_plus_dd.hi > POISSON_Y_MAX || y_minus_dd.hi > POISSON_Y_MAX ||
+        x_plus_dd.hi <= 0.0 || x_minus_dd.hi <= 0.0) {
         double value = sigma0 * p.Psi;
         return SeriesResult{value, 0.0, 0.0, 0, SeriesMethod::PowerSeries, false};
     }
 
-    double w_plus = std::exp(-y_plus);
-    double w_minus = std::exp(-y_minus);
+    dd w_plus_dd  = dd_exp({-y_plus_dd.hi, -y_plus_dd.lo});
+    dd w_minus_dd = dd_exp({-y_minus_dd.hi, -y_minus_dd.lo});
 
-    double P_plus = 0.0;
-    double P_minus = 0.0;
+    dd P_plus_dd  = {0.0, 0.0};
+    dd P_minus_dd = {0.0, 0.0};
 
     constexpr double eps_tiny = 1e-300;
-    double last_term_mag = 0.0;
+    double last_diff_change = 0.0;
     int terms_used = 0;
 
-    double ehat_plus_curr = ehat_expn(1, x_plus);
-    double ehat_minus_curr = ehat_expn(1, x_minus);
-    double amp_plus = 1.0;
-    double amp_minus = 1.0;
+    dd ehat_plus_dd  = dd_ehat_cf(1, x_plus_dd);
+    dd ehat_minus_dd = dd_ehat_cf(1, x_minus_dd);
+    dd amp_plus_dd  = {1.0, 0.0};
+    dd amp_minus_dd = {1.0, 0.0};
 
     for (int n = 0; n <= n_max_; ++n) {
-        const double coeff_plus = p.A_plus + 2.0 * n / p.a;
-        const double coeff_minus = p.A_minus + 2.0 * n / p.a;
+        const dd coeff_plus_dd  = dd_add(pd.A_plus,
+                                         dd_div(dd_from_double(2.0 * n), pd.a));
+        const dd coeff_minus_dd = dd_add(pd.A_minus,
+                                         dd_div(dd_from_double(2.0 * n), pd.a));
 
-        const double t_plus = w_plus * coeff_plus * ehat_plus_curr;
-        const double t_minus = w_minus * coeff_minus * ehat_minus_curr;
+        const dd t_plus_dd  = dd_mul(dd_mul(w_plus_dd, coeff_plus_dd), ehat_plus_dd);
+        const dd t_minus_dd = dd_mul(dd_mul(w_minus_dd, coeff_minus_dd), ehat_minus_dd);
 
-        P_plus += t_plus;
-        P_minus += t_minus;
+        const double prev_diff = dd_to_double(dd_sub(P_plus_dd, P_minus_dd));
+        P_plus_dd  = dd_add(P_plus_dd, t_plus_dd);
+        P_minus_dd = dd_add(P_minus_dd, t_minus_dd);
+        const double curr_diff = dd_to_double(dd_sub(P_plus_dd, P_minus_dd));
+        last_diff_change = std::abs(curr_diff - prev_diff);
 
-        const double term_mag = std::abs(t_plus) + std::abs(t_minus);
-        last_term_mag = term_mag;
+        const double term_mag = std::abs(t_plus_dd.hi) + std::abs(t_minus_dd.hi);
         terms_used = n + 1;
 
-        const double S_n = std::abs(P_plus) + std::abs(P_minus);
-        if (n >= n_min_ && term_mag / (S_n + eps_tiny) < eps_rel_)
-            break;
+        const double S_n = std::abs(P_plus_dd.hi) + std::abs(P_minus_dd.hi);
+        if (n >= n_min_ && term_mag / (S_n + eps_tiny) < eps_rel_) {
+            double partial = std::abs(dd_to_double(dd_add(pd.Psi,
+                                      dd_sub(P_plus_dd, P_minus_dd))));
+            if (last_diff_change / (partial + eps_tiny) < eps_rel_)
+                break;
+        }
 
         if (n < n_max_) {
-            w_plus *= y_plus / (n + 1);
-            w_minus *= y_minus / (n + 1);
+            w_plus_dd  = dd_div(dd_mul(w_plus_dd, y_plus_dd), dd_from_double(n + 1.0));
+            w_minus_dd = dd_div(dd_mul(w_minus_dd, y_minus_dd), dd_from_double(n + 1.0));
 
-            amp_plus *= x_plus / (n + 1);
-            if (amp_plus < EHAT_AMPLIFICATION_BUDGET) {
-                ehat_plus_curr = (1.0 - x_plus * ehat_plus_curr) / (n + 1);
+            amp_plus_dd = dd_mul(amp_plus_dd,
+                                 dd_div(x_plus_dd, dd_from_double(n + 1.0)));
+            if (amp_plus_dd.hi < EHAT_AMPLIFICATION_BUDGET) {
+                ehat_plus_dd = dd_div_scalar(
+                    dd_sub(dd_from_double(1.0), dd_mul(x_plus_dd, ehat_plus_dd)),
+                    n + 1);
             } else {
-                ehat_plus_curr = ehat_expn(n + 2, x_plus);
-                amp_plus = 1.0;
+                ehat_plus_dd = dd_ehat_cf(n + 2, x_plus_dd);
+                amp_plus_dd = {1.0, 0.0};
             }
 
-            amp_minus *= x_minus / (n + 1);
-            if (amp_minus < EHAT_AMPLIFICATION_BUDGET) {
-                ehat_minus_curr = (1.0 - x_minus * ehat_minus_curr) / (n + 1);
+            amp_minus_dd = dd_mul(amp_minus_dd,
+                                  dd_div(x_minus_dd, dd_from_double(n + 1.0)));
+            if (amp_minus_dd.hi < EHAT_AMPLIFICATION_BUDGET) {
+                ehat_minus_dd = dd_div_scalar(
+                    dd_sub(dd_from_double(1.0), dd_mul(x_minus_dd, ehat_minus_dd)),
+                    n + 1);
             } else {
-                ehat_minus_curr = ehat_expn(n + 2, x_minus);
-                amp_minus = 1.0;
+                ehat_minus_dd = dd_ehat_cf(n + 2, x_minus_dd);
+                amp_minus_dd = {1.0, 0.0};
             }
         }
     }
 
     const bool converged = terms_used <= n_max_;
-    const double normalized_ratio = p.Psi + P_plus - P_minus;
+    dd diff = dd_sub(P_plus_dd, P_minus_dd);
+    dd normalized_dd = dd_add(pd.Psi, diff);
+    const double normalized_ratio = dd_to_double(normalized_dd);
     const double value = sigma0 * normalized_ratio;
 
-    const double sum_abs = std::abs(P_plus) + std::abs(P_minus) + std::abs(p.Psi);
+    const double psi_abs = std::abs(pd.Psi.hi) + std::abs(pd.Psi.lo);
+    const double sum_abs = std::abs(P_plus_dd.hi) + std::abs(P_minus_dd.hi) + psi_abs;
     const double norm_abs = std::abs(normalized_ratio) + eps_tiny;
     const double conditioning = sum_abs / norm_abs;
-    const double cond_error = COND_ERROR_COEFF * conditioning;
-    const double trunc_error = last_term_mag / norm_abs;
+    const double cond_error = DD_COND_ERROR_COEFF * conditioning;
+    const double trunc_error = last_diff_change / norm_abs;
     const double rel_error = std::max(trunc_error, cond_error);
     const double abs_error = std::abs(sigma0) * rel_error * norm_abs;
 
@@ -320,7 +344,7 @@ SeriesResult ComptonKernelSeries::sigma_E(
     }
 
     if (chosen == SeriesMethod::PowerSeries)
-        return power_series(p, gamma, gamma_p, tau, sigma0_val);
+        return power_series(p, gamma, gamma_p, xi, tau, sigma0_val);
     else
         return asymptotic_series(p, gamma, gamma_p, tau, sigma0_val);
 }

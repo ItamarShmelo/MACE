@@ -15,6 +15,7 @@
 #include <stdexcept>
 
 #include "units/units.hpp"
+#include "compton_kernel_series/double_double.hpp"
 
 namespace compton {
 
@@ -61,6 +62,26 @@ struct SigmaResult {
  * G, A±, Ψ) from the inputs.  Used by both quadrature and series modules.
  */
 KershawParams compute_params(double gamma, double gamma_p, double xi, double tau);
+
+/**
+ * @brief DD-precision kinematic parameters (mirrors KershawParams).
+ *
+ * Used by the power series to achieve eps^2 conditioning error.
+ */
+struct KershawParamsDD {
+    dd a, s, q, omega2;
+    dd Delta, lambda_plus, rho_plus, rho_minus;
+    dd alpha_plus, alpha_minus;
+    dd G, A_plus, A_minus, Psi;
+};
+
+/**
+ * @brief DD-precision version of compute_params.
+ *
+ * Mirrors compute_params() exactly but performs all arithmetic in
+ * double-double precision, producing dd-accurate kinematic parameters.
+ */
+KershawParamsDD compute_params_dd(double gamma, double gamma_p, double xi, double tau);
 
 /**
  * @brief Compute the prefactor σ₀ = Nₑ r_e² m_e c² / (4E²τ)
