@@ -10,6 +10,7 @@ alwaysApply: true
   improves clarity; apply east-const style (`T const value`).
 - Keep declarations stylistically consistent in code you are actively editing.
 - Do not mass-reformat untouched files only to enforce style; apply conventions incrementally as files are changed for functional work.
+- For long function signatures, prefer one-parameter-per-line formatting (like `ComptonKernelQuadrature::sigma_E`) over compact multi-parameter single-line forms.
 
 ```cpp
 // ❌ BAD

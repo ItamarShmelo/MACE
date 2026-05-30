@@ -100,11 +100,15 @@ public:
      * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
      * @return SigmaResult with value and error estimates
      */
-    SigmaResult sigma_E(double E, double E_prime, double xi, double tau, double Ne) const;
+    SigmaResult sigma_E(double const E,
+                        double const E_prime,
+                        double const xi,
+                        double const tau,
+                        double const Ne) const;
 
 private:
-    double compute_IQ_post_ibp(const KershawParams<double>& p, double tau, int NL) const;
-    double compute_IQ_pre_ibp(const KershawParams<double>& p, double tau, int NL) const;
+    double compute_IQ_post_ibp(KershawParams<double> const& p, double const tau, int const NL) const;
+    double compute_IQ_pre_ibp(KershawParams<double> const& p, double const tau, int const NL) const;
 
     int NL_;
     QuadratureForm form_;

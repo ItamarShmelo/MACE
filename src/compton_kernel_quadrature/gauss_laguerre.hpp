@@ -243,6 +243,37 @@ inline GaussLaguerreRule compute_gauss_laguerre(int N) {
     return rule;
 }
 
+/**
+ * @brief Integrate a function using a precomputed Gauss-Laguerre rule.
+ */
+template<typename F>
+inline double laguerre_integrate(F&& integrand, GaussLaguerreRule const& rule) {
+    double sum = 0.0;
+    int const n = static_cast<int>(rule.nodes.size());
+    for (int i = 0; i < n; ++i) {
+        sum += rule.weights[i] * integrand(rule.nodes[i]);
+    }
+    return sum;
+}
+
+/**
+ * @brief Return cached Gauss-Laguerre rules for supported orders.
+ */
+inline GaussLaguerreRule const& get_rule(int const N) {
+    static GaussLaguerreRule const rule_32 = compute_gauss_laguerre(32);
+    static GaussLaguerreRule const rule_64 = compute_gauss_laguerre(64);
+    static GaussLaguerreRule const rule_128 = compute_gauss_laguerre(128);
+    static GaussLaguerreRule const rule_256 = compute_gauss_laguerre(256);
+
+    switch (N) {
+        case 32:  return rule_32;
+        case 64:  return rule_64;
+        case 128: return rule_128;
+        case 256: return rule_256;
+        default:  throw std::invalid_argument("N must be one of: 32, 64, 128, 256");
+    }
+}
+
 } // namespace compton
 
 #endif

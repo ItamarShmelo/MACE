@@ -83,6 +83,9 @@ struct SigmaResult {
     double estimated_rel_error; ///< abs_error / |value|
 };
 
+/// Floor added to relative-error denominators to avoid division by zero.
+constexpr double REL_ERROR_TINY_SCALE = 1e-300;
+
 namespace details {
 
 inline double param_sqrt(double value) {
@@ -102,7 +105,12 @@ inline DD param_sqrt(const DD& value) {
  * G, A±, Ψ) from the inputs.  Used by both quadrature and series modules.
  */
 template<typename T>
-inline KershawParams<T> compute_params(double gamma, double gamma_p, double xi, double tau) {
+inline KershawParams<T> compute_params(
+    double const gamma, 
+    double const gamma_p, 
+    double const xi, 
+    double const tau) {
+    
     KershawParams<T> p{};
 
     T const gamma_t = static_cast<T>(gamma);
@@ -163,7 +171,11 @@ inline KershawParams<T> compute_params(double gamma, double gamma_p, double xi, 
  * magnitude: elastic scattering (λ₊→1) has no suppression, while large
  * energy transfers (λ₊≫1) are exponentially suppressed.
  */
-inline double stable_sigma0_E(double E, double tau, double lambda_plus, double Ne) {
+inline double stable_sigma0_E(
+    double const E, 
+    double const tau, 
+    double const lambda_plus, 
+    double const Ne) {
     return Ne * units::r_e2 * units::me_c2
            / (4.0 * E * E * tau)
            * std::exp(-(lambda_plus - 1.0) / tau)
