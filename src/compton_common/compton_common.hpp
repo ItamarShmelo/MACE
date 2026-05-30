@@ -86,6 +86,9 @@ struct SigmaResult {
 /// Floor added to relative-error denominators to avoid division by zero.
 constexpr double REL_ERROR_TINY_SCALE = 1e-300;
 
+/// Guard to keep xi away from the direct-quadrature endpoint singularity.
+static constexpr double XI_DIRECT_QUADRATURE_GUARD = 1e-14;
+
 namespace details {
 
 inline double param_sqrt(double value) {

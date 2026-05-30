@@ -150,7 +150,7 @@ SigmaResult ComptonKernelQuadrature::sigma_E(
         throw std::invalid_argument("xi must be finite and strictly inside (-1, 1)");
     if (!std::isfinite(Ne))
         throw std::invalid_argument("Ne must be finite");
-    if (1.0 - xi < 1e-14)
+    if (1.0 - xi < XI_DIRECT_QUADRATURE_GUARD)
         throw std::invalid_argument("xi too close to 1 for direct quadrature");
 
     double const gamma = E / units::me_c2;
