@@ -9,6 +9,8 @@
  */
 
 #include <cmath>
+#include <sstream>
+#include <stdexcept>
 #include "../doubledouble.h"
 
 namespace compton {
@@ -43,6 +45,7 @@ inline DD dd_ehat_cf(int m, const DD& x) {
     DD f = b;
     DD C = b;
     DD D(0.0, 0.0);
+    bool converged = false;
 
     for (int j = 1; j <= MAX_ITER; ++j) {
         double aj = -static_cast<double>(m + j - 1) * static_cast<double>(j);
@@ -58,8 +61,19 @@ inline DD dd_ehat_cf(int m, const DD& x) {
         DD delta = C * D;
         f = f * delta;
 
-        if (std::abs(delta.upper - 1.0) + std::abs(delta.lower) < CF_TOL)
+        if (std::abs(delta.upper - 1.0) + std::abs(delta.lower) < CF_TOL) {
+            converged = true;
             break;
+        }
+    }
+
+    if (!converged) {
+        std::ostringstream message;
+        message << "dd_ehat_cf failed to converge: m=" << m
+                << ", x=(" << x.upper << ", " << x.lower << ")"
+                << ", max_iter=" << MAX_ITER
+                << ", tol=" << CF_TOL;
+        throw std::runtime_error(message.str());
     }
 
     return DD(1.0) / f;
