@@ -33,21 +33,19 @@
  *
  * Two mathematically equivalent forms of I_Q are provided:
  *
- * 1. PostIntegrationByParts (default): After applying IBP to remove the
- *    derivative of the Heaviside step functions, one obtains an integrand
- *    involving 1/√(R±).  This form converges well for moderate-to-high τ
- *    but suffers cancellation at very small τ (cold electrons).
+ * 1. PostIntegrationByParts (default):
+ * 
  *
- * 2. PreIntegrationByParts: The original form before IBP, with integrands
- *    involving 1/R±^{3/2}.  Converges uniformly across all τ and serves as
- *    a cross-check.
+ *
+ * 2. PreIntegrationByParts. 
+ *
+ *
  *
  * ─────────────────────────────────────────────────────────────────────────
  * UNITS AND API
  * ─────────────────────────────────────────────────────────────────────────
  *
- * The function sigma_E returns the microscopic differential cross-section
- * in units of [cm² / erg] when Nₑ = 1, or the macroscopic kernel in
+ * The function sigma_E returns the macroscopic kernel in
  * [1/(cm·erg)] when Nₑ = electron density [cm⁻³].
  *
  * ─────────────────────────────────────────────────────────────────────────
@@ -65,7 +63,7 @@ namespace compton {
 /// Selects which integral form to use for I_Q.
 enum class QuadratureForm {
     PostIntegrationByParts,  ///< Default: IBP-transformed, O(1/√R) integrand
-    PreIntegrationByParts    ///< Original O(1/R^{3/2}) integrand; uniform convergence
+    PreIntegrationByParts    ///< Original O(1/R^{3/2}) integrand
 };
 
 /**

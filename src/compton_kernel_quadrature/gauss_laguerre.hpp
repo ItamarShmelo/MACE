@@ -70,15 +70,24 @@
 #include <numeric>
 #include <stdexcept>
 #include <algorithm>
+#include <utility>
 
 namespace compton {
 
 struct GaussLaguerreRule {
     std::vector<double> nodes;   ///< Quadrature nodes (zeros of L_N)
     std::vector<double> weights; ///< Corresponding quadrature weights
+
+    GaussLaguerreRule() = default;
+    explicit GaussLaguerreRule(int const N) : nodes(N), weights(N) {}
 };
 
 namespace detail {
+
+struct Tql2Result {
+    std::vector<double> eigenvalues;
+    std::vector<double> eigenvectors;
+};
 
 /**
  * @brief Implicit QL algorithm for symmetric tridiagonal eigenvalue problem.
@@ -86,22 +95,25 @@ namespace detail {
  * Computes all eigenvalues and eigenvectors of a real symmetric tridiagonal
  * matrix.  On entry:
  *   - diag[0..n-1]     : diagonal elements
- *   - offdiag[0..n-1]  : sub-diagonal in positions [1..n-1]; offdiag[0] unused
+ *   - offdiag[0..n-1]  : sub-diagonal in positions [1..n-1]; offdiag[0]
+ *                        ignored on entry (kept 0.0 by convention)
  *
- * On exit:
- *   - diag[]   : eigenvalues in ascending order
- *   - Z[k*n+i] : k-th component of the i-th eigenvector
+ * Returns:
+ *   - eigenvalues[]   : eigenvalues in ascending order
+ *   - eigenvectors[]  : eigenvector matrix in column-major form, where
+ *                       eigenvectors[k*n+i] is the k-th component of the
+ *                       i-th eigenvector
  *
  * The algorithm converges cubically and typically needs 2–3 iterations per
  * eigenvalue.  A hard limit of 300 iterations per eigenvalue guards against
  * pathological cases.
  */
-inline void tql2(int n, std::vector<double>& diag, std::vector<double>& offdiag,
-                 std::vector<double>& Z) {
-    Z.assign(n * n, 0.0);
+inline Tql2Result tql2(int const n, std::vector<double> diag,
+                       std::vector<double> offdiag) {
+    std::vector<double> Z(n * n, 0.0);
     for (int i = 0; i < n; ++i) Z[i * n + i] = 1.0;
 
-    if (n == 1) return;
+    if (n == 1) return Tql2Result{std::move(diag), std::move(Z)};
 
     // Shift offdiag so that subdiagonal is in offdiag[0..n-2]
     // (offdiag passed in has subdiag in [1..n-1])
@@ -116,7 +128,7 @@ inline void tql2(int n, std::vector<double>& diag, std::vector<double>& offdiag,
         while (true) {
             int m = l;
             for (; m < n - 1; ++m) {
-                double dd = std::abs(diag[m]) + std::abs(diag[m + 1]);
+                double const dd = std::abs(diag[m]) + std::abs(diag[m + 1]);
                 if (std::abs(offdiag[m]) <= 1e-15 * dd) break;
             }
             if (m == l) break;
@@ -183,6 +195,7 @@ inline void tql2(int n, std::vector<double>& diag, std::vector<double>& offdiag,
     }
     diag = std::move(sorted_diag);
     Z = std::move(sorted_Z);
+    return Tql2Result{std::move(diag), std::move(Z)};
 }
 
 } // namespace detail
@@ -210,24 +223,20 @@ inline GaussLaguerreRule compute_gauss_laguerre(int N) {
     std::vector<double> diag(N);
     std::vector<double> offdiag(N, 0.0);
 
-    for (int i = 0; i < N; ++i)
+    // subdiag in positions 1..N-1; offdiag[0] is ignored on entry by tql2.
+    for (int i = 0; i < N; ++i) {
         diag[i] = 2.0 * i + 1.0;
+        offdiag[i] = (i == 0) ? 0.0 : static_cast<double>(i);
+    }
 
-    // subdiag in positions 1..N-1 (position 0 unused, tql2 will shift)
-    for (int i = 1; i < N; ++i)
-        offdiag[i] = static_cast<double>(i);
+    detail::Tql2Result const eig = detail::tql2(N, std::move(diag), std::move(offdiag));
 
-    std::vector<double> Z;
-    detail::tql2(N, diag, offdiag, Z);
-
-    GaussLaguerreRule rule;
-    rule.nodes.resize(N);
-    rule.weights.resize(N);
+    GaussLaguerreRule rule(N);
 
     // mu_0 = integral of e^{-x} from 0 to inf = 1
     for (int i = 0; i < N; ++i) {
-        rule.nodes[i] = diag[i];
-        double v0 = Z[0 * N + i];
+        rule.nodes[i] = eig.eigenvalues[i];
+        double const v0 = eig.eigenvectors[0 * N + i];
         rule.weights[i] = v0 * v0;
     }
 
