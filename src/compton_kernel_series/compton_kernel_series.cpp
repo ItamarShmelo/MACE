@@ -63,10 +63,10 @@ static constexpr double POISSON_Y_MAX = 500.0;
 static constexpr double EHAT_AMPLIFICATION_BUDGET = 1e2;
 
 SeriesResult ComptonKernelSeries::power_series(
-    const KershawParams& p, double gamma, double gamma_p, double xi,
+    const KershawParams<double>& p, double gamma, double gamma_p, double xi,
     double tau, double sigma0) const
 {
-    KershawParamsDD pd = compute_params_dd(gamma, gamma_p, xi, tau);
+    KershawParams<DD> pd = compute_params<DD>(gamma, gamma_p, xi, tau);
 
     const DD omega_dd = pd.omega2.sqrt();
     const DD tau_dd(tau);
@@ -173,7 +173,7 @@ SeriesResult ComptonKernelSeries::power_series(
 // ─────────────────────────────────────────────────────────────────────────
 
 SeriesResult ComptonKernelSeries::asymptotic_series(
-    const KershawParams& p, double gamma, double gamma_p,
+    const KershawParams<double>& p, double gamma, double gamma_p,
     double tau, double sigma0) const
 {
     const double a = p.a;
@@ -320,7 +320,7 @@ SeriesResult ComptonKernelSeries::sigma_E(
     const double gamma = E / units::me_c2;
     const double gamma_p = E_prime / units::me_c2;
 
-    KershawParams p = compute_params(gamma, gamma_p, xi, tau);
+    KershawParams<double> p = compute_params<double>(gamma, gamma_p, xi, tau);
     const double sigma0_val = stable_sigma0_E(E, tau, p.lambda_plus, Ne);
 
     SeriesMethod chosen;

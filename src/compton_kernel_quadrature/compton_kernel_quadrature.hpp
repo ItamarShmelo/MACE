@@ -98,8 +98,8 @@ public:
     SigmaResult sigma_E(double E, double E_prime, double xi, double tau, double Ne) const;
 
 private:
-    double compute_IQ_post_ibp(const KershawParams& p, double tau, int NL) const;
-    double compute_IQ_pre_ibp(const KershawParams& p, double tau, int NL) const;
+    double compute_IQ_post_ibp(const KershawParams<double>& p, double tau, int NL) const;
+    double compute_IQ_pre_ibp(const KershawParams<double>& p, double tau, int NL) const;
 
     int NL_;
     QuadratureForm form_;

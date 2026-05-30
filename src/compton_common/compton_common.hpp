@@ -5,17 +5,17 @@
  * @brief Shared kinematics and normalization for the Kershaw-Prasad-Beason
  *        Compton scattering kernel.
  *
- * Contains the kinematic parameter struct, prefactor computation, and scaled
- * Bessel function used by both the direct quadrature and series evaluation
- * modules.
+ * Header-only common utilities used by both direct quadrature and series
+ * evaluation modules.
  */
 
+#include <boost/math/special_functions/bessel.hpp>
 #include <cmath>
 #include <numbers>
 #include <stdexcept>
 
-#include "units/units.hpp"
 #include "compton_kernel_series/dd_extras.hpp"
+#include "units/units.hpp"
 
 namespace compton {
 
@@ -26,7 +26,34 @@ namespace compton {
  * by exp(x)), and a 5-term Hankel asymptotic expansion for x ≥ 50 where
  * the direct computation would overflow/underflow.
  */
-double scaled_K2(double x);
+inline double scaled_K2(double x) {
+    if (!(x > 0.0) || !std::isfinite(x))
+        throw std::invalid_argument("scaled_K2 requires finite x > 0");
+
+    if (x < 50.0) {
+        return std::exp(x) * boost::math::cyl_bessel_k(2, x);
+    }
+
+    const double inv8x = 1.0 / (8.0 * x);
+    constexpr double mu = 16.0;
+
+    double term = 1.0;
+    double sum = 1.0;
+
+    term *= (mu - 1.0) * inv8x;
+    sum += term;
+
+    term *= (mu - 9.0) * inv8x / 2.0;
+    sum += term;
+
+    term *= (mu - 25.0) * inv8x / 3.0;
+    sum += term;
+
+    term *= (mu - 49.0) * inv8x / 4.0;
+    sum += term;
+
+    return std::sqrt(std::numbers::pi / (2.0 * x)) * sum;
+}
 
 /**
  * @brief Pre-computed kinematic parameters for a given (γ, γ', ξ, τ).
@@ -41,11 +68,12 @@ double scaled_K2(double x);
  *   α± = 1/√(ρ±² + ω²)                 (appear in boundary terms)
  *   G, A±, Ψ                            (combined constants for the integrand)
  */
+template<typename T>
 struct KershawParams {
-    double a, s, q, omega2;
-    double Delta, lambda_plus, rho_plus, rho_minus;
-    double alpha_plus, alpha_minus;
-    double G, A_plus, A_minus, Psi;
+    T a, s, q, omega2;
+    T Delta, lambda_plus, rho_plus, rho_minus;
+    T alpha_plus, alpha_minus;
+    T G, A_plus, A_minus, Psi;
 };
 
 /// Result of a kernel evaluation: value plus heuristic error estimates.
@@ -55,33 +83,77 @@ struct SigmaResult {
     double estimated_rel_error; ///< abs_error / |value|
 };
 
+namespace details {
+
+inline double param_sqrt(double value) {
+    return std::sqrt(value);
+}
+
+inline DD param_sqrt(const DD& value) {
+    return value.sqrt();
+}
+
+} // namespace details
+
 /**
  * @brief Compute all kinematic parameters from dimensionless energies.
  *
  * This is a pure function (no state); it derives (a, s, q, Δ, λ₊, ρ±, α±,
  * G, A±, Ψ) from the inputs.  Used by both quadrature and series modules.
  */
-KershawParams compute_params(double gamma, double gamma_p, double xi, double tau);
+template<typename T>
+inline KershawParams<T> compute_params(double gamma, double gamma_p, double xi, double tau) {
+    KershawParams<T> p{};
 
-/**
- * @brief DD-precision kinematic parameters (mirrors KershawParams).
- *
- * Used by the power series to achieve eps^2 conditioning error.
- */
-struct KershawParamsDD {
-    DD a, s, q, omega2;
-    DD Delta, lambda_plus, rho_plus, rho_minus;
-    DD alpha_plus, alpha_minus;
-    DD G, A_plus, A_minus, Psi;
-};
+    T const gamma_t = static_cast<T>(gamma);
+    T const gamma_p_t = static_cast<T>(gamma_p);
+    T const xi_t = static_cast<T>(xi);
+    T const tau_t = static_cast<T>(tau);
+    T const one = static_cast<T>(1.0);
+    T const two = static_cast<T>(2.0);
 
-/**
- * @brief DD-precision version of compute_params.
- *
- * Mirrors compute_params() exactly but performs all arithmetic in
- * double-double precision, producing dd-accurate kinematic parameters.
- */
-KershawParamsDD compute_params_dd(double gamma, double gamma_p, double xi, double tau);
+    p.a = one - xi_t;
+    p.s = one / gamma_t + one / gamma_p_t;
+
+    T const dg = gamma_p_t - gamma_t;
+    T const q2 = dg * dg + two * gamma_t * gamma_p_t * p.a;
+    p.q = details::param_sqrt(q2);
+
+    p.omega2 = (one + xi_t) / p.a;
+
+    T const gg_a = gamma_t * gamma_p_t * p.a;
+    T const factor1 = one + gg_a / two;
+    T const factor2 = one + (dg * dg) / (two * gg_a);
+    p.Delta = details::param_sqrt(factor1 * factor2);
+
+    p.lambda_plus = dg / two + p.Delta;
+
+    if (p.lambda_plus < one - 1e-12)
+        throw std::runtime_error("lambda_plus significantly below 1");
+    if (p.lambda_plus < one)
+        p.lambda_plus = one;
+
+    p.rho_plus = p.lambda_plus + gamma_t;
+    p.rho_minus = p.lambda_plus - gamma_p_t;
+
+    T const Rp0 = p.rho_plus * p.rho_plus + p.omega2;
+    T const Rm0 = p.rho_minus * p.rho_minus + p.omega2;
+    p.alpha_plus = one / details::param_sqrt(Rp0);
+    p.alpha_minus = one / details::param_sqrt(Rm0);
+
+    T const a2 = p.a * p.a;
+    p.G = -gamma_t * gamma_p_t + two / p.a + two / (gamma_t * gamma_p_t * a2);
+
+    T const s_over_tau_a2 = p.s / (tau_t * a2);
+    p.A_plus = p.G - s_over_tau_a2;
+    p.A_minus = p.G + s_over_tau_a2;
+
+    p.Psi = two * tau_t * gamma_t * gamma_p_t / p.q
+          + p.s / a2 * (p.alpha_plus + p.alpha_minus)
+          + (p.rho_plus * p.alpha_plus - p.rho_minus * p.alpha_minus) / p.a;
+
+    return p;
+}
 
 /**
  * @brief Compute the prefactor σ₀ = Nₑ r_e² m_e c² / (4E²τ)
@@ -91,7 +163,12 @@ KershawParamsDD compute_params_dd(double gamma, double gamma_p, double xi, doubl
  * magnitude: elastic scattering (λ₊→1) has no suppression, while large
  * energy transfers (λ₊≫1) are exponentially suppressed.
  */
-double stable_sigma0_E(double E, double tau, double lambda_plus, double Ne);
+inline double stable_sigma0_E(double E, double tau, double lambda_plus, double Ne) {
+    return Ne * units::r_e2 * units::me_c2
+           / (4.0 * E * E * tau)
+           * std::exp(-(lambda_plus - 1.0) / tau)
+           / scaled_K2(1.0 / tau);
+}
 
 } // namespace compton
 

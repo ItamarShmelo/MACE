@@ -10,7 +10,7 @@
  *
  *   1.  Convert to dimensionless energies: γ = E/m_e c², γ' = E'/m_e c².
  *
- *   2.  compute_params():  Derive all kinematic quantities (a, s, q, Δ, λ₊,
+ *   2.  compute_params<T>():  Derive all kinematic quantities (a, s, q, Δ, λ₊,
  *       ρ±, α±, G, A±, Ψ) from (γ, γ', ξ, τ).  Special care:
  *         - q² uses the "two-term" form  (γ'−γ)² + 2γγ'(1−ξ)  to avoid
  *           cancellation when γ ≈ γ'.
@@ -100,7 +100,7 @@ ComptonKernelQuadrature::ComptonKernelQuadrature(int NL, QuadratureForm form)
 }
 
 double ComptonKernelQuadrature::compute_IQ_post_ibp(
-    const KershawParams& p, double tau, int NL) const
+    const KershawParams<double>& p, double tau, int NL) const
 {
     auto integrand = [&](double x) -> double {
         double rho = tau * x;
@@ -125,7 +125,7 @@ double ComptonKernelQuadrature::compute_IQ_post_ibp(
 }
 
 double ComptonKernelQuadrature::compute_IQ_pre_ibp(
-    const KershawParams& p, double tau, int NL) const
+    const KershawParams<double>& p, double tau, int NL) const
 {
     double gamma_val = p.rho_plus - p.lambda_plus;
     double gamma_p_val = p.lambda_plus - p.rho_minus;
@@ -177,7 +177,7 @@ SigmaResult ComptonKernelQuadrature::sigma_E(
     double gamma = E / units::me_c2;
     double gamma_p = E_prime / units::me_c2;
 
-    KershawParams p = compute_params(gamma, gamma_p, xi, tau);
+    KershawParams<double> p = compute_params<double>(gamma, gamma_p, xi, tau);
     double sigma0 = stable_sigma0_E(E, tau, p.lambda_plus, Ne);
 
     double IQ_hi, IQ_lo;

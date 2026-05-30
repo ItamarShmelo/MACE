@@ -21,7 +21,6 @@ include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${doubledouble_SOURCE_DIR}/include)
 
 pybind11_add_module(_compton_kernel_quadrature
-    src/compton_common/compton_common.cpp
     src/compton_kernel_quadrature/compton_kernel_quadrature.cpp
     src/compton_kernel_quadrature/bind/_compton_kernel_quadrature.cpp
 )
@@ -33,7 +32,6 @@ set_target_properties(_compton_kernel_quadrature PROPERTIES
 )
 
 pybind11_add_module(_compton_kernel_series
-    src/compton_common/compton_common.cpp
     src/compton_kernel_series/compton_kernel_series.cpp
     src/compton_kernel_series/bind/_compton_kernel_series.cpp
 )
@@ -45,7 +43,6 @@ set_target_properties(_compton_kernel_series PROPERTIES
 )
 
 pybind11_add_module(_compton_kernel_solver
-    src/compton_common/compton_common.cpp
     src/compton_kernel_series/compton_kernel_series.cpp
     src/compton_kernel_quadrature/compton_kernel_quadrature.cpp
     src/compton_kernel_solver/compton_kernel_solver.cpp

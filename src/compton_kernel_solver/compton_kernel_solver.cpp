@@ -37,7 +37,7 @@ SolverResult ComptonKernelSolver::sigma_E(
     const double gamma = E / units::me_c2;
     const double gamma_p = E_prime / units::me_c2;
 
-    KershawParams p = compute_params(gamma, gamma_p, xi, tau);
+    KershawParams<double> p = compute_params<double>(gamma, gamma_p, xi, tau);
 
     const double tau_alpha_max = std::max(tau * p.alpha_plus, tau * p.alpha_minus);
 

@@ -6,8 +6,7 @@
 compton_cross_section/
 ├── src/
 │   ├── compton_common/                     # Shared kinematics and normalization
-│   │   ├── compton_common.hpp             # KershawParams, compute_params, etc.
-│   │   └── compton_common.cpp             # Implementations
+│   │   └── compton_common.hpp             # Header-only KershawParams + compute_params<T>
 │   ├── compton_kernel_quadrature/          # C++ quadrature kernel
 │   │   ├── compton_kernel_quadrature.hpp   # QuadratureForm, ComptonKernelQuadrature
 │   │   ├── compton_kernel_quadrature.cpp   # Gauss-Laguerre evaluation
@@ -125,18 +124,14 @@ _compton_kernel_quadrature.so    _compton_kernel_series.so
 
 #### `compton_common.hpp`
 
-**Role:** Shared interface for kinematics and normalization used by both quadrature and series modules.
+**Role:** Header-only kinematics and normalization used by both quadrature and series modules.
 
-Declares:
+Defines:
 - `scaled_K2(x)` — scaled Bessel function K̃₂(x) = exp(x) K₂(x)
-- `KershawParams` — kinematic intermediates struct
+- `KershawParams<T>` — kinematic intermediates struct template
 - `SigmaResult` — return type with value + error estimates
-- `compute_params(gamma, gamma_p, xi, tau)` — free function deriving all kinematic quantities
+- `compute_params<T>(gamma, gamma_p, xi, tau)` — templated kinematic derivation
 - `stable_sigma0_E(E, tau, lambda_plus, Ne)` — prefactor computation
-
-#### `compton_common.cpp`
-
-**Role:** Implementations of scaled_K2, compute_params, and stable_sigma0_E.
 
 ### C++ Quadrature Kernel (`src/compton_kernel_quadrature/`)
 
@@ -279,7 +274,7 @@ See [Series Methods](series.md) for algorithmic details.
 - Fetches [WarrenWeckesser/doubledouble](https://github.com/WarrenWeckesser/doubledouble) (header-only double-double arithmetic) via CMake `FetchContent` at configure time
 - Includes `external/CMMC/src` (for `units/units.hpp`)
 - Produces three shared library targets: `_compton_kernel_quadrature`, `_compton_kernel_series`, and `_compton_kernel_solver`
-- Each links against `compton_common.cpp` (compiled into each module)
+- Shared kinematics live in header-only `compton_common.hpp` (no dedicated `compton_common.cpp` translation unit)
 - The solver module links both series and quadrature source files
 - Output goes to `cpp_modules/` for direct Python import
 - Compiler flags: `-O3 -Wall -Wextra -Wpedantic` (must NOT use `-ffast-math` or `-Ofast` as these break double-double arithmetic invariants)

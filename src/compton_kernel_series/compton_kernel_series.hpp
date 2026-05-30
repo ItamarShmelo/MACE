@@ -54,10 +54,10 @@ public:
                          double tau, double Ne) const;
 
 private:
-    SeriesResult power_series(const KershawParams& p,
+    SeriesResult power_series(const KershawParams<double>& p,
                               double gamma, double gamma_p, double xi,
                               double tau, double sigma0) const;
-    SeriesResult asymptotic_series(const KershawParams& p,
+    SeriesResult asymptotic_series(const KershawParams<double>& p,
                                    double gamma, double gamma_p,
                                    double tau, double sigma0) const;
     SeriesMethod method_;

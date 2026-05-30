@@ -1,0 +1,18 @@
+---
+description: Project-wide code conventions
+alwaysApply: true
+---
+
+# Code Conventions
+
+- Prefer east-const style where applicable (for example, `T const` over `const T`).
+- Keep declarations stylistically consistent in code you are actively editing.
+- Do not mass-reformat untouched files only to enforce style; apply conventions incrementally as files are changed for functional work.
+
+```cpp
+// ❌ BAD
+const T gamma_t = static_cast<T>(gamma);
+
+// ✅ GOOD
+T const gamma_t = static_cast<T>(gamma);
+```
