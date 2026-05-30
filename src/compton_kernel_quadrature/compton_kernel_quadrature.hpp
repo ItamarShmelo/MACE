@@ -34,13 +34,18 @@
  * Two mathematically equivalent forms of I_Q are provided:
  *
  * 1. PostIntegrationByParts (default):
- * 
+ *    Σ_E = \Sigma_0 · (Ψ + I_Q^{post})
+ *    I_Q^{post} = τ ∫₀^∞ H(τx) e^{−x} dx
+ *    with ρ = τx, r_± = ρ + ρ_±, and R_± = r_±² + ω²,
+ *    H(ρ) = (A_+ - r_+/(τa))/√R_+ + (-A_- + r_-/(τa))/√R_-
  *
- *
- * 2. PreIntegrationByParts. 
- *
- *
- *
+ * 2. PreIntegrationByParts:
+ *    Σ_E = \Sigma_0 · I_Q^{pre}
+ *    I_Q^{pre} = τ ∫₀^∞ F(τx) e^{−x} dx
+ *    with the same r_± and R_±,
+ *    F(ρ) = 2γγ'/q + [((r_- s + 1 + ξ)/R_-^{3/2})
+ *                     + ((r_+ s - 1 - ξ)/R_+^{3/2})]/a²
+ *           + G(1/√R_+ - 1/√R_-)
  * ─────────────────────────────────────────────────────────────────────────
  * UNITS AND API
  * ─────────────────────────────────────────────────────────────────────────
@@ -52,8 +57,10 @@
  * REFERENCE
  * ─────────────────────────────────────────────────────────────────────────
  *
- *   D. Kershaw, M. Prasad, and J. Beason, "Photon Transport in a
- *   Compton Scattering Medium," Technical Report UCRL-94345, 1986.
+ *   D. S. Kershaw, M. K. Prasad, and J. D. Beason, "A simple and fast method
+ *   for computing the relativistic Compton scattering kernel for radiative
+ *   transfer," Journal of Quantitative Spectroscopy and Radiative Transfer
+ *   36(4):273-282, 1986. doi:10.1016/0022-4073(86)90050-6.
  */
 
 #include "compton_common/compton_common.hpp"
