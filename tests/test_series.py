@@ -164,7 +164,7 @@ class TestConvergenceFlags:
     def test_power_series_raises_when_ehat_cf_stalls(self):
         E, Ep = 8.5 * kev, 0.85 * kev
         tau = 900.0 * kev / me_c2
-        series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeries)
+        series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeriesHighPrecision)
         with pytest.raises(RuntimeError, match="ehat failed to converge"):
             series.sigma_E(E, Ep, -0.5, tau, 1.0)
 
@@ -260,3 +260,82 @@ class TestPythonVsCpp:
             f"Python vs C++ reldiff={reldiff}: T={T_kev}, E={E_kev}, "
             f"Ep={Ep_kev}, xi={xi}"
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PowerSeries (double precision) mode
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestPowerSeriesDoublePrecision:
+    @pytest.mark.parametrize(
+        "E_kev,Ep_kev,xi",
+        [(1.0, 1.01, 0.0), (10.0, 10.5, 0.0), (100.0, 101.0, 0.0)],
+    )
+    def test_convergence_and_positivity(self, E_kev, Ep_kev, xi):
+        T_kev = 100.0
+        tau = T_kev * kev / me_c2
+        E, Ep = E_kev * kev, Ep_kev * kev
+
+        series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeries)
+        r = series.sigma_E(E, Ep, xi, tau, 1.0)
+
+        assert r.converged
+        assert r.value >= 0
+        assert r.method_used == cs.SeriesMethod.PowerSeries
+
+    @pytest.mark.parametrize(
+        "E_kev,Ep_kev,xi",
+        [(1.0, 1.01, 0.0), (10.0, 10.5, 0.0), (100.0, 101.0, 0.0)],
+    )
+    def test_vs_quadrature(self, E_kev, Ep_kev, xi):
+        T_kev = 100.0
+        tau = T_kev * kev / me_c2
+        E, Ep = E_kev * kev, Ep_kev * kev
+
+        quad = cq.ComptonKernelQuadrature(256)
+        qres = quad.sigma_E(E, Ep, xi, tau, 1.0)
+
+        series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeries)
+        sres = series.sigma_E(E, Ep, xi, tau, 1.0)
+
+        reldiff = abs(sres.value - qres.value) / (abs(qres.value) + 1e-300)
+        assert sres.converged
+        assert reldiff < 1e-4, f"reldiff={reldiff}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Precision check: double vs DD
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestPrecisionCheck:
+    @pytest.mark.parametrize(
+        "E_kev,Ep_kev,xi",
+        [(1.0, 1.01, 0.0), (10.0, 10.5, 0.0), (100.0, 101.0, 0.0),
+         (1.0, 1.01, 0.5), (1.0, 1.01, -0.5)],
+    )
+    @pytest.mark.parametrize("T_kev", [20.0, 100.0])
+    def test_relative_error_nonneg_finite(self, E_kev, Ep_kev, xi, T_kev):
+        tau = T_kev * kev / me_c2
+        E, Ep = E_kev * kev, Ep_kev * kev
+
+        series = cs.ComptonKernelSeries()
+        rel_err = series.sigma_E_precision_check(E, Ep, xi, tau, 1.0)
+
+        assert rel_err >= 0.0
+        assert math.isfinite(rel_err)
+
+    @pytest.mark.parametrize(
+        "E_kev,Ep_kev,xi",
+        [(1.0, 1.01, 0.0), (10.0, 10.5, 0.0), (100.0, 101.0, 0.0)],
+    )
+    def test_small_for_well_conditioned(self, E_kev, Ep_kev, xi):
+        T_kev = 100.0
+        tau = T_kev * kev / me_c2
+        E, Ep = E_kev * kev, Ep_kev * kev
+
+        series = cs.ComptonKernelSeries()
+        rel_err = series.sigma_E_precision_check(E, Ep, xi, tau, 1.0)
+
+        assert rel_err < 1e-6, f"rel_err={rel_err}"

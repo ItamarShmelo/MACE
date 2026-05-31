@@ -76,7 +76,7 @@ SolverResult ComptonKernelSolver::sigma_E(
 
     // --- Phase 2: Try power series ---
     try {
-        ComptonKernelSeries pow_series(SeriesMethod::PowerSeries, 1e-12, 4, 1000);
+        ComptonKernelSeries pow_series(SeriesMethod::PowerSeriesHighPrecision, 1e-12, 4, 1000);
         SeriesResult pr = pow_series.sigma_E(E, E_prime, xi, tau, Ne);
 
         if (std::abs(pr.value) < target_abs_tol_) {

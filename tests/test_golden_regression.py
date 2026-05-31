@@ -44,9 +44,9 @@ def test_quadrature_sigma_e_golden() -> None:
 
 
 def test_series_power_sigma_e_golden() -> None:
-    series = ComptonKernelSeries(SeriesMethod.PowerSeries)
+    series = ComptonKernelSeries(SeriesMethod.PowerSeriesHighPrecision)
     r = series.sigma_E(_erg(10.0), _erg(10.5), 0.0, _tau(100.0), 1.0)
-    assert r.method_used == SeriesMethod.PowerSeries
+    assert r.method_used == SeriesMethod.PowerSeriesHighPrecision
     assert r.converged
     _assert_rel_close(r.value, 1.4055711711164673e-18)
 

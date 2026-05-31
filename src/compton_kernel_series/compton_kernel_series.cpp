@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <type_traits>
 
 namespace compton {
 
@@ -61,10 +62,14 @@ SeriesResult ComptonKernelSeries::power_series(
     T const x_minus = b * param_exp(theta_minus);
     T const y_minus = b * param_exp(-theta_minus);
 
+    constexpr SeriesMethod method_tag = std::is_same_v<T, DD>
+        ? SeriesMethod::PowerSeriesHighPrecision
+        : SeriesMethod::PowerSeries;
+
     // Poisson weight exp(-y) underflows when y exceeds this threshold.
     if (y_plus > POISSON_Y_MAX || y_minus > POISSON_Y_MAX) {
         T const value = sigma0 * p.Psi;
-        return SeriesResult{to_double(value), 0.0, 0.0, 0, SeriesMethod::PowerSeries, false};
+        return SeriesResult{to_double(value), 0.0, 0.0, 0, method_tag, false};
     }
 
     T w_plus  = param_exp(-y_plus);
@@ -149,7 +154,7 @@ SeriesResult ComptonKernelSeries::power_series(
         to_double(abs_error),
         to_double(rel_error),
         terms_used,
-        SeriesMethod::PowerSeries,
+        method_tag,
         converged};
 }
 
@@ -305,38 +310,57 @@ SeriesResult ComptonKernelSeries::sigma_E(
     double tau,
     double Ne) const
 {
-    if (!(E > 0.0) || !std::isfinite(E))
-        throw std::invalid_argument("E must be finite and > 0");
-    if (!(E_prime > 0.0) || !std::isfinite(E_prime))
-        throw std::invalid_argument("E_prime must be finite and > 0");
-    if (!(tau > 0.0) || !std::isfinite(tau))
-        throw std::invalid_argument("tau must be finite and > 0");
-    if (!(xi > -1.0 && xi < 1.0) || !std::isfinite(xi))
-        throw std::invalid_argument("xi must be finite and strictly inside (-1, 1)");
-    if (!std::isfinite(Ne))
-        throw std::invalid_argument("Ne must be finite");
-    if (1.0 - xi < 1e-14)
-        throw std::invalid_argument("xi too close to 1");
+    assert_parameters(E, E_prime, xi, tau, Ne);
 
-    const double gamma = E / units::me_c2;
+    double const gamma = E / units::me_c2;
     const double gamma_p = E_prime / units::me_c2;
 
     KershawParams<double> p = compute_params<double>(gamma, gamma_p, xi, tau);
 
     SeriesMethod chosen;
     if (method_ == SeriesMethod::Auto) {
-        const double tau_alpha_max = std::max(tau * p.alpha_plus,
+        double const tau_alpha_max = std::max(tau * p.alpha_plus,
                                               tau * p.alpha_minus);
-        chosen = (tau_alpha_max < 0.05) ? SeriesMethod::Asymptotic
-                                        : SeriesMethod::PowerSeries;
+        if (tau_alpha_max < 0.05) {
+            chosen = SeriesMethod::Asymptotic;
+        } else if (std::min(gamma, gamma_p) >= constants::GAMMA_DOUBLE_PRECISION_SAFE) {
+            chosen = SeriesMethod::PowerSeries;
+        } else {
+            chosen = SeriesMethod::PowerSeriesHighPrecision;
+        }
     } else {
         chosen = method_;
     }
 
-    if (chosen == SeriesMethod::PowerSeries)
+    if (chosen == SeriesMethod::PowerSeriesHighPrecision)
         return power_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
+    else if (chosen == SeriesMethod::PowerSeries)
+        return power_series<double>(gamma, gamma_p, xi, tau, E, Ne);
     else
         return asymptotic_series(gamma, gamma_p, xi, tau, E, Ne);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Precision check: compare double vs DD power series
+// ─────────────────────────────────────────────────────────────────────────
+
+double ComptonKernelSeries::sigma_E_precision_check(
+    double E,
+    double E_prime,
+    double xi,
+    double tau,
+    double Ne) const
+{
+    assert_parameters(E, E_prime, xi, tau, Ne);
+
+    double const gamma   = E / units::me_c2;
+    double const gamma_p = E_prime / units::me_c2;
+
+    SeriesResult const dd_res  = power_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
+    SeriesResult const dbl_res = power_series<double>(gamma, gamma_p, xi, tau, E, Ne);
+
+    return std::abs(dd_res.value - dbl_res.value)
+         / (std::abs(dd_res.value) + 1e-300);
 }
 
 } // namespace compton

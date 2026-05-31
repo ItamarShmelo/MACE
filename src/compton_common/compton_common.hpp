@@ -241,6 +241,12 @@ constexpr double POISSON_Y_MAX = 500.0;
 // rel_tol / eps_machine / safety_factor = 1e-13 / 1e-16 / 10
 constexpr double EHAT_AMPLIFICATION_BUDGET = 1e2;
 
+/// Minimum dimensionless photon energy (gamma = E / m_e c^2) at which the
+/// double-precision power series agrees with the DD power series to better
+/// than 1e-6.  Empirically validated: worst-case relative error at gamma =
+/// 0.02 (~10 keV) is 3.15e-7 across all tested (E'/E, xi, T) combinations.
+constexpr double GAMMA_DOUBLE_PRECISION_SAFE = 0.02;
+
 } // namespace constants
 
 /**
@@ -354,6 +360,32 @@ struct SigmaResult {
     double estimated_abs_error; /// |σ₀| · |IQ(N) − IQ(N/2)|
     double estimated_rel_error; /// abs_error / |value|
 };
+
+/**
+ * @brief Validate the five common kernel parameters.
+ *
+ * Throws std::invalid_argument when any precondition is violated.
+ */
+inline void assert_parameters(
+    double const E,
+    double const E_prime,
+    double const xi,
+    double const tau,
+    double const Ne)
+{
+    if (!(E > 0.0) || !std::isfinite(E))
+        throw std::invalid_argument("E must be finite and > 0");
+    if (!(E_prime > 0.0) || !std::isfinite(E_prime))
+        throw std::invalid_argument("E_prime must be finite and > 0");
+    if (!(tau > 0.0) || !std::isfinite(tau))
+        throw std::invalid_argument("tau must be finite and > 0");
+    if (!(xi > -1.0 && xi < 1.0) || !std::isfinite(xi))
+        throw std::invalid_argument("xi must be finite and strictly inside (-1, 1)");
+    if (!std::isfinite(Ne))
+        throw std::invalid_argument("Ne must be finite");
+    if (1.0 - xi < 1e-14)
+        throw std::invalid_argument("xi too close to 1");
+}
 
 } // namespace compton
 

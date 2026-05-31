@@ -4,10 +4,12 @@
  * @file compton_kernel_series.hpp
  * @brief Compton scattering kernel via Section 4 series expansions.
  *
- * Two series methods:
- *   - PowerSeries:  Poisson-weighted sum of scaled exponential integrals Ehat_m
- *   - Asymptotic:   Low-temperature expansion using Legendre polynomials
- *   - Auto:         Selects method based on tau*alpha threshold (0.05)
+ * Series methods:
+ *   - PowerSeries:              double-precision power series (~15 digits)
+ *   - PowerSeriesHighPrecision: double-double power series   (~31 digits)
+ *   - Asymptotic:               Low-temperature expansion using Legendre polynomials
+ *   - Auto:                     Selects Asymptotic or PowerSeriesHighPrecision
+ *                               based on tau*alpha threshold (0.05)
  *
  * The series module does NOT depend on the quadrature module.  If the chosen
  * series fails to converge, it returns converged=false and the caller decides
@@ -19,6 +21,7 @@ namespace compton {
 
 enum class SeriesMethod {
     PowerSeries,
+    PowerSeriesHighPrecision,
     Asymptotic,
     Auto
 };
@@ -35,8 +38,9 @@ struct SeriesResult {
 class ComptonKernelSeries {
 public:
     /**
-     * @param method   Series expansion strategy (PowerSeries, Asymptotic, or
-     *                 Auto which selects based on tau*alpha < 0.05).
+     * @param method   Series expansion strategy (PowerSeries,
+     *                 PowerSeriesHighPrecision, Asymptotic, or Auto which
+     *                 selects based on tau*alpha < 0.05).
      * @param eps_rel  Relative convergence tolerance for both term-decay
      *                 and difference-stability checks.
      * @param n_min    Minimum number of terms before convergence is tested.
@@ -51,6 +55,21 @@ public:
     );
 
     SeriesResult sigma_E(
+        double E,
+        double E_prime,
+        double xi,
+        double tau,
+        double Ne
+    ) const;
+
+    /**
+     * @brief Run both double and DD power series, return the relative error.
+     *
+     * Computes |dd_value - dbl_value| / (|dd_value| + 1e-300).
+     * Useful for checking whether double precision is sufficient for a
+     * given set of parameters.
+     */
+    double sigma_E_precision_check(
         double E,
         double E_prime,
         double xi,

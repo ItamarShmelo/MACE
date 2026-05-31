@@ -12,6 +12,7 @@ PYBIND11_MODULE(_compton_kernel_series, m) {
 
     py::enum_<SeriesMethod>(m, "SeriesMethod")
         .value("PowerSeries", SeriesMethod::PowerSeries)
+        .value("PowerSeriesHighPrecision", SeriesMethod::PowerSeriesHighPrecision)
         .value("Asymptotic", SeriesMethod::Asymptotic)
         .value("Auto", SeriesMethod::Auto);
 
@@ -30,6 +31,9 @@ PYBIND11_MODULE(_compton_kernel_series, m) {
              py::arg("n_min") = 4,
              py::arg("n_max") = 200)
         .def("sigma_E", &ComptonKernelSeries::sigma_E,
+             py::arg("E"), py::arg("E_prime"), py::arg("xi"),
+             py::arg("tau"), py::arg("Ne"))
+        .def("sigma_E_precision_check", &ComptonKernelSeries::sigma_E_precision_check,
              py::arg("E"), py::arg("E_prime"), py::arg("xi"),
              py::arg("tau"), py::arg("Ne"))
         .def("sigma_E_vec", [](const ComptonKernelSeries& self,
