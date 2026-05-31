@@ -1,11 +1,3 @@
-/**
- * @file compton_kernel_series.cpp
- * @brief Power series and asymptotic series for the Compton kernel.
- *
- * Direct port of the validated Python implementation in
- * pycompton/compton_kernel_series.py.
- */
-
 #include "compton_kernel_series.hpp"
 #include "compton_common/compton_common.hpp"
 

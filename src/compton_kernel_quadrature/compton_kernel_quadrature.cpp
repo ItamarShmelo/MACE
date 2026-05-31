@@ -1,67 +1,7 @@
-/**
- * @file compton_kernel_quadrature.cpp
- * @brief Implementation of the Kershaw-Prasad-Beason Compton frequency kernel.
- *
- * ─────────────────────────────────────────────────────────────────────────
- * OVERALL ALGORITHM
- * ─────────────────────────────────────────────────────────────────────────
- *
- * For a given (E, E', ξ, τ, Nₑ) the evaluation proceeds as:
- *
- *   1.  Convert to dimensionless energies: γ = E/m_e c², γ' = E'/m_e c².
- *
- *   2.  compute_params<T>():  Derive all kinematic quantities (a, s, q, Δ, λ₊,
- *       ρ±, α±, G, A±, Ψ) from (γ, γ', ξ, τ).  Special care:
- *         - q² uses the "two-term" form  (γ'−γ)² + 2γγ'(1−ξ)  to avoid
- *           cancellation when γ ≈ γ'.
- *         - λ₊ is clamped to ≥ 1 (physical lower bound: min electron energy).
- *
- *   3.  sigma0_E():  Compute the prefactor
- *           σ₀ = Nₑ r_e² m_e c² / (4 E² τ) · exp(−(λ₊−1)/τ) / K̃₂(1/τ)
- *       The exponential and K̃₂ are kept in "scaled" form to avoid overflow:
- *       the exp(−(λ₊−1)/τ) suppression is the dominant factor controlling
- *       the kernel magnitude (elastic: λ₊→1, no suppression; large energy
- *       transfer: λ₊≫1, exponentially small).
- *
- *   4.  Evaluate the semi-infinite integral I_Q via Gauss-Laguerre quadrature.
- *       The integral has the form:
- *
- *           I_Q = ∫₀^∞  f(τx + ρ_offset) · e^{−x} dx
- *
- *       after the substitution ρ = τx + ρ_offset that maps the domain
- *       [λ₊, ∞) → [0, ∞) and exposes the e^{−x} weight for Gauss-Laguerre.
- *       Two forms are available (see header).
- *
- *   5.  Return  σ₀ · (Ψ + I_Q)  [post-IBP]  or  σ₀ · I_Q  [pre-IBP],
- *       together with a Richardson-extrapolation error estimate:
- *           abs_error = |σ₀| · |IQ(N) − IQ(N/2)|
- *
- * ─────────────────────────────────────────────────────────────────────────
- * NUMERICAL STABILITY CONSIDERATIONS
- * ─────────────────────────────────────────────────────────────────────────
- *
- *   - scaled_K2:  For large 1/τ, K₂(1/τ) overflows but
- *     exp(1/τ)·K₂(1/τ) remains O(√τ).  We use Boost for moderate arguments
- *     and an asymptotic Hankel series for x ≥ 50.
- *
- *   - The post-IBP integrand has a boundary term Ψ that captures the
- *     "elastic peak" contribution analytically, improving convergence of
- *     the numerical integral for the smooth remainder.  However, at very
- *     low τ the Ψ and I_Q terms nearly cancel (catastrophic cancellation),
- *     making pre-IBP preferable in that regime.
- *
- *   - Quadrature rules are computed once and cached (static) for the
- *     supported orders (32, 64, 128, 256).
- */
-
 #include "compton_kernel_quadrature.hpp"
 #include "gauss_laguerre.hpp"
 
 namespace compton {
-
-// ═══════════════════════════════════════════════════════════════════════════
-// ComptonKernelQuadrature implementation
-// ═══════════════════════════════════════════════════════════════════════════
 
 ComptonKernelQuadrature::ComptonKernelQuadrature(int NL, QuadratureForm form)
     : NL_(NL), form_(form)
@@ -168,10 +108,6 @@ SigmaResult ComptonKernelQuadrature::sigma_E(
         return SigmaResult{value, abs_err, rel_err};
     }
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Temperature derivative: ∂Σ_E/∂τ
-// ═══════════════════════════════════════════════════════════════════════════
 
 double ComptonKernelQuadrature::compute_dIQ_post_ibp(
     KershawParams<double> const& p,
