@@ -157,11 +157,11 @@ class TestEdgeCases:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestOutOfDomain:
-    def test_very_high_tau_reports_honestly(self, solver):
-        """tau well beyond calibration grid should still work."""
+    def test_very_high_tau_raises(self, solver):
+        """tau well beyond series convergence domain raises RuntimeError."""
         E = 1.0 * KEV; Ep = 1.5 * KEV; tau = 2000.0 * KEV / ME_C2
-        r = solver.sigma_E(E, Ep, 0.0, tau, 1.0)
-        assert math.isfinite(r.value)
+        with pytest.raises(RuntimeError):
+            solver.sigma_E(E, Ep, 0.0, tau, 1.0)
 
     def test_extreme_energy_ratio(self, solver):
         """E'/E = 100 beyond calibration grid."""

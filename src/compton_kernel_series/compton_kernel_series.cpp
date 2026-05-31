@@ -16,10 +16,6 @@
 
 namespace compton {
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ComptonKernelSeries
-// ═══════════════════════════════════════════════════════════════════════════
-
 ComptonKernelSeries::ComptonKernelSeries(
     SeriesMethod method, 
     double eps_rel, 
@@ -30,10 +26,6 @@ ComptonKernelSeries::ComptonKernelSeries(
         n_min_(n_min), 
         n_max_(n_max)
 {}
-
-// ─────────────────────────────────────────────────────────────────────────
-// Power series
-// ─────────────────────────────────────────────────────────────────────────
 
 template<typename T>
 SigmaResult ComptonKernelSeries::power_series(
@@ -158,10 +150,6 @@ template SigmaResult ComptonKernelSeries::power_series<double>(
 template SigmaResult ComptonKernelSeries::power_series<DD>(
     double, double, double, double, double, double) const;
 
-// ─────────────────────────────────────────────────────────────────────────
-// Asymptotic series
-// ─────────────────────────────────────────────────────────────────────────
-
 SigmaResult ComptonKernelSeries::asymptotic_series(
     double const gamma,
     double const gamma_p,
@@ -282,10 +270,6 @@ SigmaResult ComptonKernelSeries::asymptotic_series(
     throw std::runtime_error("asymptotic series failed to converge");
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Top-level sigma_E
-// ─────────────────────────────────────────────────────────────────────────
-
 SigmaResult ComptonKernelSeries::sigma_E(
     double const E,
     double const E_prime,
@@ -322,10 +306,6 @@ SigmaResult ComptonKernelSeries::sigma_E(
     else
         return asymptotic_series(gamma, gamma_p, xi, tau, E, Ne);
 }
-
-// ─────────────────────────────────────────────────────────────────────────
-// Precision check: compare double vs DD power series
-// ─────────────────────────────────────────────────────────────────────────
 
 double ComptonKernelSeries::sigma_E_precision_check(
     double const E,

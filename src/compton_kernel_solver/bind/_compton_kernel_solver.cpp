@@ -7,14 +7,12 @@ namespace py = pybind11;
 using namespace compton;
 
 PYBIND11_MODULE(_compton_kernel_solver, m) {
-    m.doc() = "Robust adaptive Compton kernel solver with cascade method selection";
+    m.doc() = "Adaptive Compton kernel solver: asymptotic or power series dispatch";
 
     py::module_::import("_compton_common");
 
     py::class_<ComptonKernelSolver>(m, "ComptonKernelSolver")
-        .def(py::init<double, double>(),
-             py::arg("target_rel_tol") = 1e-8,
-             py::arg("target_abs_tol") = 1e-300)
+        .def(py::init<>())
         .def("sigma_E", &ComptonKernelSolver::sigma_E,
              py::arg("E"), py::arg("E_prime"), py::arg("xi"),
              py::arg("tau"), py::arg("Ne"))

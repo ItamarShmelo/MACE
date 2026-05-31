@@ -2,40 +2,53 @@
 #define COMPTON_KERNEL_SOLVER_HPP
 /**
  * @file compton_kernel_solver.hpp
- * @brief Robust adaptive solver for the Compton scattering kernel.
+ * @brief Adaptive solver for the Compton scattering kernel.
  *
- * Cascades through asymptotic series, power series, and Gauss-Laguerre
- * quadrature to achieve empirically validated 1e-8 relative error on the
- * calibrated domain while minimizing use of the expensive quadrature method.
- *
- * Dispatch threshold (tau_alpha_max < 0.2) decides what to try first.
- * Validity threshold (estimated_rel_error < target) decides acceptance.
+ * Dispatches between asymptotic series and power series based on the
+ * dimensionless product tau * alpha_max.  When tau * alpha_max is below
+ * constants::ASYMP_TAU_ALPHA_THRESHOLD the asymptotic expansion is used;
+ * otherwise the power series (which internally selects double or
+ * double-double precision) handles the evaluation.
  */
 
 #include "compton_common/compton_common.hpp"
 #include "compton_kernel_series/compton_kernel_series.hpp"
-#include "compton_kernel_quadrature/compton_kernel_quadrature.hpp"
 
 namespace compton {
 
 class ComptonKernelSolver {
 public:
-    /**
-     * @param target_rel_tol  Relative error target (default 1e-8)
-     * @param target_abs_tol  Absolute value below which kernel is considered negligible (default 1e-300)
-     */
-    ComptonKernelSolver(double target_rel_tol = 1e-8,
-                        double target_abs_tol = 1e-300);
+    ComptonKernelSolver();
 
-    SigmaResult sigma_E(double E, double E_prime, double xi, double tau, double Ne) const;
+    /**
+     * @brief Evaluate the Compton scattering kernel Sigma_E(E -> E', xi; tau, Ne).
+     *
+     * @param E        Incident photon energy [erg]
+     * @param E_prime  Scattered photon energy [erg]
+     * @param xi       cos(scattering angle), strictly in (-1, 1)
+     * @param tau      Dimensionless electron temperature kT/(m_e c^2)
+     * @param Ne       Electron number density [cm^-3] (use 1.0 for microscopic)
+     * @return SigmaResult with value and error estimates
+     */
+    SigmaResult sigma_E(
+        double const E,
+        double const E_prime,
+        double const xi,
+        double const tau,
+        double const Ne) const;
 
 private:
-    double target_rel_tol_;
-    double target_abs_tol_;
-    ComptonKernelSeries series_;
-    ComptonKernelQuadrature quad256_;
+    /// Relative convergence tolerance for series term-decay checks.
+    static constexpr double SERIES_EPS_REL = 1e-12;
+    /// Minimum number of terms before convergence is tested.
+    static constexpr int SERIES_N_MIN = 4;
+    /// Maximum number of series terms.
+    static constexpr int SERIES_N_MAX = 200;
 
-    static constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.2;
+    /// Asymptotic series for the low tau*alpha regime.
+    ComptonKernelSeries asymptotic_series_;
+    /// Power series with automatic precision selection for the general regime.
+    ComptonKernelSeries power_series_;
 };
 
 } // namespace compton

@@ -247,6 +247,10 @@ constexpr double EHAT_AMPLIFICATION_BUDGET = 1e2;
 /// 0.02 (~10 keV) is 3.15e-7 across all tested (E'/E, xi, T) combinations.
 constexpr double GAMMA_DOUBLE_PRECISION_SAFE = 0.02;
 
+/// Dispatch threshold for asymptotic vs power series: use asymptotic series
+/// when tau * max(alpha_plus, alpha_minus) is below this value.
+constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.05;
+
 } // namespace constants
 
 /**
