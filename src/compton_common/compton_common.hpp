@@ -11,6 +11,7 @@
 
 #include <boost/math/special_functions/bessel.hpp>
 #include <cmath>
+#include <limits>
 #include <numbers>
 #include <ostream>
 #include <sstream>
@@ -23,8 +24,23 @@ namespace compton {
 
 using DD = doubledouble::DoubleDouble;
 
+inline std::ostream& operator<<(std::ostream& os, DD const& x) {
+    os << "(" << x.upper << ", " << x.lower << ")";
+    return os;
+}
+
+namespace details {
+
 inline double dd_to_double(DD const& x) {
     return x.upper + x.lower;
+}
+
+inline double to_double(double const value) {
+    return value;
+}
+
+inline double to_double(DD const& value) {
+    return dd_to_double(value);
 }
 
 inline DD dd_abs(DD const& x) {
@@ -32,11 +48,6 @@ inline DD dd_abs(DD const& x) {
         return -x;
     }
     return x;
-}
-
-inline std::ostream& operator<<(std::ostream& os, DD const& x) {
-    os << "(" << x.upper << ", " << x.lower << ")";
-    return os;
 }
 
 /**
@@ -48,18 +59,50 @@ inline DD dd_asinh(DD const& x) {
     return (x + (x * x + 1.0).sqrt()).log();
 }
 
-/**
- * @brief Ehat_m(x) = exp(x) * E_m(x) via modified Lentz continued fraction.
- *
- * DLMF 8.9.2: Ehat_m(x) = 1/(x+m - m*1/(x+m+2 - (m+1)*2/(x+m+4 - ...)))
- * Evaluated via a templated modified Lentz algorithm shared by double and DD.
- */
-namespace details {
+inline double param_abs(double const value) {
+    return std::abs(value);
+}
 
-inline double param_abs(double const value);
-inline DD param_abs(DD const& value);
+inline DD param_abs(DD const& value) {
+    return dd_abs(value);
+}
 
-} // namespace details
+inline double param_sqrt(double const value) {
+    return std::sqrt(value);
+}
+
+inline DD param_sqrt(DD const& value) {
+    return value.sqrt();
+}
+
+inline double param_exp(double const value) {
+    return std::exp(value);
+}
+
+inline DD param_exp(DD const& value) {
+    return value.exp();
+}
+
+inline double param_asinh(double const value) {
+    return std::asinh(value);
+}
+
+inline DD param_asinh(DD const& value) {
+    return dd_asinh(value);
+}
+
+template<typename T> struct MachineEps;
+
+template<>
+struct MachineEps<double> {
+    static constexpr double value = std::numeric_limits<double>::epsilon();
+};
+
+template<>
+struct MachineEps<DD> {
+    static constexpr double value = std::numeric_limits<double>::epsilon()
+                                  * std::numeric_limits<double>::epsilon();
+};
 
 template<typename T>
 struct EhatCfConfig;
@@ -76,23 +119,33 @@ struct EhatCfConfig<DD> {
     static constexpr int max_iter = 200;
 };
 
+} // namespace details
+
+/**
+ * @brief Scaled exponential integral: Ehat_m(x) = exp(x) * E_m(x).
+ *
+ * Evaluated via the modified Lentz continued fraction (DLMF 8.9.2):
+ *   Ehat_m(x) = 1/(x+m - m*1/(x+m+2 - (m+1)*2/(x+m+4 - ...)))
+ */
 template<typename T>
-inline T ehat_cf(
+inline T ehat(
     int const m,
     T const& x,
-    double const cf_tol = EhatCfConfig<T>::cf_tol,
-    int const max_iter = EhatCfConfig<T>::max_iter) {
+    double const cf_tol = details::EhatCfConfig<T>::cf_tol,
+    int const max_iter = details::EhatCfConfig<T>::max_iter) {
+    using namespace details;
+
     if (!(x > 0.0)) {
-        throw std::invalid_argument("ehat_cf requires x > 0");
+        throw std::invalid_argument("ehat requires x > 0");
     }
     if (m < 1) {
-        throw std::invalid_argument("ehat_cf requires m >= 1");
+        throw std::invalid_argument("ehat requires m >= 1");
     }
 
     constexpr double TINY = 1e-300;
     T const tiny_t = TINY;
     T b = x + m;
-    if (details::param_abs(b) < tiny_t) {
+    if (param_abs(b) < tiny_t) {
         b = tiny_t;
     }
 
@@ -108,20 +161,20 @@ inline T ehat_cf(
         T const bj = x + (m + 2 * j);
 
         D = bj + D * aj;
-        if (details::param_abs(D) < tiny_t) {
+        if (param_abs(D) < tiny_t) {
             D = tiny_t;
         }
         D = one / D;
 
         C = bj + aj_t / C;
-        if (details::param_abs(C) < tiny_t) {
+        if (param_abs(C) < tiny_t) {
             C = tiny_t;
         }
 
         T const delta = C * D;
         f = f * delta;
 
-        if (details::param_abs(delta - one) < cf_tol) {
+        if (param_abs(delta - one) < cf_tol) {
             converged = true;
             break;
         }
@@ -129,7 +182,7 @@ inline T ehat_cf(
 
     if (!converged) {
         std::ostringstream message;
-        message << "ehat_cf failed to converge: m=" << m;
+        message << "ehat failed to converge: m=" << m;
         message << ", x=" << x;
         message << ", max_iter=" << max_iter
                 << ", tol=" << cf_tol;
@@ -175,6 +228,21 @@ inline double scaled_K2(double x) {
     return std::sqrt(std::numbers::pi / (2.0 * x)) * sum;
 }
 
+namespace constants {
+
+/// Floor added to relative-error denominators to avoid division by zero.
+constexpr double REL_ERROR_TINY_SCALE = 1e-300;
+
+/// Guard to keep xi away from the direct-quadrature endpoint singularity.
+constexpr double XI_DIRECT_QUADRATURE_GUARD = 1e-14;
+
+constexpr double POISSON_Y_MAX = 500.0;
+
+// rel_tol / eps_machine / safety_factor = 1e-13 / 1e-16 / 10
+constexpr double EHAT_AMPLIFICATION_BUDGET = 1e2;
+
+} // namespace constants
+
 /**
  * @brief Pre-computed kinematic parameters for a given (γ, γ', ξ, τ).
  *
@@ -195,39 +263,6 @@ struct KershawParams {
     T alpha_plus, alpha_minus;
     T G, A_plus, A_minus, Psi;
 };
-
-/// Result of a kernel evaluation: value plus heuristic error estimates.
-struct SigmaResult {
-    double value;               ///< Σ_E in [cm²/erg] (Nₑ=1) or [1/(cm·erg)]
-    double estimated_abs_error; ///< |σ₀| · |IQ(N) − IQ(N/2)|
-    double estimated_rel_error; ///< abs_error / |value|
-};
-
-/// Floor added to relative-error denominators to avoid division by zero.
-constexpr double REL_ERROR_TINY_SCALE = 1e-300;
-
-/// Guard to keep xi away from the direct-quadrature endpoint singularity.
-static constexpr double XI_DIRECT_QUADRATURE_GUARD = 1e-14;
-
-namespace details {
-
-inline double param_abs(double const value) {
-    return std::abs(value);
-}
-
-inline DD param_abs(DD const& value) {
-    return dd_abs(value);
-}
-
-inline double param_sqrt(double const value) {
-    return std::sqrt(value);
-}
-
-inline DD param_sqrt(DD const& value) {
-    return value.sqrt();
-}
-
-} // namespace details
 
 /**
  * @brief Compute all kinematic parameters from dimensionless energies.
@@ -302,7 +337,7 @@ inline KershawParams<T> compute_params(
  * magnitude: elastic scattering (λ₊→1) has no suppression, while large
  * energy transfers (λ₊≫1) are exponentially suppressed.
  */
-inline double stable_sigma0_E(
+inline double sigma0_E(
     double const E, 
     double const tau, 
     double const lambda_plus, 
@@ -312,6 +347,13 @@ inline double stable_sigma0_E(
            * std::exp(-(lambda_plus - 1.0) / tau)
            / scaled_K2(1.0 / tau);
 }
+
+/// Result of a kernel evaluation: value plus heuristic error estimates.
+struct SigmaResult {
+    double value;               /// Σ_E in [cm²/erg] (Nₑ=1) or [1/(cm·erg)]
+    double estimated_abs_error; /// |σ₀| · |IQ(N) − IQ(N/2)|
+    double estimated_rel_error; /// abs_error / |value|
+};
 
 } // namespace compton
 

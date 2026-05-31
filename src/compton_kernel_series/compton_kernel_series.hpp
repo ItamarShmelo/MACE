@@ -14,7 +14,6 @@
  * whether to fall back to quadrature.
  */
 
-#include "compton_common/compton_common.hpp"
 
 namespace compton {
 
@@ -35,6 +34,15 @@ struct SeriesResult {
 
 class ComptonKernelSeries {
 public:
+    /**
+     * @param method   Series expansion strategy (PowerSeries, Asymptotic, or
+     *                 Auto which selects based on tau*alpha < 0.05).
+     * @param eps_rel  Relative convergence tolerance for both term-decay
+     *                 and difference-stability checks.
+     * @param n_min    Minimum number of terms before convergence is tested.
+     * @param n_max    Maximum number of terms; if reached without convergence
+     *                 the result is returned with converged=false.
+     */
     ComptonKernelSeries(
         SeriesMethod method = SeriesMethod::Auto,
         double eps_rel = 1e-12,
@@ -42,16 +50,34 @@ public:
         int n_max = 200
     );
 
-    SeriesResult sigma_E(double E, double E_prime, double xi,
-                         double tau, double Ne) const;
+    SeriesResult sigma_E(
+        double E,
+        double E_prime,
+        double xi,
+        double tau,
+        double Ne
+    ) const;
 
 private:
-    SeriesResult power_series(const KershawParams<double>& p,
-                              double gamma, double gamma_p, double xi,
-                              double tau, double sigma0) const;
-    SeriesResult asymptotic_series(const KershawParams<double>& p,
-                                   double gamma, double gamma_p,
-                                   double tau, double sigma0) const;
+    template<typename T>
+    SeriesResult power_series(
+        double gamma,
+        double gamma_p,
+        double xi,
+        double tau,
+        double E,
+        double Ne
+    ) const;
+
+    SeriesResult asymptotic_series(
+        double gamma,
+        double gamma_p,
+        double xi,
+        double tau,
+        double E,
+        double Ne
+    ) const;
+
     SeriesMethod method_;
     double eps_rel_;
     int n_min_, n_max_;

@@ -2,6 +2,7 @@
 #include <pybind11/numpy.h>
 
 #include "compton_kernel_series/compton_kernel_series.hpp"
+#include "compton_common/compton_common.hpp"
 
 namespace py = pybind11;
 using namespace compton;
@@ -56,7 +57,7 @@ PYBIND11_MODULE(_compton_kernel_series, m) {
            py::arg("tau"), py::arg("Ne"));
 
     m.def("ehat_cf", [](int const m, double const x) {
-        return ehat_cf(m, x);
+        return ehat(m, x);
     }, py::arg("m"), py::arg("x"),
           "Scaled exponential integral via continued fraction: Ehat_m(x) = exp(x) * E_m(x)");
 }

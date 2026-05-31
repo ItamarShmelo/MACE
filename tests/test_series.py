@@ -165,7 +165,7 @@ class TestConvergenceFlags:
         E, Ep = 8.5 * kev, 0.85 * kev
         tau = 900.0 * kev / me_c2
         series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeries)
-        with pytest.raises(RuntimeError, match="ehat_cf failed to converge"):
+        with pytest.raises(RuntimeError, match="ehat failed to converge"):
             series.sigma_E(E, Ep, -0.5, tau, 1.0)
 
     def test_asymptotic_converges(self):

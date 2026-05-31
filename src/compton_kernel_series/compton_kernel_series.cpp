@@ -7,6 +7,7 @@
  */
 
 #include "compton_kernel_series.hpp"
+#include "compton_common/compton_common.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -33,132 +34,145 @@ ComptonKernelSeries::ComptonKernelSeries(
 // Power series
 // ─────────────────────────────────────────────────────────────────────────
 
-static constexpr double POISSON_Y_MAX = 500.0;
-
-// rel_tol / eps_machine / safety_factor = 1e-13 / 1e-16 / 10
-static constexpr double EHAT_AMPLIFICATION_BUDGET = 1e2;
-
+template<typename T>
 SeriesResult ComptonKernelSeries::power_series(
-    const KershawParams<double>& p, 
-    double gamma, 
-    double gamma_p, 
+    double gamma,
+    double gamma_p,
     double xi,
-    double tau, 
-    double sigma0) const
+    double tau,
+    double E,
+    double Ne) const
 {
-    KershawParams<DD> pd = compute_params<DD>(gamma, gamma_p, xi, tau);
+    using namespace details;
+    using namespace constants;
 
-    const DD omega_dd = pd.omega2.sqrt();
-    const DD tau_dd(tau);
-    const DD b_dd = omega_dd / (tau_dd * 2.0);
+    KershawParams<T> p = compute_params<T>(gamma, gamma_p, xi, tau);
+    double const sigma0 = sigma0_E(E, tau, to_double(p.lambda_plus), Ne);
 
-    const DD theta_plus_dd  = dd_asinh(pd.rho_plus / omega_dd);
-    const DD theta_minus_dd = dd_asinh(pd.rho_minus / omega_dd);
+    T const omega = param_sqrt(p.omega2);
+    T const tau_t(tau);
+    T const b = omega / (tau_t * 2.0);
 
-    const DD x_plus_dd  = b_dd * theta_plus_dd.exp();
-    const DD y_plus_dd  = b_dd * (-theta_plus_dd).exp();
-    const DD x_minus_dd = b_dd * theta_minus_dd.exp();
-    const DD y_minus_dd = b_dd * (-theta_minus_dd).exp();
+    T const theta_plus  = param_asinh(p.rho_plus / omega);
+    T const theta_minus = param_asinh(p.rho_minus / omega);
 
-    if (y_plus_dd.upper > POISSON_Y_MAX || y_minus_dd.upper > POISSON_Y_MAX ||
-        x_plus_dd.upper <= 0.0 || x_minus_dd.upper <= 0.0) {
-        double value = sigma0 * p.Psi;
-        return SeriesResult{value, 0.0, 0.0, 0, SeriesMethod::PowerSeries, false};
+    T const x_plus  = b * param_exp(theta_plus);
+    T const y_plus  = b * param_exp(-theta_plus);
+    T const x_minus = b * param_exp(theta_minus);
+    T const y_minus = b * param_exp(-theta_minus);
+
+    // Poisson weight exp(-y) underflows when y exceeds this threshold.
+    if (y_plus > POISSON_Y_MAX || y_minus > POISSON_Y_MAX) {
+        T const value = sigma0 * p.Psi;
+        return SeriesResult{to_double(value), 0.0, 0.0, 0, SeriesMethod::PowerSeries, false};
     }
 
-    DD w_plus_dd  = (-y_plus_dd).exp();
-    DD w_minus_dd = (-y_minus_dd).exp();
+    T w_plus  = param_exp(-y_plus);
+    T w_minus = param_exp(-y_minus);
 
-    DD P_plus_dd(0.0);
-    DD P_minus_dd(0.0);
+    T P_plus(0.0);
+    T P_minus(0.0);
 
     constexpr double eps_tiny = 1e-300;
-    double last_diff_change = 0.0;
-    double last_term_mag = 0.0;
+    T last_diff_change(0.0);
+    T last_term_mag(0.0);
     int terms_used = 0;
 
-    DD ehat_plus_dd  = ehat_cf(1, x_plus_dd);
-    DD ehat_minus_dd = ehat_cf(1, x_minus_dd);
-    DD amp_plus_dd(1.0);
-    DD amp_minus_dd(1.0);
+    T ehat_plus  = ehat(1, x_plus);
+    T ehat_minus = ehat(1, x_minus);
+    T amp_plus(1.0);
+    T amp_minus(1.0);
 
     for (int n = 0; n <= n_max_; ++n) {
-        const DD coeff_plus_dd  = pd.A_plus + DD(2.0 * n) / pd.a;
-        const DD coeff_minus_dd = pd.A_minus + DD(2.0 * n) / pd.a;
+        T const coeff_plus  = p.A_plus + T(2.0 * n) / p.a;
+        T const coeff_minus = p.A_minus + T(2.0 * n) / p.a;
 
-        const DD t_plus_dd  = w_plus_dd * coeff_plus_dd * ehat_plus_dd;
-        const DD t_minus_dd = w_minus_dd * coeff_minus_dd * ehat_minus_dd;
+        T const t_plus  = w_plus * coeff_plus * ehat_plus;
+        T const t_minus = w_minus * coeff_minus * ehat_minus;
 
-        const double prev_diff = dd_to_double(P_plus_dd - P_minus_dd);
-        P_plus_dd  = P_plus_dd + t_plus_dd;
-        P_minus_dd = P_minus_dd + t_minus_dd;
-        const double curr_diff = dd_to_double(P_plus_dd - P_minus_dd);
-        last_diff_change = std::abs(curr_diff - prev_diff);
+        T const prev_diff = P_plus - P_minus;
+        P_plus  = P_plus + t_plus;
+        P_minus = P_minus + t_minus;
+        T const curr_diff = P_plus - P_minus;
+        last_diff_change = param_abs(curr_diff - prev_diff);
 
-        const double term_mag = std::abs(t_plus_dd.upper) + std::abs(t_minus_dd.upper);
+        T const term_mag = param_abs(t_plus) + param_abs(t_minus);
         last_term_mag = term_mag;
         terms_used = n + 1;
 
-        const double S_n = std::abs(P_plus_dd.upper) + std::abs(P_minus_dd.upper);
-        if (n >= n_min_ && term_mag / (S_n + eps_tiny) < eps_rel_) {
-            double partial = std::abs(dd_to_double(
-                pd.Psi + (P_plus_dd - P_minus_dd)));
-            if (last_diff_change / (partial + eps_tiny) < eps_rel_)
-                break;
-        }
+        // Converge on the actual result magnitude, not the inflated accumulators.
+        if (n >= n_min_ &&
+            last_diff_change / (param_abs(p.Psi + (P_plus - P_minus)) + eps_tiny) < eps_rel_)
+            break;
 
         if (n < n_max_) {
-            w_plus_dd  = w_plus_dd * y_plus_dd / (n + 1.0);
-            w_minus_dd = w_minus_dd * y_minus_dd / (n + 1.0);
+            w_plus  = w_plus * y_plus / (n + 1.0);
+            w_minus = w_minus * y_minus / (n + 1.0);
 
-            amp_plus_dd = amp_plus_dd * (x_plus_dd / (n + 1.0));
-            if (amp_plus_dd.upper < EHAT_AMPLIFICATION_BUDGET) {
-                ehat_plus_dd = (DD(1.0) - x_plus_dd * ehat_plus_dd) / (n + 1.0);
+            // Advance ehat via recurrence Ehat_{n+1}(x) = (1 - x*Ehat_n(x)) / n
+            // unless cumulative amplification (product of x/(k+1) factors) exceeds
+            // budget, in which case restart from the continued fraction to curb
+            // round-off error growth.
+            amp_plus = amp_plus * (x_plus / (n + 1.0));
+            if (amp_plus < EHAT_AMPLIFICATION_BUDGET) {
+                ehat_plus = (T(1.0) - x_plus * ehat_plus) / (n + 1.0);
             } else {
-                ehat_plus_dd = ehat_cf(n + 2, x_plus_dd);
-                amp_plus_dd = DD(1.0);
+                ehat_plus = ehat(n + 2, x_plus);
+                amp_plus = T(1.0);
             }
 
-            amp_minus_dd = amp_minus_dd * (x_minus_dd / (n + 1.0));
-            if (amp_minus_dd.upper < EHAT_AMPLIFICATION_BUDGET) {
-                ehat_minus_dd = (DD(1.0) - x_minus_dd * ehat_minus_dd) / (n + 1.0);
+            amp_minus = amp_minus * (x_minus / (n + 1.0));
+            if (amp_minus < EHAT_AMPLIFICATION_BUDGET) {
+                ehat_minus = (T(1.0) - x_minus * ehat_minus) / (n + 1.0);
             } else {
-                ehat_minus_dd = ehat_cf(n + 2, x_minus_dd);
-                amp_minus_dd = DD(1.0);
+                ehat_minus = ehat(n + 2, x_minus);
+                amp_minus = T(1.0);
             }
         }
     }
 
-    const bool converged = terms_used <= n_max_;
-    DD diff = P_plus_dd - P_minus_dd;
-    DD normalized_dd = pd.Psi + diff;
-    const double normalized_ratio = dd_to_double(normalized_dd);
-    const double value = sigma0 * normalized_ratio;
+    bool const converged = terms_used <= n_max_;
+    T const diff = P_plus - P_minus;
+    T const normalized = p.Psi + diff;
+    T const value = sigma0 * normalized;
 
-    constexpr double DD_EPS = std::numeric_limits<double>::epsilon()
-                            * std::numeric_limits<double>::epsilon();
-    const double norm_abs = std::abs(normalized_ratio) + eps_tiny;
-    const double max_accum = std::max(std::abs(P_plus_dd.upper), std::abs(P_minus_dd.upper));
-    const double trunc_rel = last_term_mag / norm_abs;
-    const double round_rel = terms_used * DD_EPS * max_accum / norm_abs;
-    const double rel_error = std::max(trunc_rel, round_rel);
-    const double abs_error = rel_error * std::abs(value);
+    constexpr double T_EPS = details::MachineEps<T>::value;
+    T const norm_abs = param_abs(normalized) + eps_tiny;
+    T const max_accum = std::max(param_abs(P_plus), param_abs(P_minus));
+    T const trunc_rel = last_term_mag / norm_abs;
+    T const round_rel = T(terms_used) * T_EPS * max_accum / norm_abs;
+    T const rel_error = std::max(trunc_rel, round_rel);
+    T const abs_error = rel_error * param_abs(value);
 
-    return SeriesResult{value, abs_error, rel_error, terms_used,
-                        SeriesMethod::PowerSeries, converged};
+    return SeriesResult{
+        to_double(value),
+        to_double(abs_error),
+        to_double(rel_error),
+        terms_used,
+        SeriesMethod::PowerSeries,
+        converged};
 }
+
+template SeriesResult ComptonKernelSeries::power_series<double>(
+    double, double, double, double, double, double) const;
+template SeriesResult ComptonKernelSeries::power_series<DD>(
+    double, double, double, double, double, double) const;
 
 // ─────────────────────────────────────────────────────────────────────────
 // Asymptotic series
 // ─────────────────────────────────────────────────────────────────────────
 
 SeriesResult ComptonKernelSeries::asymptotic_series(
-    const KershawParams<double>& p, 
-    double gamma, 
+    double gamma,
     double gamma_p,
-    double tau, 
-    double sigma0) const
+    double xi,
+    double tau,
+    double E,
+    double Ne) const
 {
+    KershawParams<double> const p = compute_params<double>(gamma, gamma_p, xi, tau);
+    double const sigma0 = sigma0_E(E, tau, p.lambda_plus, Ne);
+
     const double a = p.a;
     const double a2 = a * a;
 
@@ -285,7 +299,11 @@ SeriesResult ComptonKernelSeries::asymptotic_series(
 // ─────────────────────────────────────────────────────────────────────────
 
 SeriesResult ComptonKernelSeries::sigma_E(
-    double E, double E_prime, double xi, double tau, double Ne) const
+    double E,
+    double E_prime,
+    double xi,
+    double tau,
+    double Ne) const
 {
     if (!(E > 0.0) || !std::isfinite(E))
         throw std::invalid_argument("E must be finite and > 0");
@@ -304,7 +322,6 @@ SeriesResult ComptonKernelSeries::sigma_E(
     const double gamma_p = E_prime / units::me_c2;
 
     KershawParams<double> p = compute_params<double>(gamma, gamma_p, xi, tau);
-    const double sigma0_val = stable_sigma0_E(E, tau, p.lambda_plus, Ne);
 
     SeriesMethod chosen;
     if (method_ == SeriesMethod::Auto) {
@@ -317,9 +334,9 @@ SeriesResult ComptonKernelSeries::sigma_E(
     }
 
     if (chosen == SeriesMethod::PowerSeries)
-        return power_series(p, gamma, gamma_p, xi, tau, sigma0_val);
+        return power_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
     else
-        return asymptotic_series(p, gamma, gamma_p, tau, sigma0_val);
+        return asymptotic_series(gamma, gamma_p, xi, tau, E, Ne);
 }
 
 } // namespace compton

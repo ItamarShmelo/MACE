@@ -16,7 +16,7 @@
  *           cancellation when γ ≈ γ'.
  *         - λ₊ is clamped to ≥ 1 (physical lower bound: min electron energy).
  *
- *   3.  stable_sigma0_E():  Compute the prefactor
+ *   3.  sigma0_E():  Compute the prefactor
  *           σ₀ = Nₑ r_e² m_e c² / (4 E² τ) · exp(−(λ₊−1)/τ) / K̃₂(1/τ)
  *       The exponential and K̃₂ are kept in "scaled" form to avoid overflow:
  *       the exp(−(λ₊−1)/τ) suppression is the dominant factor controlling
@@ -150,14 +150,14 @@ SigmaResult ComptonKernelQuadrature::sigma_E(
         throw std::invalid_argument("xi must be finite and strictly inside (-1, 1)");
     if (!std::isfinite(Ne))
         throw std::invalid_argument("Ne must be finite");
-    if (1.0 - xi < XI_DIRECT_QUADRATURE_GUARD)
+    if (1.0 - xi < constants::XI_DIRECT_QUADRATURE_GUARD)
         throw std::invalid_argument("xi too close to 1 for direct quadrature");
 
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
     KershawParams<double> const p = compute_params<double>(gamma, gamma_p, xi, tau);
-    double const sigma0 = stable_sigma0_E(E, tau, p.lambda_plus, Ne);
+    double const sigma0 = sigma0_E(E, tau, p.lambda_plus, Ne);
 
     if (form_ == QuadratureForm::PostIntegrationByParts) {
         double const IQ_hi = compute_IQ_post_ibp(p, tau, NL_);
@@ -165,7 +165,7 @@ SigmaResult ComptonKernelQuadrature::sigma_E(
         double const value = sigma0 * (p.Psi + IQ_hi);
 
         double const abs_err = std::abs(sigma0) * std::abs(IQ_hi - IQ_lo);
-        double const rel_err = abs_err / (std::abs(value) + REL_ERROR_TINY_SCALE);
+        double const rel_err = abs_err / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
 
         return SigmaResult{value, abs_err, rel_err};
     } else {
@@ -174,7 +174,7 @@ SigmaResult ComptonKernelQuadrature::sigma_E(
         double const value = sigma0 * IQ_hi;
 
         double const abs_err = std::abs(sigma0) * std::abs(IQ_hi - IQ_lo);
-        double const rel_err = abs_err / (std::abs(value) + REL_ERROR_TINY_SCALE);
+        double const rel_err = abs_err / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
 
         return SigmaResult{value, abs_err, rel_err};
     }
