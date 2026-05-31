@@ -132,6 +132,7 @@ def section_accuracy():
 
     rel_errors = np.array(rel_errors)
 
+    fig, ax = plt.subplots(figsize=(8, 4))
     if len(rel_errors) > 0:
         data_clipped = np.clip(rel_errors, 1e-16, None)
         ax.hist(np.log10(data_clipped), bins=30, edgecolor='black', alpha=0.7)

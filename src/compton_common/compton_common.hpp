@@ -228,6 +228,52 @@ inline double scaled_K2(double x) {
     return std::sqrt(std::numbers::pi / (2.0 * x)) * sum;
 }
 
+/**
+ * @brief Scaled modified Bessel function: K̃₁(x) = exp(x) · K₁(x).
+ *
+ * Same strategy as scaled_K2: Boost cyl_bessel_k for x < 50, Hankel
+ * asymptotic for x >= 50.  Hankel parameter mu = 4·1² = 4 (vs 16 for K₂).
+ */
+inline double scaled_K1(double const x) {
+    if (!(x > 0.0) || !std::isfinite(x))
+        throw std::invalid_argument("scaled_K1 requires finite x > 0");
+
+    if (x < 50.0) {
+        return std::exp(x) * boost::math::cyl_bessel_k(1, x);
+    }
+
+    double const inv8x = 1.0 / (8.0 * x);
+    constexpr double mu = 4.0;
+
+    double term = 1.0;
+    double sum = 1.0;
+
+    term *= (mu - 1.0) * inv8x;
+    sum += term;
+
+    term *= (mu - 9.0) * inv8x / 2.0;
+    sum += term;
+
+    term *= (mu - 25.0) * inv8x / 3.0;
+    sum += term;
+
+    term *= (mu - 49.0) * inv8x / 4.0;
+    sum += term;
+
+    return std::sqrt(std::numbers::pi / (2.0 * x)) * sum;
+}
+
+/**
+ * @brief Bessel ratio κ(τ) = K₁(1/τ) / K₂(1/τ).
+ *
+ * Computed via scaled Bessel functions to avoid overflow for small τ.
+ * Asymptotics: κ → 1 as τ → 0, κ → 1/(2τ) as τ → ∞.
+ */
+inline double kappa_ratio(double const tau) {
+    double const x = 1.0 / tau;
+    return scaled_K1(x) / scaled_K2(x);
+}
+
 namespace constants {
 
 /// Floor added to relative-error denominators to avoid division by zero.

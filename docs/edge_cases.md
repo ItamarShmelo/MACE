@@ -254,6 +254,24 @@ The series module is complementary to quadrature:
 
 ---
 
+## Temperature Derivative Edge Cases
+
+The `dsigma_E_dtau` method inherits all edge cases of `sigma_E` and adds:
+
+### Post-IBP Derivative Cancellation
+
+At low τ, the post-IBP derivative suffers from the same Ψ-cancellation as the kernel itself.  The pre-IBP derivative avoids this entirely and is recommended for all temperatures.
+
+### Kappa Ratio at Extreme τ
+
+At very small τ (< 10⁻⁴), κ(τ) approaches 1 and the log-derivative `d(ln σ₀)/dτ` is dominated by the `(λ₊ − 1)/τ²` term.  At very large τ (> 100), κ ≈ 1/(2τ) and the log-derivative is moderate.  Both limits are handled correctly by the scaled Bessel implementation.
+
+### Recommended Form
+
+Use pre-IBP for `dsigma_E_dtau` at all temperatures.  The post-IBP form provides a useful cross-check at moderate τ but degrades at low τ.
+
+---
+
 ## Summary: Safe Operating Envelope
 
 ### Quadrature

@@ -28,25 +28,6 @@
  *     Gauss-Laguerre quadrature after a change of variable ρ = τ·x + ρ_offset
  *
  * ─────────────────────────────────────────────────────────────────────────
- * QUADRATURE FORMS
- * ─────────────────────────────────────────────────────────────────────────
- *
- * Two mathematically equivalent forms of I_Q are provided:
- *
- * 1. PostIntegrationByParts (default):
- *    Σ_E = \Sigma_0 · (Ψ + I_Q^{post})
- *    I_Q^{post} = τ ∫₀^∞ H(τx) e^{−x} dx
- *    with ρ = τx, r_± = ρ + ρ_±, and R_± = r_±² + ω²,
- *    H(ρ) = (A_+ - r_+/(τa))/√R_+ + (-A_- + r_-/(τa))/√R_-
- *
- * 2. PreIntegrationByParts:
- *    Σ_E = \Sigma_0 · I_Q^{pre}
- *    I_Q^{pre} = τ ∫₀^∞ F(τx) e^{−x} dx
- *    with the same r_± and R_±,
- *    F(ρ) = 2γγ'/q + [((r_- s + 1 + ξ)/R_-^{3/2})
- *                     + ((r_+ s - 1 - ξ)/R_+^{3/2})]/a²
- *           + G(1/√R_+ - 1/√R_-)
- * ─────────────────────────────────────────────────────────────────────────
  * UNITS AND API
  * ─────────────────────────────────────────────────────────────────────────
  *
@@ -106,9 +87,86 @@ public:
                         double const tau,
                         double const Ne) const;
 
+    /**
+     * @brief Evaluate ∂Σ_E/∂τ at a single phase-space point.
+     *
+     * Temperature derivative of the Compton kernel, computed analytically
+     * by differentiating through the Gauss-Laguerre integrand.  Uses
+     * κ(τ) = K₁(1/τ) / K₂(1/τ) via scaled Bessel functions for stability.
+     *
+     * @param E        Incident photon energy [erg]
+     * @param E_prime  Scattered photon energy [erg]
+     * @param xi       cos(scattering angle), strictly in (−1, 1)
+     * @param tau      Dimensionless electron temperature kT/(m_e c²)
+     * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
+     * @return SigmaResult with value and error estimates
+     */
+    SigmaResult dsigma_E_dtau(double const E,
+                               double const E_prime,
+                               double const xi,
+                               double const tau,
+                               double const Ne) const;
+
 private:
+    /**
+     * @brief Post-IBP Gauss-Laguerre quadrature for I_Q.
+     *
+     * Evaluates:
+     *   I_Q^{post} = τ ∫₀^∞ H(τx) e^{−x} dx
+     *
+     * with ρ = τx, r_± = ρ + ρ_±, R_± = r_±² + ω², and
+     *   H(ρ) = (Λ₊ − r₊/(τa)) / √R₊  +  (−Λ₋ + r₋/(τa)) / √R₋
+     *
+     * The full kernel value is then:
+     *   Σ_E = Σ₀ · (Ψ + I_Q^{post})
+     */
     double compute_IQ_post_ibp(KershawParams<double> const& p, double const tau, int const NL) const;
+
+    /**
+     * @brief Pre-IBP Gauss-Laguerre quadrature for I_Q.
+     *
+     * Evaluates:
+     *   I_Q^{pre} = τ ∫₀^∞ F(τx) e^{−x} dx
+     *
+     * with the same r_±, R_± as post-IBP, and
+     *   F(ρ) = 2γγ'/q
+     *          + [((r₋ s + 1 + ξ)/R₋^{3/2})
+     *            + ((r₊ s − 1 − ξ)/R₊^{3/2})] / a²
+     *          + G · (1/√R₊ − 1/√R₋)
+     *
+     * The full kernel value is then:
+     *   Σ_E = Σ₀ · I_Q^{pre}
+     */
     double compute_IQ_pre_ibp(KershawParams<double> const& p, double const tau, int const NL) const;
+
+    /**
+     * @brief Post-IBP derivative quadrature for ∂I_Q/∂τ.
+     *
+     * Combined form absorbing the prefactor log-derivative:
+     *   d(ln Σ₀)/dτ = (λ₊ − κ)/τ² − 3/τ
+     *
+     * Integrand per node:
+     *   plus_term  = [dlnΣ₀(ρ) · A₊(ρ) + B₊(ρ)/τ²] / √R₊
+     *   minus_term = [dlnΣ₀(ρ) · A₋(ρ) − B₋(ρ)/τ²] / √R₋
+     *
+     * where:
+     *   dlnΣ₀(ρ) = (λ₊ + ρ − κ)/τ² − 3/τ
+     *   B₊(ρ) = s/a² + r₊/a,   B₋(ρ) = r₋/a − s/a²
+     */
+    double compute_dIQ_post_ibp(KershawParams<double> const& p, double const tau,
+                                 int const NL, double const kappa_val) const;
+
+    /**
+     * @brief Pre-IBP derivative quadrature for ∂I_Q/∂τ.
+     *
+     * Multiplies the existing pre-IBP integrand F(x) by a weight:
+     *   weight(x) = (λ₊ + τx − 3τ − κ) / τ²
+     *
+     * so the derivative integral is:
+     *   τ · Σᵢ wᵢ · weight(xᵢ) · F(xᵢ)
+     */
+    double compute_dIQ_pre_ibp(KershawParams<double> const& p, double const tau,
+                                int const NL, double const kappa_val) const;
 
     int NL_;
     QuadratureForm form_;

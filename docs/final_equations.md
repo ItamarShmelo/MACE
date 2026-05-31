@@ -325,6 +325,86 @@ They differ only in numerical conditioning:
 
 ---
 
+## Step 8: Temperature Derivative (`dsigma_E_dtau`)
+
+The temperature derivative $\partial\Sigma_E / \partial\tau$ is computed analytically by differentiating
+through the Gauss-Laguerre integrand.
+
+### Bessel ratio
+
+$$
+\kappa(\tau) = \frac{K_1(1/\tau)}{K_2(1/\tau)} = \frac{\tilde{K}_1(1/\tau)}{\tilde{K}_2(1/\tau)}
+$$
+
+Computed via scaled Bessel functions for numerical stability.  Asymptotics: $\kappa \to 1$ as
+$\tau \to 0$, $\kappa \to 1/(2\tau)$ as $\tau \to \infty$.
+
+### Log-derivative of the prefactor
+
+$$
+\frac{d \ln \sigma_0}{d\tau} = \frac{\lambda_+ - \kappa}{\tau^2} - \frac{3}{\tau}
+$$
+
+This follows from differentiating $\sigma_0 \propto \tau^{-1} \exp(-(\lambda_+ - 1)/\tau) / \tilde{K}_2(1/\tau)$.
+
+### Pre-IBP derivative (single-integral form)
+
+The pre-IBP form multiplies the existing integrand $F(x_i)$ by a weight:
+
+$$
+w(x_i) = \frac{\lambda_+ + \tau x_i - 3\tau - \kappa}{\tau^2}
+$$
+
+$$
+\boxed{\frac{\partial\Sigma_E}{\partial\tau} = \sigma_0 \cdot \tau \sum_i w_i \cdot w(x_i) \cdot F(x_i)}
+$$
+
+### Post-IBP derivative (combined form)
+
+The post-IBP form has a non-integral contribution and an integral part:
+
+$$
+\text{non-integral} = \frac{d\ln\sigma_0}{d\tau} \cdot \Psi + \frac{2\gamma\gamma'}{q}
+$$
+
+For the integral, define per quadrature node $x_i$ with $\rho = \tau x_i$:
+
+$$
+d\ln\sigma_0(\rho) = \frac{\lambda_+ + \rho - \kappa}{\tau^2} - \frac{3}{\tau}
+$$
+
+$$
+\tilde{A}_+(\rho) = A_+ - \frac{r_+}{\tau\, a}, \qquad \tilde{A}_-(\rho) = -A_- + \frac{r_-}{\tau\, a}
+$$
+
+$$
+B_+(\rho) = \frac{s}{a^2} + \frac{r_+}{a}, \qquad B_-(\rho) = \frac{r_-}{a} - \frac{s}{a^2}
+$$
+
+The combined integrand:
+
+$$
+\text{plus} = \frac{d\ln\sigma_0(\rho) \cdot \tilde{A}_+(\rho) + B_+(\rho)/\tau^2}{\sqrt{R_+}}
+$$
+
+$$
+\text{minus} = \frac{d\ln\sigma_0(\rho) \cdot \tilde{A}_-(\rho) - B_-(\rho)/\tau^2}{\sqrt{R_-}}
+$$
+
+$$
+\boxed{\frac{\partial\Sigma_E}{\partial\tau} = \sigma_0 \cdot \left(\text{non-integral} + \tau \sum_i w_i \cdot (\text{plus}_i + \text{minus}_i)\right)}
+$$
+
+### Error estimate
+
+Same Richardson approach as for $\Sigma_E$: evaluate at NL and NL/2.
+
+$$
+\varepsilon_{\text{abs}} = |\sigma_0| \cdot |dI_Q(N_L) - dI_Q(N_L/2)|
+$$
+
+---
+
 # Series Evaluation
 
 This section documents the equations implemented in `src/compton_kernel_series/compton_kernel_series.cpp`.  The series provide an alternative to Gauss-Laguerre quadrature for evaluating the same kernel $\Sigma_E$.

@@ -109,6 +109,26 @@ Validates the C++ series module against the C++ quadrature module and CMMC Monte
 
 ---
 
+## derivative_validation.py
+
+**Output:** `reports/generated/derivative_validation.md`
+
+Validates the temperature derivative `dsigma_E_dtau` implementation.
+
+### Sections
+
+1. **Derivative GL Convergence** — Compares NL=64, 128, 256 Richardson error estimates for both pre-IBP and post-IBP derivative forms across representative test points.
+
+2. **Finite-Difference Comparison** — Log-log plot of |FD − analytic| / |analytic| vs step size h, plus a table of Richardson-extrapolated FD vs analytic derivative at each test point.
+
+3. **Pre-IBP vs Post-IBP Derivative Agreement** — Relative difference between the two forms as a function of temperature, showing where post-IBP degrades.
+
+4. **Kappa Ratio Validation** — Relative error of C++ `scaled_K1` vs scipy `kve(1, x)`, and kappa(τ) vs cold/hot asymptotic limits.
+
+5. **Small-tau Stability** — Table of derivative values and error estimates at low temperatures, verifying finiteness.
+
+---
+
 ## Adding New Reports
 
 Follow the conventions in existing scripts:

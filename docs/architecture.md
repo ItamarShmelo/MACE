@@ -42,6 +42,7 @@ compton_cross_section/
 ├── tests/
 │   ├── conftest.py                     # pytest --run-slow flag
 │   ├── test_deterministic.py           # Fast unit tests (+ GL nodes vs scipy)
+│   ├── test_derivatives.py             # Temperature derivative validation tests
 │   ├── test_python_vs_cpp.py           # Python vs C++ pointwise comparison
 │   ├── test_series_python.py           # Python series validation (Phase 2f)
 │   ├── test_series.py                  # C++ series tests (Phase 4)
@@ -52,6 +53,7 @@ compton_cross_section/
 │   └── benchmark_python_cpp_mc.py      # Timing + accuracy benchmark
 ├── reports/
 │   ├── convergence_analysis.py         # Convergence report generator (with plots)
+│   ├── derivative_validation.py        # Derivative validation report (with plots)
 │   ├── python_cpp_comparison.py        # Python vs C++ report generator (with plots)
 │   ├── series_validation.py            # Series validation report (with plots)
 │   ├── solver_validation.py            # Solver validation report (with plots)
@@ -125,6 +127,8 @@ _compton_kernel_quadrature.so    _compton_kernel_series.so
 
 Defines:
 - `scaled_K2(x)` — scaled Bessel function K̃₂(x) = exp(x) K₂(x)
+- `scaled_K1(x)` — scaled Bessel function K̃₁(x) = exp(x) K₁(x)
+- `kappa_ratio(tau)` — Bessel ratio κ(τ) = K₁(1/τ) / K₂(1/τ) for temperature derivatives
 - `KershawParams<T>` — kinematic intermediates struct template
 - `SigmaResult` — return type with value + error estimates
 - `compute_params<T>(gamma, gamma_p, xi, tau)` — templated kinematic derivation
@@ -148,7 +152,9 @@ Includes `compton_common.hpp` for shared types.
 
 Contains:
 - `compute_IQ_post_ibp` and `compute_IQ_pre_ibp` performing the quadrature
+- `compute_dIQ_post_ibp` and `compute_dIQ_pre_ibp` performing the derivative quadrature
 - `sigma_E` tying prefactor and quadrature together
+- `dsigma_E_dtau` computing ∂Σ_E/∂τ via analytic differentiation of the integrand
 - Static rule cache (`get_rule`)
 - Gauss-Laguerre integration helper template
 
@@ -203,8 +209,10 @@ No external dependencies beyond the standard library.
 Exposes:
 - `QuadratureForm` enum → Python enum
 - `SigmaResult` struct → Python object with readonly attributes
-- `ComptonKernelQuadrature` class → Python class with `sigma_E` and `sigma_E_vec`
+- `ComptonKernelQuadrature` class → Python class with `sigma_E`, `sigma_E_vec`, `dsigma_E_dtau`, `dsigma_E_dtau_vec`
 - `scaled_K2` → standalone Python function
+- `scaled_K1` → standalone Python function
+- `kappa_ratio` → standalone Python function
 - `gauss_laguerre_rule(N)` → returns (nodes, weights) tuple for testing
 
 The vectorized `sigma_E_vec` loops in C++ over an input NumPy array, avoiding per-element Python overhead.  GIL is held (no threading benefit) for simplicity.
@@ -307,6 +315,17 @@ Run in < 5 seconds.  No randomness, no external dependencies beyond the C++ modu
 | `TestPostVsPreIBP` | Both forms agree (relaxed tolerance for small τ) |
 | `TestAngularNormalization` | Total cross section ~ σ_Thomson for low-energy photons |
 | `TestGaussLaguerreVsScipy` | C++ GL nodes/weights match scipy to rtol=1e-11 |
+
+### Layer 1b: Derivative Tests (`test_derivatives.py`)
+
+Run in < 1 second.  Validates the temperature derivative `dsigma_E_dtau`.
+
+| Test | What it verifies |
+|------|------------------|
+| `TestFiniteDifference` | Analytic derivative matches Richardson-extrapolated FD at converged points |
+| `TestPrePostIBPConsistency` | Pre-IBP and post-IBP derivative forms agree |
+| `TestSmallTauStability` | Derivative returns finite values at small τ |
+| `TestKappaBessel` | scaled_K1 matches scipy.special.kve; kappa_ratio has correct asymptotics |
 
 ### Layer 2: Python vs C++ Tests (`test_python_vs_cpp.py`)
 

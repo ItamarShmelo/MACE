@@ -42,10 +42,39 @@ PYBIND11_MODULE(_compton_kernel_quadrature, m) {
             }
             return py::make_tuple(values, errors);
         }, py::arg("E"), py::arg("E_prime_arr"), py::arg("xi"),
+           py::arg("tau"), py::arg("Ne"))
+        .def("dsigma_E_dtau", &ComptonKernelQuadrature::dsigma_E_dtau,
+             py::arg("E"), py::arg("E_prime"), py::arg("xi"),
+             py::arg("tau"), py::arg("Ne"))
+        .def("dsigma_E_dtau_vec", [](const ComptonKernelQuadrature& self,
+                                      double E,
+                                      py::array_t<double, py::array::c_style | py::array::forcecast> E_prime_arr,
+                                      double xi, double tau, double Ne) {
+            auto in = E_prime_arr.unchecked<1>();
+            const py::ssize_t n = in.shape(0);
+
+            py::array_t<double> values(n);
+            py::array_t<double> errors(n);
+            auto out_values = values.mutable_unchecked<1>();
+            auto out_errors = errors.mutable_unchecked<1>();
+
+            for (py::ssize_t i = 0; i < n; ++i) {
+                SigmaResult r = self.dsigma_E_dtau(E, in(i), xi, tau, Ne);
+                out_values(i) = r.value;
+                out_errors(i) = r.estimated_abs_error;
+            }
+            return py::make_tuple(values, errors);
+        }, py::arg("E"), py::arg("E_prime_arr"), py::arg("xi"),
            py::arg("tau"), py::arg("Ne"));
 
     m.def("scaled_K2", &scaled_K2, py::arg("x"),
           "Returns kve(2, x) = exp(x) * K_2(x)");
+
+    m.def("scaled_K1", &scaled_K1, py::arg("x"),
+          "Returns kve(1, x) = exp(x) * K_1(x)");
+
+    m.def("kappa_ratio", &kappa_ratio, py::arg("tau"),
+          "Returns K_1(1/tau) / K_2(1/tau)");
 
     m.def("gauss_laguerre_rule", [](int N) {
         auto rule = compton::compute_gauss_laguerre(N);

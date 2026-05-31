@@ -509,23 +509,32 @@ def section_power_series_convergence(report):
         values = []
         for nm in n_max_values:
             eng = ComptonKernelSeries(method=SeriesMethod.PowerSeries, eps_rel=1e-15, n_min=nm+1, n_max=nm)
-            r = eng.sigma_E(E, Ep, xi, tau, 1.0)
-            values.append(r.value)
-            if abs(ref_val) > 1e-300:
-                rel_errors.append(abs(r.value - ref_val) / abs(ref_val))
-            else:
-                rel_errors.append(0.0)
+            try:
+                r = eng.sigma_E(E, Ep, xi, tau, 1.0)
+                values.append(r.value)
+                if abs(ref_val) > 1e-300:
+                    rel_errors.append(abs(r.value - ref_val) / abs(ref_val))
+                else:
+                    rel_errors.append(0.0)
+            except RuntimeError:
+                values.append(float('nan'))
+                rel_errors.append(float('nan'))
 
         conv_eng = ComptonKernelSeries(method=SeriesMethod.PowerSeries)
-        conv_r = conv_eng.sigma_E(E, Ep, xi, tau, 1.0)
-        if abs(ref_val) > 1e-300:
-            conv_rel = abs(conv_r.value - ref_val) / abs(ref_val)
-        else:
-            conv_rel = 0.0
+        try:
+            conv_r = conv_eng.sigma_E(E, Ep, xi, tau, 1.0)
+            conv_val = conv_r.value
+            if abs(ref_val) > 1e-300:
+                conv_rel = abs(conv_val - ref_val) / abs(ref_val)
+            else:
+                conv_rel = 0.0
+        except RuntimeError:
+            conv_val = float('nan')
+            conv_rel = float('nan')
 
         report.append(
             f"| {ci+1} | {T_kev} | {E_kev} | {Ep_kev} | {xi} | {ref_val:.6e} | "
-            f"{conv_r.value:.6e} | {conv_rel:.2e} |"
+            f"{conv_val:.6e} | {conv_rel:.2e} |"
         )
 
         ax = axes[ci]
@@ -591,19 +600,28 @@ def section_asymptotic_series_convergence(report):
         term_mags = []
         for nm in n_max_values:
             eng = ComptonKernelSeries(method=SeriesMethod.Asymptotic, eps_rel=1e-15, n_min=nm+1, n_max=nm)
-            r = eng.sigma_E(E, Ep, xi, tau, 1.0)
-            if abs(ref_val) > 1e-300:
-                rel_errors.append(abs(r.value - ref_val) / abs(ref_val))
-            else:
-                rel_errors.append(0.0)
-            term_mags.append(r.estimated_abs_error)
+            try:
+                r = eng.sigma_E(E, Ep, xi, tau, 1.0)
+                if abs(ref_val) > 1e-300:
+                    rel_errors.append(abs(r.value - ref_val) / abs(ref_val))
+                else:
+                    rel_errors.append(0.0)
+                term_mags.append(r.estimated_abs_error)
+            except RuntimeError:
+                rel_errors.append(float('nan'))
+                term_mags.append(float('nan'))
 
         conv_eng = ComptonKernelSeries(method=SeriesMethod.Asymptotic)
-        conv_r = conv_eng.sigma_E(E, Ep, xi, tau, 1.0)
-        if abs(ref_val) > 1e-300:
-            conv_rel = abs(conv_r.value - ref_val) / abs(ref_val)
-        else:
-            conv_rel = 0.0
+        try:
+            conv_r = conv_eng.sigma_E(E, Ep, xi, tau, 1.0)
+            conv_val = conv_r.value
+            if abs(ref_val) > 1e-300:
+                conv_rel = abs(conv_val - ref_val) / abs(ref_val)
+            else:
+                conv_rel = 0.0
+        except RuntimeError:
+            conv_val = float('nan')
+            conv_rel = float('nan')
 
         gamma = E / ME_C2
         gamma_p = Ep / ME_C2
@@ -621,15 +639,17 @@ def section_asymptotic_series_convergence(report):
 
         report.append(
             f"| {ci+1} | {T_kev} | {E_kev} | {Ep_kev} | {xi} | {tau_alpha_max:.4f} | "
-            f"{ref_val:.6e} | {conv_r.value:.6e} | {conv_rel:.2e} |"
+            f"{ref_val:.6e} | {conv_val:.6e} | {conv_rel:.2e} |"
         )
 
         ax_err = axes[0, ci]
-        plot_errs = [max(e, 1e-16) for e in rel_errors]
+        plot_errs = [max(e, 1e-16) if not np.isnan(e) else 1e2 for e in rel_errors]
         ax_err.semilogy(n_max_values, plot_errs, '-', color='coral', linewidth=1.5)
-        best_n = n_max_values[np.argmin(rel_errors)]
-        ax_err.axvline(best_n, color='blue', linestyle=':', alpha=0.5,
-                       label=f'Best n={best_n}')
+        valid_errs = [e for e in rel_errors if not np.isnan(e)]
+        if valid_errs:
+            best_n = n_max_values[np.nanargmin(rel_errors)]
+            ax_err.axvline(best_n, color='blue', linestyle=':', alpha=0.5,
+                           label=f'Best n={best_n}')
         ax_err.set_ylabel("Rel error vs quadrature")
         ax_err.set_title(f"T={T_kev}, E={E_kev}, E'={Ep_kev}\nξ={xi}, τα={tau_alpha_max:.3f}",
                          fontsize=8)

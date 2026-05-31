@@ -293,6 +293,32 @@ This means the solver's fallback from series to quadrature at high τ is subopti
 
 ---
 
+## Challenge 12: Derivative Cancellation
+
+### Problem
+
+The temperature derivative ∂Σ_E/∂τ requires differentiating through the prefactor σ₀, which depends on τ via three terms: the 1/τ normalization, exp(−(λ₊−1)/τ), and K̃₂(1/τ).  The log-derivative is:
+
+$$
+\frac{d \ln \sigma_0}{d\tau} = \frac{\lambda_+ - \kappa}{\tau^2} - \frac{3}{\tau}
+$$
+
+where κ(τ) = K₁(1/τ) / K₂(1/τ).  Computing κ directly from unscaled Bessel functions would fail for small τ (both K₁ and K₂ overflow), and the post-IBP derivative has the same Ψ-cancellation issue as the kernel itself.
+
+### Solution
+
+1. **Scaled Bessel ratio:** κ is computed as `scaled_K1(1/τ) / scaled_K2(1/τ)`, where scaled_K1 uses the same Boost + Hankel asymptotic strategy as scaled_K2.  The exponential factors cancel in the ratio.
+
+2. **Single-integral form (pre-IBP):** The pre-IBP derivative multiplies the existing integrand F(x) by a weight function w(x).  This avoids the Ψ boundary term and the associated cancellation, making it reliable at all temperatures.
+
+3. **Combined post-IBP form:** The post-IBP derivative absorbs d(ln σ₀)/dτ into the integrand rather than differentiating Ψ and I_Q separately.  This reduces but does not eliminate cancellation at low τ.
+
+### When to Use Which Form
+
+The pre-IBP derivative is recommended for general use (uniform convergence, no cancellation).  The post-IBP derivative provides a consistency check and may converge faster at moderate τ.
+
+---
+
 ## Summary Table
 
 | Challenge | Technique | Where |
@@ -308,3 +334,4 @@ This means the solver's fallback from series to quadrature at high τ is subopti
 | Poisson weight underflow | Bail-out when y± > 500 | Power series loop |
 | Asymptotic divergence | Smallest-term truncation with 2-increase rule | Asymptotic series loop |
 | P₊ − P₋ cancellation | Double-double accumulation (external `doubledouble` lib) | Power series loop |
+| Derivative κ(τ) stability | Scaled K₁/K₂ ratio; single-integral pre-IBP form | `kappa_ratio()`, `compute_dIQ_pre_ibp()` |
