@@ -55,11 +55,11 @@ public:
     );
 
     SeriesResult sigma_E(
-        double E,
-        double E_prime,
-        double xi,
-        double tau,
-        double Ne
+        double const E,
+        double const E_prime,
+        double const xi,
+        double const tau,
+        double const Ne
     ) const;
 
     /**
@@ -70,31 +70,31 @@ public:
      * given set of parameters.
      */
     double sigma_E_precision_check(
-        double E,
-        double E_prime,
-        double xi,
-        double tau,
-        double Ne
+        double const E,
+        double const E_prime,
+        double const xi,
+        double const tau,
+        double const Ne
     ) const;
 
 private:
     template<typename T>
     SeriesResult power_series(
-        double gamma,
-        double gamma_p,
-        double xi,
-        double tau,
-        double E,
-        double Ne
+        double const gamma,
+        double const gamma_p,
+        double const xi,
+        double const tau,
+        double const E,
+        double const Ne
     ) const;
 
     SeriesResult asymptotic_series(
-        double gamma,
-        double gamma_p,
-        double xi,
-        double tau,
-        double E,
-        double Ne
+        double const gamma,
+        double const gamma_p,
+        double const xi,
+        double const tau,
+        double const E,
+        double const Ne
     ) const;
 
     SeriesMethod method_;
