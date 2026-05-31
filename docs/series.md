@@ -238,7 +238,7 @@ Measured speedups (C++ vectorized throughput): 3-13x for asymptotic series,
 
 ## Double-Double Precision
 
-The power series loop performs all arithmetic in **double-double precision** (~32 significant digits) to handle the severe cancellation in $P_+ - P_-$.  This uses the [WarrenWeckesser/doubledouble](https://github.com/WarrenWeckesser/doubledouble) library (fetched at build time via CMake FetchContent), with two domain-specific extensions in `dd_extras.hpp`:
+The power series loop performs all arithmetic in **double-double precision** (~32 significant digits) to handle the severe cancellation in $P_+ - P_-$.  This uses the [WarrenWeckesser/doubledouble](https://github.com/WarrenWeckesser/doubledouble) library (fetched at build time via CMake FetchContent), with domain-specific DD/ehat helpers implemented in `compton_common.hpp`:
 
 - `dd_asinh(x)` — needed for the hyperbolic substitution $\theta_\pm = \text{arcsinh}(\rho_\pm / \omega)$
 - `dd_ehat_cf(m, x)` — Ehat_m via modified Lentz continued fraction (DLMF 8.9.2)

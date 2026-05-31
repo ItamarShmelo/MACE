@@ -41,15 +41,15 @@ TEMPS_KEV = [0.1, 1.0, 5.0, 20.0, 100.0]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# C++ ehat_expn vs scipy
+# C++ ehat_cf vs scipy
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-class TestEhatExpn:
+class TestEhatCf:
     @pytest.mark.parametrize("m", [1, 2, 5, 10])
     @pytest.mark.parametrize("x", [0.1, 1.0, 5.0, 10.0, 30.0, 49.0])
     def test_vs_scipy(self, m, x):
-        val = cs.ehat_expn(m, x)
+        val = cs.ehat_cf(m, x)
         ref = math.exp(x) * float(expn(m, x))
         reldiff = abs(val - ref) / (abs(ref) + 1e-300)
         assert reldiff < 1e-12, f"m={m}, x={x}: reldiff={reldiff}"
@@ -57,14 +57,14 @@ class TestEhatExpn:
     @pytest.mark.parametrize("m", [1, 2, 5, 10])
     @pytest.mark.parametrize("x", [51.0, 100.0, 500.0])
     def test_large_x_positive_finite(self, m, x):
-        val = cs.ehat_expn(m, x)
+        val = cs.ehat_cf(m, x)
         assert val > 0 and math.isfinite(val)
 
     def test_invalid_inputs(self):
         with pytest.raises(Exception):
-            cs.ehat_expn(1, -1.0)
+            cs.ehat_cf(1, -1.0)
         with pytest.raises(Exception):
-            cs.ehat_expn(0, 1.0)
+            cs.ehat_cf(0, 1.0)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -165,7 +165,7 @@ class TestConvergenceFlags:
         E, Ep = 8.5 * kev, 0.85 * kev
         tau = 900.0 * kev / me_c2
         series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeries)
-        with pytest.raises(RuntimeError, match="dd_ehat_cf failed to converge"):
+        with pytest.raises(RuntimeError, match="ehat_cf failed to converge"):
             series.sigma_E(E, Ep, -0.5, tau, 1.0)
 
     def test_asymptotic_converges(self):

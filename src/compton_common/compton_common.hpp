@@ -12,12 +12,132 @@
 #include <boost/math/special_functions/bessel.hpp>
 #include <cmath>
 #include <numbers>
+#include <ostream>
+#include <sstream>
 #include <stdexcept>
 
-#include "compton_kernel_series/dd_extras.hpp"
+#include "doubledouble.h"
 #include "units/units.hpp"
 
 namespace compton {
+
+using DD = doubledouble::DoubleDouble;
+
+inline double dd_to_double(DD const& x) {
+    return x.upper + x.lower;
+}
+
+inline DD dd_abs(DD const& x) {
+    if (x.upper < 0.0 || (x.upper == 0.0 && x.lower < 0.0)) {
+        return -x;
+    }
+    return x;
+}
+
+inline std::ostream& operator<<(std::ostream& os, DD const& x) {
+    os << "(" << x.upper << ", " << x.lower << ")";
+    return os;
+}
+
+/**
+ * @brief Inverse hyperbolic sine in double-double precision.
+ *
+ * asinh(x) = log(x + sqrt(x^2 + 1))
+ */
+inline DD dd_asinh(DD const& x) {
+    return (x + (x * x + 1.0).sqrt()).log();
+}
+
+/**
+ * @brief Ehat_m(x) = exp(x) * E_m(x) via modified Lentz continued fraction.
+ *
+ * DLMF 8.9.2: Ehat_m(x) = 1/(x+m - m*1/(x+m+2 - (m+1)*2/(x+m+4 - ...)))
+ * Evaluated via a templated modified Lentz algorithm shared by double and DD.
+ */
+namespace details {
+
+inline double param_abs(double const value);
+inline DD param_abs(DD const& value);
+
+} // namespace details
+
+template<typename T>
+struct EhatCfConfig;
+
+template<>
+struct EhatCfConfig<double> {
+    static constexpr double cf_tol = 1e-14;
+    static constexpr int max_iter = 1000;
+};
+
+template<>
+struct EhatCfConfig<DD> {
+    static constexpr double cf_tol = 1e-31;
+    static constexpr int max_iter = 200;
+};
+
+template<typename T>
+inline T ehat_cf(
+    int const m,
+    T const& x,
+    double const cf_tol = EhatCfConfig<T>::cf_tol,
+    int const max_iter = EhatCfConfig<T>::max_iter) {
+    if (!(x > 0.0)) {
+        throw std::invalid_argument("ehat_cf requires x > 0");
+    }
+    if (m < 1) {
+        throw std::invalid_argument("ehat_cf requires m >= 1");
+    }
+
+    constexpr double TINY = 1e-300;
+    T const tiny_t = TINY;
+    T b = x + m;
+    if (details::param_abs(b) < tiny_t) {
+        b = tiny_t;
+    }
+
+    T const one = 1.0;
+    T f = b;
+    T C = b;
+    T D = 0.0;
+    bool converged = false;
+
+    for (int j = 1; j <= max_iter; ++j) {
+        double const aj = -static_cast<double>(m + j - 1) * static_cast<double>(j);
+        T const aj_t = aj;
+        T const bj = x + (m + 2 * j);
+
+        D = bj + D * aj;
+        if (details::param_abs(D) < tiny_t) {
+            D = tiny_t;
+        }
+        D = one / D;
+
+        C = bj + aj_t / C;
+        if (details::param_abs(C) < tiny_t) {
+            C = tiny_t;
+        }
+
+        T const delta = C * D;
+        f = f * delta;
+
+        if (details::param_abs(delta - one) < cf_tol) {
+            converged = true;
+            break;
+        }
+    }
+
+    if (!converged) {
+        std::ostringstream message;
+        message << "ehat_cf failed to converge: m=" << m;
+        message << ", x=" << x;
+        message << ", max_iter=" << max_iter
+                << ", tol=" << cf_tol;
+        throw std::runtime_error(message.str());
+    }
+
+    return one / f;
+}
 
 /**
  * @brief Scaled modified Bessel function: K̃₂(x) = exp(x) · K₂(x).
@@ -91,11 +211,19 @@ static constexpr double XI_DIRECT_QUADRATURE_GUARD = 1e-14;
 
 namespace details {
 
-inline double param_sqrt(double value) {
+inline double param_abs(double const value) {
+    return std::abs(value);
+}
+
+inline DD param_abs(DD const& value) {
+    return dd_abs(value);
+}
+
+inline double param_sqrt(double const value) {
     return std::sqrt(value);
 }
 
-inline DD param_sqrt(const DD& value) {
+inline DD param_sqrt(DD const& value) {
     return value.sqrt();
 }
 

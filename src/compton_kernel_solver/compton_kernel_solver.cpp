@@ -56,22 +56,26 @@ SolverResult ComptonKernelSolver::sigma_E(
 
     // --- Phase 1: Try asymptotic if in its natural regime ---
     if (tau_alpha_max < ASYMP_TAU_ALPHA_THRESHOLD) {
-        ComptonKernelSeries asym_series(SeriesMethod::Asymptotic, 1e-12, 4, 200);
-        SeriesResult ar = asym_series.sigma_E(E, E_prime, xi, tau, Ne);
+        try {
+            ComptonKernelSeries asym_series(SeriesMethod::Asymptotic, 1e-12, 4, 200);
+            SeriesResult ar = asym_series.sigma_E(E, E_prime, xi, tau, Ne);
 
-        if (std::abs(ar.value) < target_abs_tol_) {
-            return make_result(0.0, 0.0, 0.0, ar.terms_used,
-                               SolverMethod::Asymptotic, false, true);
-        }
-        if (ar.estimated_rel_error < target_rel_tol_) {
-            return make_result(ar.value, ar.estimated_abs_error,
-                               ar.estimated_rel_error, ar.terms_used,
-                               SolverMethod::Asymptotic, false, true);
+            if (std::abs(ar.value) < target_abs_tol_) {
+                return make_result(0.0, 0.0, 0.0, ar.terms_used,
+                                   SolverMethod::Asymptotic, false, true);
+            }
+            if (ar.estimated_rel_error < target_rel_tol_) {
+                return make_result(ar.value, ar.estimated_abs_error,
+                                   ar.estimated_rel_error, ar.terms_used,
+                                   SolverMethod::Asymptotic, false, true);
+            }
+        } catch (std::runtime_error const&) {
+            // Series path failed (e.g., ehat CF non-convergence); continue cascade.
         }
     }
 
     // --- Phase 2: Try power series ---
-    {
+    try {
         ComptonKernelSeries pow_series(SeriesMethod::PowerSeries, 1e-12, 4, 1000);
         SeriesResult pr = pow_series.sigma_E(E, E_prime, xi, tau, Ne);
 
@@ -85,16 +89,18 @@ SolverResult ComptonKernelSolver::sigma_E(
                                pr.estimated_rel_error, pr.terms_used,
                                SolverMethod::PowerSeries, false, true);
         }
-
-        // --- Phase 3: Quadrature safety net ---
-        SigmaResult qr = quad256_.sigma_E(E, E_prime, xi, tau, Ne);
-        double q_rel_err = qr.estimated_rel_error;
-        bool q_target_met = (q_rel_err < target_rel_tol_);
-
-        return make_result(qr.value, qr.estimated_abs_error, q_rel_err,
-                           256, SolverMethod::Quadrature, false,
-                           q_target_met);
+    } catch (std::runtime_error const&) {
+        // Series path failed (e.g., ehat CF non-convergence); use quadrature safety net.
     }
+
+    // --- Phase 3: Quadrature safety net ---
+    SigmaResult qr = quad256_.sigma_E(E, E_prime, xi, tau, Ne);
+    double q_rel_err = qr.estimated_rel_error;
+    bool q_target_met = (q_rel_err < target_rel_tol_);
+
+    return make_result(qr.value, qr.estimated_abs_error, q_rel_err,
+                       256, SolverMethod::Quadrature, false,
+                       q_target_met);
 }
 
 } // namespace compton

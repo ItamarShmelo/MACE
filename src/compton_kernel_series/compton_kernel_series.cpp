@@ -8,7 +8,6 @@
 
 #include "compton_kernel_series.hpp"
 
-#include <boost/math/special_functions/expint.hpp>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -16,41 +15,18 @@
 namespace compton {
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ehat_expn: Ehat_m(x) = exp(x) * E_m(x)
-// ═══════════════════════════════════════════════════════════════════════════
-
-static double ehat_asymptotic(int m, double x, int n_terms = 15) {
-    const double inv_x = 1.0 / x;
-    double result = 1.0;
-    double term = 1.0;
-    for (int k = 1; k < n_terms; ++k) {
-        term *= -(static_cast<double>(m + k - 1)) * inv_x;
-        result += term;
-        if (std::abs(term) < 1e-15 * std::abs(result))
-            break;
-    }
-    return inv_x * result;
-}
-
-double ehat_expn(int m, double x) {
-    if (!(x > 0.0) || !std::isfinite(x))
-        throw std::invalid_argument("ehat_expn requires finite x > 0");
-    if (m < 1)
-        throw std::invalid_argument("ehat_expn requires m >= 1");
-
-    if (x < 50.0) {
-        return std::exp(x) * boost::math::expint(m, x);
-    }
-    return ehat_asymptotic(m, x);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // ComptonKernelSeries
 // ═══════════════════════════════════════════════════════════════════════════
 
 ComptonKernelSeries::ComptonKernelSeries(
-    SeriesMethod method, double eps_rel, int n_min, int n_max)
-    : method_(method), eps_rel_(eps_rel), n_min_(n_min), n_max_(n_max)
+    SeriesMethod method, 
+    double eps_rel, 
+    int n_min, 
+    int n_max)
+    :   method_(method), 
+        eps_rel_(eps_rel), 
+        n_min_(n_min), 
+        n_max_(n_max)
 {}
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -63,8 +39,12 @@ static constexpr double POISSON_Y_MAX = 500.0;
 static constexpr double EHAT_AMPLIFICATION_BUDGET = 1e2;
 
 SeriesResult ComptonKernelSeries::power_series(
-    const KershawParams<double>& p, double gamma, double gamma_p, double xi,
-    double tau, double sigma0) const
+    const KershawParams<double>& p, 
+    double gamma, 
+    double gamma_p, 
+    double xi,
+    double tau, 
+    double sigma0) const
 {
     KershawParams<DD> pd = compute_params<DD>(gamma, gamma_p, xi, tau);
 
@@ -97,8 +77,8 @@ SeriesResult ComptonKernelSeries::power_series(
     double last_term_mag = 0.0;
     int terms_used = 0;
 
-    DD ehat_plus_dd  = dd_ehat_cf(1, x_plus_dd);
-    DD ehat_minus_dd = dd_ehat_cf(1, x_minus_dd);
+    DD ehat_plus_dd  = ehat_cf(1, x_plus_dd);
+    DD ehat_minus_dd = ehat_cf(1, x_minus_dd);
     DD amp_plus_dd(1.0);
     DD amp_minus_dd(1.0);
 
@@ -135,7 +115,7 @@ SeriesResult ComptonKernelSeries::power_series(
             if (amp_plus_dd.upper < EHAT_AMPLIFICATION_BUDGET) {
                 ehat_plus_dd = (DD(1.0) - x_plus_dd * ehat_plus_dd) / (n + 1.0);
             } else {
-                ehat_plus_dd = dd_ehat_cf(n + 2, x_plus_dd);
+                ehat_plus_dd = ehat_cf(n + 2, x_plus_dd);
                 amp_plus_dd = DD(1.0);
             }
 
@@ -143,7 +123,7 @@ SeriesResult ComptonKernelSeries::power_series(
             if (amp_minus_dd.upper < EHAT_AMPLIFICATION_BUDGET) {
                 ehat_minus_dd = (DD(1.0) - x_minus_dd * ehat_minus_dd) / (n + 1.0);
             } else {
-                ehat_minus_dd = dd_ehat_cf(n + 2, x_minus_dd);
+                ehat_minus_dd = ehat_cf(n + 2, x_minus_dd);
                 amp_minus_dd = DD(1.0);
             }
         }
@@ -173,8 +153,11 @@ SeriesResult ComptonKernelSeries::power_series(
 // ─────────────────────────────────────────────────────────────────────────
 
 SeriesResult ComptonKernelSeries::asymptotic_series(
-    const KershawParams<double>& p, double gamma, double gamma_p,
-    double tau, double sigma0) const
+    const KershawParams<double>& p, 
+    double gamma, 
+    double gamma_p,
+    double tau, 
+    double sigma0) const
 {
     const double a = p.a;
     const double a2 = a * a;

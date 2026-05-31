@@ -33,14 +33,6 @@ struct SeriesResult {
     bool converged;
 };
 
-/**
- * @brief Scaled exponential integral: Ehat_m(x) = exp(x) * E_m(x).
- *
- * Uses boost::math::expint for x < 50 (multiplied by exp(x)), and an
- * asymptotic expansion for x >= 50 to avoid overflow.
- */
-double ehat_expn(int m, double x);
-
 class ComptonKernelSeries {
 public:
     ComptonKernelSeries(

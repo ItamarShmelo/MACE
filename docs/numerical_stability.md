@@ -190,25 +190,20 @@ The power series requires the **scaled exponential integral**:
 
 For large `x`, `exp(x)` overflows while `E_m(x)` underflows — the naive product `exp(x) * expn(m, x)` is `∞ × 0 = NaN`.
 
-### Solution: Two-Regime Strategy
+### Solution: Continued-Fraction Strategy
 
 | x range | Method | Error |
 |---------|--------|-------|
-| x < 50 | Direct product: `exp(x) · boost::expint(m, x)` | Machine precision |
-| x ≥ 50 | Asymptotic expansion (15 terms max) | < 10⁻¹⁵ relative |
+| x > 0 | Modified Lentz continued fraction (DLMF 8.9.2) | Typically near machine precision in tested ranges |
 
-The asymptotic expansion for large x:
-
-```
-Ê_m(x) ~ (1/x) · [1 − m/x + m(m+1)/x² − m(m+1)(m+2)/x³ + ...]
-```
-
-Terms are accumulated until `|term| < 10⁻¹⁵ |partial sum|` or 15 terms are reached.  This mirrors the two-regime approach used for `scaled_K2`.
+The implementation uses a shared templated continued-fraction evaluator for both
+`double` and double-double arithmetic, with type-specific tolerances and
+iteration caps in wrappers (`ehat_expn`, `dd_ehat_cf`).
 
 ### Implementation
 
 - Python: `ehat_expn(m, x)` in `pycompton/compton_kernel_series.py`
-- C++: `ehat_expn(m, x)` in `compton_kernel_series.cpp` (uses `boost::math::expint`)
+- C++: `ehat_expn(m, x)` / `dd_ehat_cf(m, x)` in `compton_common.hpp` (templated continued fraction)
 
 ---
 
@@ -284,7 +279,7 @@ The entire power series loop — including kinematic parameters, Poisson weights
   - `trunc_rel = |last_term| / |result|` — standard convergent-series truncation bound
   - `round_rel = N × ε² × max(|P+|, |P-|) / |result|` — accumulated DD rounding scaled by cancellation
 
-The two domain-specific functions not in the external library are implemented in `dd_extras.hpp`:
+The two domain-specific functions not in the external library are implemented in `compton_common.hpp`:
 - `dd_asinh(x)` — inverse hyperbolic sine via `log(x + sqrt(x² + 1))`
 - `dd_ehat_cf(m, x)` — Ehat_m via modified Lentz continued fraction (DLMF 8.9.2)
 
@@ -309,7 +304,7 @@ This means the solver's fallback from series to quadrature at high τ is subopti
 | Integration domain | ρ = λ₊ + τx substitution | Gauss-Laguerre integration |
 | ξ = ±1 singularity | Endpoint exclusion (10⁻¹⁰) | Python integration layer |
 | R± positivity | Guaranteed by ω² ≥ 0 | No handling needed |
-| Ê_m overflow | Two-regime `ehat_expn` (direct × asymptotic) | `ehat_expn()` |
+| Ê_m overflow/underflow | Continued-fraction `ehat_expn` / `dd_ehat_cf` | `compton_common.hpp` |
 | Poisson weight underflow | Bail-out when y± > 500 | Power series loop |
 | Asymptotic divergence | Smallest-term truncation with 2-increase rule | Asymptotic series loop |
 | P₊ − P₋ cancellation | Double-double accumulation (external `doubledouble` lib) | Power series loop |

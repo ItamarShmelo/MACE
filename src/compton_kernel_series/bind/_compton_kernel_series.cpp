@@ -55,6 +55,8 @@ PYBIND11_MODULE(_compton_kernel_series, m) {
         }, py::arg("E"), py::arg("E_prime_arr"), py::arg("xi"),
            py::arg("tau"), py::arg("Ne"));
 
-    m.def("ehat_expn", &ehat_expn, py::arg("m"), py::arg("x"),
-          "Scaled exponential integral: Ehat_m(x) = exp(x) * E_m(x)");
+    m.def("ehat_cf", [](int const m, double const x) {
+        return ehat_cf(m, x);
+    }, py::arg("m"), py::arg("x"),
+          "Scaled exponential integral via continued fraction: Ehat_m(x) = exp(x) * E_m(x)");
 }
