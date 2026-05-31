@@ -52,17 +52,6 @@ set_target_properties(_compton_kernel_series PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
 )
 
-pybind11_add_module(_compton_kernel_solver
-    src/compton_kernel_series/compton_kernel_series.cpp
-    src/compton_kernel_solver/compton_kernel_solver.cpp
-    src/compton_kernel_solver/bind/_compton_kernel_solver.cpp
-)
-target_compile_options(_compton_kernel_solver PRIVATE
-    -O3 -Wall -Wextra -Wpedantic
-)
-set_target_properties(_compton_kernel_solver PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
-)
 
 pybind11_add_module(_units
     src/units/bind_units.cpp

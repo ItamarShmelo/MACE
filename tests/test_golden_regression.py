@@ -14,7 +14,6 @@ sys.path.insert(0, os.path.join(ROOT, "cpp_modules"))
 
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
 from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
-from _compton_kernel_solver import ComptonKernelSolver
 
 ME_C2 = 9.109383713928e-28 * (2.99792458e10) ** 2
 KEV = 1.602176634e-9
@@ -55,7 +54,7 @@ def test_series_asymptotic_sigma_e_golden() -> None:
     _assert_rel_close(r.value, 4.1888861326125885e-16)
 
 
-def test_solver_sigma_e_golden() -> None:
-    solver = ComptonKernelSolver()
-    r = solver.sigma_E(_erg(100.0), _erg(150.0), 0.0, _tau(100.0), 1.0)
+def test_series_auto_sigma_e_golden() -> None:
+    series = ComptonKernelSeries(SeriesMethod.Auto)
+    r = series.sigma_E(_erg(100.0), _erg(150.0), 0.0, _tau(100.0), 1.0)
     _assert_rel_close(r.value, 9.880334406406093e-20)

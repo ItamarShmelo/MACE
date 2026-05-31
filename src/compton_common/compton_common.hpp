@@ -249,7 +249,7 @@ constexpr double GAMMA_DOUBLE_PRECISION_SAFE = 0.02;
 
 /// Dispatch threshold for asymptotic vs power series: use asymptotic series
 /// when tau * max(alpha_plus, alpha_minus) is below this value.
-constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.05;
+constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.025;
 
 } // namespace constants
 

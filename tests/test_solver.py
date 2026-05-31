@@ -1,5 +1,5 @@
 """
-Tests for ComptonKernelSolver: accuracy, edge cases, domain validation,
+Tests for ComptonKernelSeries(Auto): accuracy, edge cases, domain validation,
 and physical consistency.
 """
 
@@ -12,7 +12,7 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 
-from _compton_kernel_solver import ComptonKernelSolver
+from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
 
 ME_C2 = 9.109383713928e-28 * (2.99792458e10)**2
@@ -21,7 +21,7 @@ KEV = 1.602176634e-9
 
 @pytest.fixture
 def solver():
-    return ComptonKernelSolver()
+    return ComptonKernelSeries(SeriesMethod.Auto)
 
 
 @pytest.fixture

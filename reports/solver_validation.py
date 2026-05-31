@@ -1,5 +1,5 @@
 """
-Solver validation report: demonstrates ComptonKernelSolver effectiveness and robustness.
+Solver validation report: demonstrates ComptonKernelSeries(Auto) effectiveness and robustness.
 
 Generates reports/generated/solver_validation.md with embedded plots covering:
   1. Regime coverage map (method selection vs tau and E'/E)
@@ -31,7 +31,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 sys.path.insert(0, os.path.join(ROOT, 'src', 'python'))
 
-from _compton_kernel_solver import ComptonKernelSolver
+from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
 
 ME_C2 = 9.109383713928e-28 * (2.99792458e10)**2
@@ -42,7 +42,7 @@ FIGS_DIR = os.path.join(GEN_DIR, 'figs')
 os.makedirs(GEN_DIR, exist_ok=True)
 os.makedirs(FIGS_DIR, exist_ok=True)
 
-solver = ComptonKernelSolver()
+solver = ComptonKernelSeries(SeriesMethod.Auto)
 quad256 = ComptonKernelQuadrature(256, QuadratureForm.PostIBP)
 
 lines = []
@@ -347,7 +347,7 @@ def section_non_negativity():
 def main():
     emit("# Solver Validation Report")
     emit()
-    emit("Demonstrates ComptonKernelSolver effectiveness and robustness.")
+    emit("Demonstrates ComptonKernelSeries(Auto) effectiveness and robustness.")
     emit(f"Target relative tolerance: 1e-8")
     emit()
 

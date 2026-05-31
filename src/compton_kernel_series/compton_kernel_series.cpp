@@ -288,7 +288,7 @@ SigmaResult ComptonKernelSeries::sigma_E(
     if (method_ == SeriesMethod::Auto) {
         double const tau_alpha_max = std::max(tau * p.alpha_plus,
                                               tau * p.alpha_minus);
-        if (tau_alpha_max < 0.05) {
+        if (tau_alpha_max < constants::ASYMP_TAU_ALPHA_THRESHOLD) {
             chosen = SeriesMethod::Asymptotic;
         } else if (std::min(gamma, gamma_p) >= constants::GAMMA_DOUBLE_PRECISION_SAFE) {
             chosen = SeriesMethod::PowerSeries;
