@@ -137,10 +137,8 @@ def benchmark_single_point(pt, kernel):
 
     return {
         "cpp_value": result.value,
-        "cpp_terms": result.terms_used,
         "cpp_single_call_us": np.median(times_cpp_single) * 1e6,
         "python_value": py_result.value,
-        "python_terms": py_result.terms_used,
         "python_time_us": np.median(times_python) * 1e6,
     }
 
@@ -259,16 +257,15 @@ def print_summary(results):
     print(f"\n{'='*80}")
     print(f"Benchmark Summary ({results['implementation_mode']})")
     print(f"{'='*80}")
-    print(f"{'Point':<25} {'Method':<10} {'C++ vec(10k) us':<18} {'Python us':<12} {'Terms'}")
-    print(f"{'-'*80}")
+    print(f"{'Point':<25} {'Method':<10} {'C++ vec(10k) us':<18} {'Python us':<12}")
+    print(f"{'-'*70}")
 
     for pt in results["points"]:
         label = pt["label"]
         method = pt["diagnostics"]["method"]
         vec_us = pt["vectorized_identical"]["10000"]["per_eval_us"]
         py_us = pt["single_call"]["python_time_us"]
-        terms = pt["single_call"]["cpp_terms"]
-        print(f"{label:<25} {method:<10} {vec_us:<18.3f} {py_us:<12.1f} {terms}")
+        print(f"{label:<25} {method:<10} {vec_us:<18.3f} {py_us:<12.1f}")
 
 
 def estimate_series_conditioning(pt):

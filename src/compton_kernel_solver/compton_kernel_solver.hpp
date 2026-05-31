@@ -18,24 +18,6 @@
 
 namespace compton {
 
-enum class SolverMethod {
-    Asymptotic,
-    PowerSeries,
-    Quadrature
-};
-
-struct SolverResult {
-    double value;
-    double estimated_abs_error;
-    double estimated_rel_error;
-    int terms_used;
-    SolverMethod method_used;
-    bool used_fallback;      ///< reserved (always false; asymptotic fallback removed)
-    bool target_met;         ///< true if accepted path achieved rel_error < target (or negligible)
-    bool clamped;            ///< true if negative value was clamped to zero
-    double tau_alpha_max;    ///< diagnostic: max(tau*alpha_plus, tau*alpha_minus)
-};
-
 class ComptonKernelSolver {
 public:
     /**
@@ -45,7 +27,7 @@ public:
     ComptonKernelSolver(double target_rel_tol = 1e-8,
                         double target_abs_tol = 1e-300);
 
-    SolverResult sigma_E(double E, double E_prime, double xi, double tau, double Ne) const;
+    SigmaResult sigma_E(double E, double E_prime, double xi, double tau, double Ne) const;
 
 private:
     double target_rel_tol_;

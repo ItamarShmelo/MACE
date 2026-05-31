@@ -448,12 +448,10 @@ def section_series_pointwise(report):
         scale = max(abs(cr.value), abs(pr.value), 1e-300)
         rd = abs(cr.value - pr.value) / scale
         rel_diffs.append(max(rd, 1e-16))
-        methods.append(str(cr.method_used).replace('SeriesMethod.', ''))
 
         report.append(
             f"| {i+1} | {E_kev} | {Ep_kev} | {xi} | {T_kev} | "
-            f"{cr.value:.4e} | {pr.value:.4e} | {rd:.2e} | "
-            f"{methods[-1]} | {cr.terms_used} |"
+            f"{cr.value:.4e} | {pr.value:.4e} | {rd:.2e} |"
         )
 
     fig, ax = plt.subplots(figsize=(10, 5))

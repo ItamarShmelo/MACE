@@ -8,8 +8,9 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'cpp_modules'))
+from _compton_common import SigmaResult
 from _compton_kernel_quadrature import (
-    ComptonKernelQuadrature, QuadratureForm, SigmaResult, scaled_K2,
+    ComptonKernelQuadrature, QuadratureForm, scaled_K2,
     gauss_laguerre_rule,
 )
 

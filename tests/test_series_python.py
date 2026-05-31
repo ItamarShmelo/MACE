@@ -22,7 +22,7 @@ from pycompton.compton_kernel_quadrature import (
     stable_sigma0_E,
 )
 from pycompton.compton_kernel_series import (
-    SeriesResult,
+    SigmaResult,
     _asymptotic_series_normalized,
     _power_series_normalized,
     ehat_expn,
@@ -119,7 +119,6 @@ class TestPowerSeriesVsQuadrature:
         val_quad, _, _ = sigma_E(E, Ep, xi, tau, 1.0, NL=256)
         res = sigma_E_series(E, Ep, xi, tau, 1.0, method="power")
         reldiff = abs(res.value - val_quad) / (abs(val_quad) + 1e-300)
-        assert res.converged, "Power series should converge at T=100 keV"
         assert reldiff < 1e-4, f"reldiff={reldiff}"
 
 
@@ -142,10 +141,6 @@ class TestAsymptoticVsQuadrature:
         val_quad, _, _ = sigma_E(E, Ep, xi, tau, 1.0, NL=256)
         res = sigma_E_series(E, Ep, xi, tau, 1.0, method="asymptotic")
         reldiff = abs(res.value - val_quad) / (abs(val_quad) + 1e-300)
-        assert res.converged, (
-            f"Asymptotic should converge at T={T_kev} keV: "
-            f"E={E_kev}, Ep={Ep_kev}, xi={xi}"
-        )
         assert reldiff < 1e-3, f"reldiff={reldiff}"
 
 
@@ -168,13 +163,8 @@ class TestAutoModeVsQuadrature:
         val_quad, _, _ = sigma_E(E, Ep, xi, tau, 1.0, NL=256)
         res = sigma_E_series(E, Ep, xi, tau, 1.0, method="auto")
         reldiff = abs(res.value - val_quad) / (abs(val_quad) + 1e-300)
-        assert res.converged, (
-            f"Auto should converge: T={T_kev}, E={E_kev}, Ep={Ep_kev}, xi={xi}, "
-            f"method={res.method_used}"
-        )
         assert reldiff < 1e-3, (
-            f"reldiff={reldiff}: T={T_kev}, E={E_kev}, Ep={Ep_kev}, xi={xi}, "
-            f"method={res.method_used}, terms={res.terms_used}"
+            f"reldiff={reldiff}: T={T_kev}, E={E_kev}, Ep={Ep_kev}, xi={xi}"
         )
 
 
@@ -230,33 +220,31 @@ class TestPositivity:
         res = sigma_E_series(E, Ep, xi, tau, 1.0, method="auto")
         assert res.value >= 0, (
             f"Negative kernel: {res.value}, T={T_kev}, E={E_kev}, "
-            f"Ep={Ep_kev}, xi={xi}, method={res.method_used}"
+            f"Ep={Ep_kev}, xi={xi}"
         )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Convergence flags
+# Convergence behavior
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-class TestConvergenceFlags:
-    """Convergence flags should be set correctly."""
+class TestConvergenceBehavior:
+    """Series should converge without raising for well-conditioned inputs."""
 
     def test_power_series_converges_high_temp(self):
         E = 10.0 * kev
         Ep = 10.5 * kev
         tau = 100.0 * kev / me_c2
         res = sigma_E_series(E, Ep, 0.0, tau, 1.0, method="power")
-        assert res.converged
-        assert res.terms_used < 50
+        assert res.value > 0
 
     def test_asymptotic_converges_low_temp(self):
         E = 1.0 * kev
         Ep = 1.01 * kev
         tau = 0.1 * kev / me_c2
         res = sigma_E_series(E, Ep, 0.0, tau, 1.0, method="asymptotic")
-        assert res.converged
-        assert res.terms_used < 20
+        assert res.value > 0
 
     def test_error_estimates_positive(self):
         E = 1.0 * kev

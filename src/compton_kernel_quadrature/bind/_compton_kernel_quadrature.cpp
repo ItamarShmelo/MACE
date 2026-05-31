@@ -10,14 +10,11 @@ using namespace compton;
 PYBIND11_MODULE(_compton_kernel_quadrature, m) {
     m.doc() = "Compton scattering kernel via direct Gauss-Laguerre quadrature";
 
+    py::module_::import("_compton_common");
+
     py::enum_<QuadratureForm>(m, "QuadratureForm")
         .value("PostIBP", QuadratureForm::PostIntegrationByParts)
         .value("PreIBP", QuadratureForm::PreIntegrationByParts);
-
-    py::class_<SigmaResult>(m, "SigmaResult")
-        .def_readonly("value", &SigmaResult::value)
-        .def_readonly("estimated_abs_error", &SigmaResult::estimated_abs_error)
-        .def_readonly("estimated_rel_error", &SigmaResult::estimated_rel_error);
 
     py::class_<ComptonKernelQuadrature>(m, "ComptonKernelQuadrature")
         .def(py::init<int, QuadratureForm>(),

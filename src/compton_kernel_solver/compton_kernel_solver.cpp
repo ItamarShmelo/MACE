@@ -20,7 +20,7 @@ ComptonKernelSolver::ComptonKernelSolver(double target_rel_tol, double target_ab
       quad256_(256, QuadratureForm::PostIntegrationByParts)
 {}
 
-SolverResult ComptonKernelSolver::sigma_E(
+SigmaResult ComptonKernelSolver::sigma_E(
     double E, double E_prime, double xi, double tau, double Ne) const
 {
     if (!(E > 0.0) || !std::isfinite(E))
@@ -34,73 +34,54 @@ SolverResult ComptonKernelSolver::sigma_E(
     if (!std::isfinite(Ne))
         throw std::invalid_argument("Ne must be finite");
 
-    const double gamma = E / units::me_c2;
-    const double gamma_p = E_prime / units::me_c2;
+    double const gamma = E / units::me_c2;
+    double const gamma_p = E_prime / units::me_c2;
 
     KershawParams<double> p = compute_params<double>(gamma, gamma_p, xi, tau);
 
-    const double tau_alpha_max = std::max(tau * p.alpha_plus, tau * p.alpha_minus);
+    double const tau_alpha_max = std::max(tau * p.alpha_plus, tau * p.alpha_minus);
 
-    auto make_result = [&](double value, double abs_err, double rel_err,
-                           int terms, SolverMethod method, bool fallback,
-                           bool target_met_val) -> SolverResult {
-        bool clamped = false;
-        if (value < 0.0 && std::abs(value) < abs_err) {
-            clamped = true;
-            value = 0.0;
+    auto clamp_negative = [](SigmaResult r) -> SigmaResult {
+        if (r.value < 0.0 && std::abs(r.value) < r.estimated_abs_error) {
+            r.value = 0.0;
         }
-        return SolverResult{value, abs_err, rel_err, terms, method,
-                            fallback, target_met_val, clamped,
-                            tau_alpha_max};
+        return r;
     };
 
     // --- Phase 1: Try asymptotic if in its natural regime ---
     if (tau_alpha_max < ASYMP_TAU_ALPHA_THRESHOLD) {
         try {
             ComptonKernelSeries asym_series(SeriesMethod::Asymptotic, 1e-12, 4, 200);
-            SeriesResult ar = asym_series.sigma_E(E, E_prime, xi, tau, Ne);
+            SigmaResult ar = asym_series.sigma_E(E, E_prime, xi, tau, Ne);
 
             if (std::abs(ar.value) < target_abs_tol_) {
-                return make_result(0.0, 0.0, 0.0, ar.terms_used,
-                                   SolverMethod::Asymptotic, false, true);
+                return SigmaResult{0.0, 0.0, 0.0};
             }
             if (ar.estimated_rel_error < target_rel_tol_) {
-                return make_result(ar.value, ar.estimated_abs_error,
-                                   ar.estimated_rel_error, ar.terms_used,
-                                   SolverMethod::Asymptotic, false, true);
+                return clamp_negative(ar);
             }
         } catch (std::runtime_error const&) {
-            // Series path failed (e.g., ehat CF non-convergence); continue cascade.
         }
     }
 
     // --- Phase 2: Try power series ---
     try {
         ComptonKernelSeries pow_series(SeriesMethod::PowerSeriesHighPrecision, 1e-12, 4, 1000);
-        SeriesResult pr = pow_series.sigma_E(E, E_prime, xi, tau, Ne);
+        SigmaResult pr = pow_series.sigma_E(E, E_prime, xi, tau, Ne);
 
         if (std::abs(pr.value) < target_abs_tol_) {
-            return make_result(0.0, 0.0, 0.0, pr.terms_used,
-                               SolverMethod::PowerSeries, false, true);
+            return SigmaResult{0.0, 0.0, 0.0};
         }
 
         if (pr.estimated_rel_error < target_rel_tol_) {
-            return make_result(pr.value, pr.estimated_abs_error,
-                               pr.estimated_rel_error, pr.terms_used,
-                               SolverMethod::PowerSeries, false, true);
+            return clamp_negative(pr);
         }
     } catch (std::runtime_error const&) {
-        // Series path failed (e.g., ehat CF non-convergence); use quadrature safety net.
     }
 
     // --- Phase 3: Quadrature safety net ---
     SigmaResult qr = quad256_.sigma_E(E, E_prime, xi, tau, Ne);
-    double q_rel_err = qr.estimated_rel_error;
-    bool q_target_met = (q_rel_err < target_rel_tol_);
-
-    return make_result(qr.value, qr.estimated_abs_error, q_rel_err,
-                       256, SolverMethod::Quadrature, false,
-                       q_target_met);
+    return clamp_negative(qr);
 }
 
 } // namespace compton

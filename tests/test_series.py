@@ -89,7 +89,6 @@ class TestPowerSeriesVsQuadrature:
         sres = series.sigma_E(E, Ep, xi, tau, 1.0)
 
         reldiff = abs(sres.value - qres.value) / (abs(qres.value) + 1e-300)
-        assert sres.converged
         assert reldiff < 1e-4, f"reldiff={reldiff}"
 
 
@@ -114,9 +113,6 @@ class TestAsymptoticVsQuadrature:
         sres = series.sigma_E(E, Ep, xi, tau, 1.0)
 
         reldiff = abs(sres.value - qres.value) / (abs(qres.value) + 1e-300)
-        assert sres.converged, (
-            f"Asymptotic not converged: T={T_kev}, E={E_kev}, Ep={Ep_kev}, xi={xi}"
-        )
         assert reldiff < 1e-3, f"reldiff={reldiff}"
 
 
@@ -141,25 +137,23 @@ class TestAutoSwitching:
         sres = series.sigma_E(E, Ep, xi, tau, 1.0)
 
         reldiff = abs(sres.value - qres.value) / (abs(qres.value) + 1e-300)
-        assert sres.converged
         assert reldiff < 1e-3, (
-            f"reldiff={reldiff}: T={T_kev}, method={sres.method_used}"
+            f"reldiff={reldiff}: T={T_kev}"
         )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Convergence flags
+# Convergence behavior
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-class TestConvergenceFlags:
+class TestConvergenceBehavior:
     def test_power_series_converges(self):
         E, Ep = 10.0 * kev, 10.5 * kev
         tau = 100.0 * kev / me_c2
         series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeries)
         r = series.sigma_E(E, Ep, 0.0, tau, 1.0)
-        assert r.converged
-        assert r.terms_used > 0
+        assert r.value > 0
 
     def test_power_series_raises_when_ehat_cf_stalls(self):
         E, Ep = 8.5 * kev, 0.85 * kev
@@ -173,7 +167,7 @@ class TestConvergenceFlags:
         tau = 0.1 * kev / me_c2
         series = cs.ComptonKernelSeries(cs.SeriesMethod.Asymptotic)
         r = series.sigma_E(E, Ep, 0.0, tau, 1.0)
-        assert r.converged
+        assert r.value > 0
 
     def test_error_estimates_nonneg(self):
         E, Ep = 1.0 * kev, 1.5 * kev
@@ -280,9 +274,7 @@ class TestPowerSeriesDoublePrecision:
         series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeries)
         r = series.sigma_E(E, Ep, xi, tau, 1.0)
 
-        assert r.converged
         assert r.value >= 0
-        assert r.method_used == cs.SeriesMethod.PowerSeries
 
     @pytest.mark.parametrize(
         "E_kev,Ep_kev,xi",
@@ -300,7 +292,6 @@ class TestPowerSeriesDoublePrecision:
         sres = series.sigma_E(E, Ep, xi, tau, 1.0)
 
         reldiff = abs(sres.value - qres.value) / (abs(qres.value) + 1e-300)
-        assert sres.converged
         assert reldiff < 1e-4, f"reldiff={reldiff}"
 
 

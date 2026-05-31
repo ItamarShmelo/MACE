@@ -31,7 +31,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 sys.path.insert(0, os.path.join(ROOT, 'src', 'python'))
 
-from _compton_kernel_solver import ComptonKernelSolver, SolverMethod
+from _compton_kernel_solver import ComptonKernelSolver
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
 
 ME_C2 = 9.109383713928e-28 * (2.99792458e10)**2
@@ -74,7 +74,7 @@ def section_regime_map():
             Ep = E * ratio
             try:
                 r = solver.sigma_E(E, Ep, 0.0, tau, 1.0)
-                method_map[i, j] = r.method_used.value
+                method_map[i, j] = 0 if r.value >= 0 else 1
             except Exception:
                 method_map[i, j] = -1
 
@@ -110,7 +110,6 @@ def section_accuracy():
     xi_vals = [-0.5, 0.0, 0.5]
 
     rel_errors = []
-    methods_used = []
 
     for T_keV in T_vals:
         tau = T_keV * KEV / ME_C2
@@ -130,26 +129,17 @@ def section_accuracy():
 
                     rel_diff = abs(sr.value - qr.value) / abs(qr.value)
                     rel_errors.append(rel_diff)
-                    methods_used.append(sr.method_used.value)
 
     rel_errors = np.array(rel_errors)
-    methods_used = np.array(methods_used)
 
-    fig, axes = plt.subplots(1, 3, figsize=(12, 4))
-    method_names = ['Asymptotic', 'Power', 'Quadrature']
-    for idx, (ax, name) in enumerate(zip(axes, method_names)):
-        mask = methods_used == idx
-        if mask.sum() > 0:
-            data = rel_errors[mask]
-            data_clipped = np.clip(data, 1e-16, None)
-            ax.hist(np.log10(data_clipped), bins=30, edgecolor='black', alpha=0.7)
-            ax.axvline(np.log10(1e-8), color='red', linestyle='--', label='1e-8 target')
-            ax.set_title(f"{name} (n={mask.sum()})")
-            ax.set_xlabel("log10(|solver - Q256| / |Q256|)")
-            ax.legend()
-        else:
-            ax.set_title(f"{name} (n=0)")
-    fig.suptitle("Solver vs Q256 Relative Discrepancy by Method")
+    if len(rel_errors) > 0:
+        data_clipped = np.clip(rel_errors, 1e-16, None)
+        ax.hist(np.log10(data_clipped), bins=30, edgecolor='black', alpha=0.7)
+        ax.axvline(np.log10(1e-8), color='red', linestyle='--', label='1e-8 target')
+        ax.set_title(f"Solver vs Q256 (n={len(rel_errors)})")
+        ax.set_xlabel("log10(|solver - Q256| / |Q256|)")
+        ax.legend()
+    fig.suptitle("Solver vs Q256 Relative Discrepancy")
     fig.tight_layout()
     fig.savefig(os.path.join(FIGS_DIR, 'solver_accuracy_hist.png'), dpi=120)
     plt.close(fig)
@@ -180,10 +170,8 @@ def section_fallback_stats():
     ratios = [1.001, 1.01, 1.05, 1.1, 1.5, 2.0, 3.0, 5.0]
     xi_vals = [-0.5, 0.0, 0.5]
 
-    counts = {'Asymptotic': 0, 'PowerSeries': 0, 'Quadrature': 0}
-    n_target_met = 0
-    n_clamped = 0
     n_total = 0
+    n_nonneg = 0
 
     for T_keV in T_vals:
         tau = T_keV * KEV / ME_C2
@@ -197,19 +185,13 @@ def section_fallback_stats():
                     except Exception:
                         continue
                     n_total += 1
-                    counts[r.method_used.name] += 1
-                    if r.target_met:
-                        n_target_met += 1
-                    if r.clamped:
-                        n_clamped += 1
+                    if r.value >= 0:
+                        n_nonneg += 1
 
     emit("| Metric | Count | Percentage |")
     emit("|--------|-------|------------|")
     emit(f"| Total points | {n_total} | 100% |")
-    for name, count in counts.items():
-        emit(f"| Method: {name} | {count} | {100*count/n_total:.1f}% |")
-    emit(f"| target_met=True | {n_target_met} | {100*n_target_met/n_total:.1f}% |")
-    emit(f"| clamped=True | {n_clamped} | {100*n_clamped/n_total:.1f}% |")
+    emit(f"| Non-negative | {n_nonneg} | {100*n_nonneg/n_total:.1f}% |")
     emit()
 
 
@@ -230,17 +212,16 @@ def section_edge_cases():
         ("Cancellation: E=1, E'=1.01, xi=0.5, T=100", 1.0, 1.01, 0.5, 100.0),
     ]
 
-    emit("| Case | Value | rel_error | Method | target_met | clamped | tau_alpha_max |")
-    emit("|------|-------|-----------|--------|------------|---------|---------------|")
+    emit("| Case | Value | rel_error |")
+    emit("|------|-------|-----------|")
 
     for label, E_keV, Ep_keV, xi, T_keV in cases:
         E = E_keV * KEV; Ep = Ep_keV * KEV; tau = T_keV * KEV / ME_C2
         try:
             r = solver.sigma_E(E, Ep, xi, tau, 1.0)
-            emit(f"| {label} | {r.value:.3e} | {r.estimated_rel_error:.2e} | "
-                 f"{r.method_used.name} | {r.target_met} | {r.clamped} | {r.tau_alpha_max:.4f} |")
+            emit(f"| {label} | {r.value:.3e} | {r.estimated_rel_error:.2e} |")
         except Exception as e:
-            emit(f"| {label} | ERROR: {e} | - | - | - | - | - |")
+            emit(f"| {label} | ERROR: {e} | - |")
     emit()
 
 
@@ -261,16 +242,15 @@ def section_out_of_domain():
         ("E'/E=0.01", 100.0, 1.0, 0.0, 200.0),
     ]
 
-    emit("| Case | Value | rel_error | Method | target_met |")
-    emit("|------|-------|-----------|--------|------------|")
+    emit("| Case | Value | rel_error |")
+    emit("|------|-------|-----------|")
     for label, E_keV, Ep_keV, xi, T_keV in cases:
         E = E_keV * KEV; Ep = Ep_keV * KEV; tau = T_keV * KEV / ME_C2
         try:
             r = solver.sigma_E(E, Ep, xi, tau, 1.0)
-            emit(f"| {label} | {r.value:.3e} | {r.estimated_rel_error:.2e} | "
-                 f"{r.method_used.name} | {r.target_met} |")
+            emit(f"| {label} | {r.value:.3e} | {r.estimated_rel_error:.2e} |")
         except Exception as e:
-            emit(f"| {label} | ERROR | - | - | - |")
+            emit(f"| {label} | ERROR | - |")
     emit()
 
 
@@ -337,7 +317,6 @@ def section_non_negativity():
 
     n_total = 0
     n_negative = 0
-    n_clamped = 0
 
     for T_keV in T_vals:
         tau = T_keV * KEV / ME_C2
@@ -353,12 +332,9 @@ def section_non_negativity():
                     n_total += 1
                     if r.value < 0:
                         n_negative += 1
-                    if r.clamped:
-                        n_clamped += 1
 
     emit(f"- Total points checked: {n_total}")
-    emit(f"- Negative values (after clamping): {n_negative}")
-    emit(f"- Points where clamping was applied: {n_clamped}")
+    emit(f"- Negative values: {n_negative}")
     if n_negative == 0:
         emit(f"- **Result: All values are non-negative.**")
     emit()

@@ -20,6 +20,16 @@ include_directories(external/CMMC/src)
 include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${doubledouble_SOURCE_DIR}/include)
 
+pybind11_add_module(_compton_common
+    src/compton_common/bind/_compton_common.cpp
+)
+target_compile_options(_compton_common PRIVATE
+    -O3 -Wall -Wextra -Wpedantic
+)
+set_target_properties(_compton_common PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
+)
+
 pybind11_add_module(_compton_kernel_quadrature
     src/compton_kernel_quadrature/compton_kernel_quadrature.cpp
     src/compton_kernel_quadrature/bind/_compton_kernel_quadrature.cpp

@@ -140,18 +140,7 @@ SigmaResult ComptonKernelQuadrature::sigma_E(
     double const tau,
     double const Ne) const
 {
-    if (!(E > 0.0) || !std::isfinite(E))
-        throw std::invalid_argument("E must be finite and > 0");
-    if (!(E_prime > 0.0) || !std::isfinite(E_prime))
-        throw std::invalid_argument("E_prime must be finite and > 0");
-    if (!(tau > 0.0) || !std::isfinite(tau))
-        throw std::invalid_argument("tau must be finite and > 0");
-    if (!(xi > -1.0 && xi < 1.0) || !std::isfinite(xi))
-        throw std::invalid_argument("xi must be finite and strictly inside (-1, 1)");
-    if (!std::isfinite(Ne))
-        throw std::invalid_argument("Ne must be finite");
-    if (1.0 - xi < constants::XI_DIRECT_QUADRATURE_GUARD)
-        throw std::invalid_argument("xi too close to 1 for direct quadrature");
+    assert_parameters(E, E_prime, xi, tau, Ne);
 
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;

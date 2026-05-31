@@ -1,6 +1,6 @@
 """
-Tests for ComptonKernelSolver: cascade method selection, accuracy, edge cases,
-domain validation, and physical consistency.
+Tests for ComptonKernelSolver: accuracy, edge cases, domain validation,
+and physical consistency.
 """
 
 import sys
@@ -12,7 +12,7 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 
-from _compton_kernel_solver import ComptonKernelSolver, SolverMethod
+from _compton_kernel_solver import ComptonKernelSolver
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
 
 ME_C2 = 9.109383713928e-28 * (2.99792458e10)**2
@@ -68,31 +68,7 @@ class TestDomainValidation:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Method selection tests
-# ═══════════════════════════════════════════════════════════════════════════════
-
-class TestMethodSelection:
-    def test_low_tau_uses_asymptotic(self, solver):
-        """Very low T should use asymptotic series."""
-        E = 1.0 * KEV; Ep = 1.5 * KEV; tau = 0.01 * KEV / ME_C2
-        r = solver.sigma_E(E, Ep, 0.0, tau, 1.0)
-        assert r.method_used == SolverMethod.Asymptotic
-
-    def test_high_tau_uses_power_or_quad(self, solver):
-        """High T with well-separated energies should use power or quadrature."""
-        E = 100.0 * KEV; Ep = 150.0 * KEV; tau = 100.0 * KEV / ME_C2
-        r = solver.sigma_E(E, Ep, 0.0, tau, 1.0)
-        assert r.method_used in (SolverMethod.PowerSeries, SolverMethod.Quadrature)
-
-    def test_tau_alpha_max_populated(self, solver):
-        """Diagnostic tau_alpha_max should always be positive."""
-        E = 1.0 * KEV; Ep = 1.5 * KEV; tau = 5.0 * KEV / ME_C2
-        r = solver.sigma_E(E, Ep, 0.0, tau, 1.0)
-        assert r.tau_alpha_max > 0.0
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Accuracy tests: series results vs quadrature reference
+# Accuracy tests: solver results vs quadrature reference
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestAccuracy:
@@ -123,17 +99,6 @@ class TestAccuracy:
                 f"E={E_keV}, Ep={Ep_keV}, xi={xi}, T={T_keV}: "
                 f"rel_diff={rel_diff:.2e}, tol={tolerance:.2e}"
             )
-
-    def test_target_met_implies_accuracy(self, solver, quad256):
-        """When target_met=True and method is not quadrature, error should be < 1e-8."""
-        for E_keV, Ep_keV, xi, T_keV in self.ACCURACY_CASES:
-            E = E_keV * KEV; Ep = Ep_keV * KEV; tau = T_keV * KEV / ME_C2
-            sr = solver.sigma_E(E, Ep, xi, tau, 1.0)
-
-            if sr.target_met and sr.method_used != SolverMethod.Quadrature:
-                assert sr.estimated_rel_error < 1e-8, (
-                    f"E={E_keV}, Ep={Ep_keV}: target_met but rel_err={sr.estimated_rel_error:.2e}"
-                )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -171,7 +136,6 @@ class TestEdgeCases:
         """Very cold electrons (deep asymptotic regime)."""
         E = 10.0 * KEV; Ep = 10.5 * KEV; tau = 0.001 * KEV / ME_C2
         r = solver.sigma_E(E, Ep, 0.0, tau, 1.0)
-        assert r.method_used == SolverMethod.Asymptotic
         assert math.isfinite(r.value)
 
     def test_high_tau(self, solver):
@@ -194,7 +158,7 @@ class TestEdgeCases:
 
 class TestOutOfDomain:
     def test_very_high_tau_reports_honestly(self, solver):
-        """tau well beyond calibration grid should still work (maybe with larger error)."""
+        """tau well beyond calibration grid should still work."""
         E = 1.0 * KEV; Ep = 1.5 * KEV; tau = 2000.0 * KEV / ME_C2
         r = solver.sigma_E(E, Ep, 0.0, tau, 1.0)
         assert math.isfinite(r.value)
@@ -260,10 +224,8 @@ class TestVectorized:
         Ep_arr = np.array([10.5, 11.0, 12.0, 15.0, 20.0]) * KEV
         xi = 0.0; tau = 10.0 * KEV / ME_C2
 
-        values, errors, methods, terms, fallbacks, target_mets = \
-            solver.sigma_E_vec(E, Ep_arr, xi, tau, 1.0)
+        values, errors = solver.sigma_E_vec(E, Ep_arr, xi, tau, 1.0)
 
         for i, Ep in enumerate(Ep_arr):
             r = solver.sigma_E(E, float(Ep), xi, tau, 1.0)
             assert abs(values[i] - r.value) < 1e-300 + 1e-15 * abs(r.value)
-            assert methods[i] == int(r.method_used.value)

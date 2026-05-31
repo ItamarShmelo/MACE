@@ -12,10 +12,10 @@
  *                               based on tau*alpha threshold (0.05)
  *
  * The series module does NOT depend on the quadrature module.  If the chosen
- * series fails to converge, it returns converged=false and the caller decides
- * whether to fall back to quadrature.
+ * series fails to converge, it throws std::runtime_error.
  */
 
+#include "compton_common/compton_common.hpp"
 
 namespace compton {
 
@@ -24,15 +24,6 @@ enum class SeriesMethod {
     PowerSeriesHighPrecision,
     Asymptotic,
     Auto
-};
-
-struct SeriesResult {
-    double value;
-    double estimated_abs_error;
-    double estimated_rel_error;
-    int terms_used;
-    SeriesMethod method_used;
-    bool converged;
 };
 
 class ComptonKernelSeries {
@@ -45,7 +36,7 @@ public:
      *                 and difference-stability checks.
      * @param n_min    Minimum number of terms before convergence is tested.
      * @param n_max    Maximum number of terms; if reached without convergence
-     *                 the result is returned with converged=false.
+     *                 a std::runtime_error is thrown.
      */
     ComptonKernelSeries(
         SeriesMethod method = SeriesMethod::Auto,
@@ -54,7 +45,7 @@ public:
         int n_max = 200
     );
 
-    SeriesResult sigma_E(
+    SigmaResult sigma_E(
         double const E,
         double const E_prime,
         double const xi,
@@ -79,7 +70,7 @@ public:
 
 private:
     template<typename T>
-    SeriesResult power_series(
+    SigmaResult power_series(
         double const gamma,
         double const gamma_p,
         double const xi,
@@ -88,7 +79,7 @@ private:
         double const Ne
     ) const;
 
-    SeriesResult asymptotic_series(
+    SigmaResult asymptotic_series(
         double const gamma,
         double const gamma_p,
         double const xi,

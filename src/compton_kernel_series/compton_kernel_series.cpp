@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <type_traits>
+#include <stdexcept>
 
 namespace compton {
 
@@ -36,7 +36,7 @@ ComptonKernelSeries::ComptonKernelSeries(
 // ─────────────────────────────────────────────────────────────────────────
 
 template<typename T>
-SeriesResult ComptonKernelSeries::power_series(
+SigmaResult ComptonKernelSeries::power_series(
     double const gamma,
     double const gamma_p,
     double const xi,
@@ -62,14 +62,9 @@ SeriesResult ComptonKernelSeries::power_series(
     T const x_minus = b * param_exp(theta_minus);
     T const y_minus = b * param_exp(-theta_minus);
 
-    constexpr SeriesMethod method_tag = std::is_same_v<T, DD>
-        ? SeriesMethod::PowerSeriesHighPrecision
-        : SeriesMethod::PowerSeries;
-
     // Poisson weight exp(-y) underflows when y exceeds this threshold.
     if (y_plus > POISSON_Y_MAX || y_minus > POISSON_Y_MAX) {
-        T const value = sigma0 * p.Psi;
-        return SeriesResult{to_double(value), 0.0, 0.0, 0, method_tag, false};
+        throw std::runtime_error("power series: Poisson weight underflow");
     }
 
     T w_plus  = param_exp(-y_plus);
@@ -136,7 +131,10 @@ SeriesResult ComptonKernelSeries::power_series(
         }
     }
 
-    bool const converged = terms_used <= n_max_;
+    if (terms_used > n_max_) {
+        throw std::runtime_error("power series failed to converge");
+    }
+
     T const diff = P_plus - P_minus;
     T const normalized = p.Psi + diff;
     T const value = sigma0 * normalized;
@@ -149,25 +147,22 @@ SeriesResult ComptonKernelSeries::power_series(
     T const rel_error = std::max(trunc_rel, round_rel);
     T const abs_error = rel_error * param_abs(value);
 
-    return SeriesResult{
+    return SigmaResult{
         to_double(value),
         to_double(abs_error),
-        to_double(rel_error),
-        terms_used,
-        method_tag,
-        converged};
+        to_double(rel_error)};
 }
 
-template SeriesResult ComptonKernelSeries::power_series<double>(
+template SigmaResult ComptonKernelSeries::power_series<double>(
     double, double, double, double, double, double) const;
-template SeriesResult ComptonKernelSeries::power_series<DD>(
+template SigmaResult ComptonKernelSeries::power_series<DD>(
     double, double, double, double, double, double) const;
 
 // ─────────────────────────────────────────────────────────────────────────
 // Asymptotic series
 // ─────────────────────────────────────────────────────────────────────────
 
-SeriesResult ComptonKernelSeries::asymptotic_series(
+SigmaResult ComptonKernelSeries::asymptotic_series(
     double const gamma,
     double const gamma_p,
     double const xi,
@@ -198,7 +193,6 @@ SeriesResult ComptonKernelSeries::asymptotic_series(
     double smallest_term_mag = std::numeric_limits<double>::infinity();
     double best_S_plus = 0.0;
     double best_S_minus = 0.0;
-    int best_terms = 0;
     int increase_count = 0;
     double prev_term_mag = std::numeric_limits<double>::infinity();
 
@@ -210,8 +204,6 @@ SeriesResult ComptonKernelSeries::asymptotic_series(
     double Pp_curr = zeta_plus;
     double Pm_prev = 1.0;
     double Pm_curr = zeta_minus;
-
-    int terms_used = 0;
 
     for (int n = 0; n <= n_max_; ++n) {
         if (n > 0) {
@@ -239,7 +231,6 @@ SeriesResult ComptonKernelSeries::asymptotic_series(
 
         S_plus += term_plus;
         S_minus += term_minus;
-        terms_used = n + 1;
 
         double const term_mag = std::abs(term_plus) + std::abs(term_minus);
 
@@ -247,7 +238,6 @@ SeriesResult ComptonKernelSeries::asymptotic_series(
             smallest_term_mag = term_mag;
             best_S_plus = S_plus;
             best_S_minus = S_minus;
-            best_terms = terms_used;
         }
 
         // Converged: relative term magnitude dropped below tolerance.
@@ -257,13 +247,7 @@ SeriesResult ComptonKernelSeries::asymptotic_series(
             double const value = sigma0 * normalized;
             double const abs_error = std::abs(sigma0) * term_mag;
             double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
-            return SeriesResult{
-                value,
-                abs_error,
-                rel_error,
-                terms_used,
-                SeriesMethod::Asymptotic,
-                true};
+            return SigmaResult{value, abs_error, rel_error};
         }
 
         // Asymptotic divergence: terms growing; truncate at smallest-term point.
@@ -274,13 +258,7 @@ SeriesResult ComptonKernelSeries::asymptotic_series(
                 double const value = sigma0 * normalized;
                 double const abs_error = std::abs(sigma0) * smallest_term_mag;
                 double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
-                return SeriesResult{
-                    value,
-                    abs_error,
-                    rel_error,
-                    best_terms,
-                    SeriesMethod::Asymptotic,
-                    true};
+                return SigmaResult{value, abs_error, rel_error};
             }
         } else {
             increase_count = 0;
@@ -301,24 +279,14 @@ SeriesResult ComptonKernelSeries::asymptotic_series(
         Pm_curr = Pm_next;
     }
 
-    double const normalized = base_term + best_S_plus + best_S_minus;
-    double const value = sigma0 * normalized;
-    double const abs_error = std::abs(sigma0) * smallest_term_mag;
-    double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
-    return SeriesResult{
-        value,
-        abs_error,
-        rel_error,
-        best_terms,
-        SeriesMethod::Asymptotic,
-        false};
+    throw std::runtime_error("asymptotic series failed to converge");
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // Top-level sigma_E
 // ─────────────────────────────────────────────────────────────────────────
 
-SeriesResult ComptonKernelSeries::sigma_E(
+SigmaResult ComptonKernelSeries::sigma_E(
     double const E,
     double const E_prime,
     double const xi,
@@ -371,8 +339,8 @@ double ComptonKernelSeries::sigma_E_precision_check(
     double const gamma   = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
-    SeriesResult const dd_res  = power_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
-    SeriesResult const dbl_res = power_series<double>(gamma, gamma_p, xi, tau, E, Ne);
+    SigmaResult const dd_res  = power_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
+    SigmaResult const dbl_res = power_series<double>(gamma, gamma_p, xi, tau, E, Ne);
 
     return std::abs(dd_res.value - dbl_res.value)
          / (std::abs(dd_res.value) + constants::REL_ERROR_TINY_SCALE);

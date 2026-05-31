@@ -115,14 +115,12 @@ def section_pointwise(report):
         speedup = t_q / t_s if t_s > 0 else float('inf')
 
         rel_diffs.append(max(rd, 1e-16))
-        methods.append(method_str(sr.method_used))
         t_quads.append(t_q)
         t_series_list.append(t_s)
 
         report.append(
             f"| {i+1} | {E_kev} | {Ep_kev} | {xi} | {T_kev} | "
             f"{qr.value:.4e} | {sr.value:.4e} | {rd:.2e} | "
-            f"{method_str(sr.method_used)} | {sr.terms_used} | "
             f"{t_q:.1f} | {t_s:.1f} | {speedup:.1f}x |"
         )
 
@@ -442,49 +440,37 @@ def section_convergence(report):
     Ep = Ep_kev * KEV
 
     taus = np.geomspace(0.0001, 0.5, 80)
-    terms_list = []
-    methods_list = []
-    converged_list = []
+    values_list = []
+    n_success = 0
 
     for tau in taus:
-        r = series.sigma_E(E, Ep, xi, tau, 1.0)
-        terms_list.append(r.terms_used)
-        methods_list.append(method_str(r.method_used))
-        converged_list.append(r.converged)
+        try:
+            r = series.sigma_E(E, Ep, xi, tau, 1.0)
+            values_list.append(r.value)
+            n_success += 1
+        except RuntimeError:
+            values_list.append(np.nan)
 
-    terms_arr = np.array(terms_list)
-    is_power = np.array([m == 'PowerSeries' for m in methods_list])
-    is_asymp = np.array([m == 'Asymptotic' for m in methods_list])
+    values_arr = np.array(values_list)
+    n_total = len(taus)
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 7), sharex=True)
-
-    ax1.plot(taus[is_asymp], terms_arr[is_asymp], 'o', color='coral',
-             markersize=4, label='Asymptotic')
-    ax1.plot(taus[is_power], terms_arr[is_power], 's', color='steelblue',
-             markersize=4, label='PowerSeries')
-    ax1.set_ylabel("Terms used")
-    ax1.set_title(f"Series convergence: E={E_kev} keV, E'={Ep_kev} keV, xi={xi}")
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
-    ax1.set_xscale('log')
-
-    conv = np.array(converged_list, dtype=float)
-    ax2.plot(taus, conv, 'k-', lw=1.5)
-    ax2.set_xlabel(r"$\tau$ = kT / m_e c²")
-    ax2.set_ylabel("Converged (1=yes)")
-    ax2.set_ylim(-0.1, 1.1)
-    ax2.grid(True, alpha=0.3)
+    fig, ax = plt.subplots(figsize=(10, 5))
+    valid = np.isfinite(values_arr)
+    ax.semilogy(taus[valid], np.abs(values_arr[valid]) + 1e-300, 'o-',
+                color='steelblue', markersize=3)
+    ax.set_xlabel(r"$\tau$ = kT / m_e c²")
+    ax.set_ylabel("|sigma_E|")
+    ax.set_title(f"Series sweep: E={E_kev} keV, E'={Ep_kev} keV, xi={xi}")
+    ax.set_xscale('log')
+    ax.grid(True, alpha=0.3)
 
     fig.tight_layout()
     plot_name = "convergence_diagnostics.png"
     fig.savefig(os.path.join(FIGS_DIR, plot_name), dpi=150)
     plt.close(fig)
 
-    n_conv = sum(converged_list)
-    n_total = len(converged_list)
-
     report.append(f"Sweep over tau for E={E_kev} keV, E'={Ep_kev} keV, xi={xi}:\n")
-    report.append(f"- Converged: {n_conv}/{n_total} ({100*n_conv/n_total:.0f}%)")
+    report.append(f"- Successful evaluations: {n_success}/{n_total} ({100*n_success/n_total:.0f}%)")
     report.append(f"- Auto selects Asymptotic for small tau, PowerSeries for large tau")
     report.append(f"- Switching threshold: tau_alpha ~ 0.05\n")
     report.append(f"![Convergence](figs/{plot_name})\n")

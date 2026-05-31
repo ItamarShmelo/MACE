@@ -287,13 +287,10 @@ def ehat_expn(m, x):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @dataclass
-class SeriesResult:
+class SigmaResult:
     value: float
     estimated_abs_error: float
     estimated_rel_error: float
-    terms_used: int
-    method_used: str      # "power", "asymptotic", or "auto"
-    converged: bool
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -569,7 +566,11 @@ def sigma_E_series(E, E_prime, xi, tau, Ne=1.0, method="auto",
 
     Returns
     -------
-    SeriesResult with value, error estimates, diagnostics, and convergence flag.
+    SigmaResult with value and error estimates.
+
+    Raises
+    ------
+    RuntimeError if the series fails to converge.
     """
     if not (E > 0.0 and math.isfinite(E)):
         raise ValueError("E must be finite and > 0")
@@ -608,17 +609,16 @@ def sigma_E_series(E, E_prime, xi, tau, Ne=1.0, method="auto",
     else:
         raise ValueError(f"Unknown method: {method!r}")
 
+    if not converged:
+        raise RuntimeError(
+            f"{chosen} series failed to converge after {terms} terms")
+
     value = sigma0 * norm_ratio
     abs_error = abs(sigma0) * norm_err
     rel_error = abs_error / (abs(value) + 1e-300)
 
-    method_label = chosen if method != "auto" else f"auto({chosen})"
-
-    return SeriesResult(
+    return SigmaResult(
         value=value,
         estimated_abs_error=abs_error,
         estimated_rel_error=rel_error,
-        terms_used=terms,
-        method_used=method_label,
-        converged=converged,
     )

@@ -525,15 +525,12 @@ def section_power_series_convergence(report):
 
         report.append(
             f"| {ci+1} | {T_kev} | {E_kev} | {Ep_kev} | {xi} | {ref_val:.6e} | "
-            f"{conv_r.value:.6e} | {conv_r.terms_used} | {conv_rel:.2e} |"
+            f"{conv_r.value:.6e} | {conv_rel:.2e} |"
         )
 
         ax = axes[ci]
         plot_errs = [max(e, 1e-16) for e in rel_errors]
         ax.semilogy(n_max_values, plot_errs, '-', color='steelblue', linewidth=1.5)
-        if conv_r.converged:
-            ax.axvline(conv_r.terms_used, color='red', linestyle='--', alpha=0.7,
-                       label=f'Converged at n={conv_r.terms_used}')
         ax.set_xlabel("n_max (terms)")
         ax.set_ylabel("Rel error vs quadrature")
         ax.set_title(f"T={T_kev}, E={E_kev}, E'={Ep_kev}, ξ={xi}", fontsize=9)
@@ -624,15 +621,12 @@ def section_asymptotic_series_convergence(report):
 
         report.append(
             f"| {ci+1} | {T_kev} | {E_kev} | {Ep_kev} | {xi} | {tau_alpha_max:.4f} | "
-            f"{ref_val:.6e} | {conv_r.value:.6e} | {conv_r.terms_used} | {conv_rel:.2e} |"
+            f"{ref_val:.6e} | {conv_r.value:.6e} | {conv_rel:.2e} |"
         )
 
         ax_err = axes[0, ci]
         plot_errs = [max(e, 1e-16) for e in rel_errors]
         ax_err.semilogy(n_max_values, plot_errs, '-', color='coral', linewidth=1.5)
-        if conv_r.converged:
-            ax_err.axvline(conv_r.terms_used, color='green', linestyle='--', alpha=0.7,
-                           label=f'Truncated at n={conv_r.terms_used}')
         best_n = n_max_values[np.argmin(rel_errors)]
         ax_err.axvline(best_n, color='blue', linestyle=':', alpha=0.5,
                        label=f'Best n={best_n}')
@@ -646,8 +640,6 @@ def section_asymptotic_series_convergence(report):
         ax_term = axes[1, ci]
         plot_terms = [max(t, 1e-300) for t in term_mags]
         ax_term.semilogy(n_max_values, plot_terms, '-', color='darkorange', linewidth=1.5)
-        if conv_r.converged:
-            ax_term.axvline(conv_r.terms_used, color='green', linestyle='--', alpha=0.7)
         ax_term.set_xlabel("n_max (terms)")
         ax_term.set_ylabel("| σ₀ × smallest term |")
         ax_term.set_title("Term magnitude", fontsize=9)
