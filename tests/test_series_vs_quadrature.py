@@ -7,6 +7,9 @@ quadrature in the regime where that method is convergent:
   - PowerSeriesHighPrecision (DD)     at high T (hot plasma)
   - Asymptotic                        at low T  (cold plasma)
   - Auto                              across all T
+
+Also validates the temperature derivative dsigma_E_dT for each method
+against the same quadrature reference.
 """
 
 import sys
@@ -107,6 +110,79 @@ class TestAutoVsQuadrature:
 
         series = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
         sres = series.sigma_E(E, Ep, xi, T, 1.0)
+
+        rd = _rel_diff(sres.value, qres.value)
+        assert rd < 1e-3, f"reldiff={rd:.2e}"
+
+
+# ---------------------------------------------------------------------------
+# Temperature derivative: dsigma_E_dT
+# ---------------------------------------------------------------------------
+
+
+class TestPowerSeriesDerivativeVsQuadrature:
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi", TEST_POINTS)
+    @pytest.mark.parametrize("T_kev", TEMPS_HOT_KEV)
+    def test_double(self, E_kev, Ep_kev, xi, T_kev):
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
+            pytest.skip("quadrature reference unreliable")
+
+        series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeries)
+        sres = series.dsigma_E_dT(E, Ep, xi, T, 1.0)
+
+        rd = _rel_diff(sres.value, qres.value)
+        assert rd < 1e-4, f"reldiff={rd:.2e}"
+
+
+class TestPowerSeriesHPDerivativeVsQuadrature:
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi", TEST_POINTS)
+    @pytest.mark.parametrize("T_kev", TEMPS_HOT_KEV)
+    def test_double_double(self, E_kev, Ep_kev, xi, T_kev):
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
+            pytest.skip("quadrature reference unreliable")
+
+        series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeriesHighPrecision)
+        sres = series.dsigma_E_dT(E, Ep, xi, T, 1.0)
+
+        rd = _rel_diff(sres.value, qres.value)
+        assert rd < 1e-4, f"reldiff={rd:.2e}"
+
+
+class TestAsymptoticDerivativeVsQuadrature:
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi", TEST_POINTS)
+    @pytest.mark.parametrize("T_kev", TEMPS_COLD_KEV)
+    def test_low_temp(self, E_kev, Ep_kev, xi, T_kev):
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
+            pytest.skip("quadrature reference unreliable")
+
+        series = cs.ComptonKernelSeries(cs.SeriesMethod.Asymptotic)
+        sres = series.dsigma_E_dT(E, Ep, xi, T, 1.0)
+
+        rd = _rel_diff(sres.value, qres.value)
+        assert rd < 1e-3, f"reldiff={rd:.2e}"
+
+
+class TestAutoDerivativeVsQuadrature:
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi", TEST_POINTS)
+    @pytest.mark.parametrize("T_kev", TEMPS_ALL_KEV)
+    def test_auto(self, E_kev, Ep_kev, xi, T_kev):
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
+            pytest.skip("quadrature reference unreliable")
+
+        series = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
+        sres = series.dsigma_E_dT(E, Ep, xi, T, 1.0)
 
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"

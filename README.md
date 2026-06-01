@@ -69,126 +69,327 @@ Both return a `SigmaResult` with fields `value`, `estimated_abs_error`, and
 
 ## Equations
 
+This section gives the final equations used by the evaluators. The code returns
+the energy-space kernel
+$\Sigma_E(E\to E',\xi;T,N_e)$, where $E=h\nu$ and
+$E'=h\nu'$. It is related to the frequency-space kernel in the paper by
+$\Sigma_E = \Sigma_\nu/h$.
+
 | Symbol | Code name | Meaning |
 |--------|-----------|---------|
 | $E$, $E'$ | `E`, `E_prime` | Incident / scattered photon energy [erg] |
-| $\xi = \cos\theta$ | `xi` | Scattering angle cosine, strictly in $(-1, 1)$ |
-| $\tau = kT / (m_e c^2)$ | `tau` | Dimensionless electron temperature |
+| $\xi=\cos\theta$ | `xi` | Scattering-angle cosine, with $-1<\xi<1$ |
+| $T$ | `T` | Electron temperature [K] |
+| $\tau=k_B T/(m_e c^2)$ | `tau` | Dimensionless electron temperature |
 | $N_e$ | `Ne` | Electron number density [$\mathrm{cm}^{-3}$] |
 
-Dimensionless photon energies: $\gamma = E / (m_e c^2)$, $\gamma' = E' / (m_e c^2)$.
+The dimensionless photon energies are
 
-### Kinematic parameters
+$$
+\gamma = \frac{E}{m_e c^2},
+\qquad
+\gamma' = \frac{E'}{m_e c^2}.
+$$
 
-With $a = 1 - \xi$, $s = 1/\gamma + 1/\gamma'$, and $\Delta\gamma = \gamma' - \gamma$:
+### Kinematic quantities
 
-$$q^2 = \Delta\gamma^2 + 2\gamma\gamma' a, \quad s = \frac{1}{\gamma} + \frac{1}{\gamma'}$$
+Define
 
-$$\lambda_+ = \frac{as + q}{2a}, \quad \omega^2 = \frac{1 + \xi}{a}$$
+$$
+a = 1-\xi,
+\qquad
+\Delta = \gamma'-\gamma,
+\qquad
+s = \frac{1}{\gamma}+\frac{1}{\gamma'},
+$$
 
-$$\rho_+ = \lambda_+ + \gamma, \quad \rho_- = \lambda_+ - \gamma'$$
+$$
+q = \sqrt{\gamma^2+\gamma'^2-2\gamma\gamma'\xi}
+  = \sqrt{\Delta^2+2\gamma\gamma'a},
+\qquad
+\omega^2 = \frac{1+\xi}{a}.
+$$
 
-$$\alpha_\pm = \frac{1}{\sqrt{\rho_\pm^2 + \omega^2}}$$
+The minimum electron Lorentz factor allowed by the scattering kinematics is
 
-plus boundary/coefficient terms $G$, $A_\pm$, $\Psi$ derived from these
-(see `compute_params` in `compton_common.hpp`).
+$$
+\lambda_+
+= \frac{\Delta}{2}
+  + \sqrt{\left(1+\frac{\gamma\gamma'a}{2}\right)
+           \left(1+\frac{\Delta^2}{2\gamma\gamma'a}\right)}
+= \frac{\Delta+q\sqrt{1+2/(\gamma\gamma'a)}}{2}.
+$$
+
+The shifted lower-limit quantities are
+
+$$
+\rho_+ = \lambda_+ + \gamma,
+\qquad
+\rho_- = \lambda_+ - \gamma',
+$$
+
+$$
+\alpha_\pm = \frac{1}{\sqrt{\rho_\pm^2+\omega^2}},
+\qquad
+\chi_\pm = \rho_\pm\alpha_\pm.
+$$
+
+For quadrature, the integration variable is shifted from
+$\lambda\in[\lambda_+,\infty)$ to $\rho=\lambda-\lambda_+\in[0,\infty)$.
+For either sign,
+
+$$
+r_\pm(\rho)=\rho+\rho_\pm,
+\qquad
+R_\pm(\rho)=r_\pm(\rho)^2+\omega^2.
+$$
+
+The common coefficient used in all representations is
+
+$$
+G
+= -\gamma\gamma'
+  + \frac{2}{a}
+  + \frac{2}{\gamma\gamma'a^2}.
+$$
+
+The post-integration-by-parts coefficients are
+
+$$
+\Lambda_+ = G - \frac{s}{\tau a^2},
+\qquad
+\Lambda_- = G + \frac{s}{\tau a^2}.
+$$
+
+The boundary term is
+
+$$
+\Psi
+= \frac{2\tau\gamma\gamma'}{q}
+  + \frac{s}{a^2}\left(\alpha_+ + \alpha_-\right)
+  + \frac{\rho_+\alpha_+ - \rho_-\alpha_-}{a}.
+$$
 
 ### Common prefactor
 
-$$\Sigma_0 = \frac{N_e\, r_e^2\, m_e c^2}{4 E^2 \tau} \cdot \frac{e^{-(\lambda_+ - 1)/\tau}}{\tilde{K}_2(1/\tau)}$$
+The energy-space kernel is written as $\Sigma_E=\Sigma_0\mathcal{M}$.
+The mathematically direct prefactor is
 
-where $r_e^2 = 3\sigma_T / (8\pi)$ is the classical electron radius squared.
+$$
+\Sigma_0
+= \frac{N_e r_e^2 m_e c^2}{4E^2\tau}
+  \frac{\exp(-\lambda_+/\tau)}{K_2(1/\tau)}.
+$$
 
-**Scaled Bessel functions.** The Maxwell-Juttner normalization involves
-$K_2(1/\tau)$ and the Boltzmann factor $e^{-\lambda_+/\tau}$, which
-individually overflow or underflow at extreme temperatures. The code uses the
-scaled form $\tilde{K}_2(x) = e^x K_2(x)$, which absorbs the $e^{1/\tau}$
-factor from the denominator into the numerator:
+For numerical stability the implementation uses the scaled Bessel function
 
-$$\frac{e^{-\lambda_+/\tau}}{K_2(1/\tau)} = \frac{e^{-(\lambda_+ - 1)/\tau}}{\tilde{K}_2(1/\tau)}$$
+$$
+\widetilde K_2(x)=e^xK_2(x),
+$$
 
-This is where the $\lambda_+ - 1$ in the exponent comes from -- it keeps both
-factors numerically moderate across all temperature regimes.
+so that
 
-### Quadrature
+$$
+\frac{\exp(-\lambda_+/\tau)}{K_2(1/\tau)}
+= \frac{\exp[-(\lambda_+-1)/\tau]}{\widetilde K_2(1/\tau)}.
+$$
 
-The kernel involves an integral over the electron Lorentz factor $\lambda$
-from $\lambda_+$ to $\infty$ against the Maxwell-Juttner distribution
-$e^{-\lambda/\tau}$. After extracting $\Sigma_0$ (which carries the
-$e^{-\lambda_+/\tau}$ suppression), the remaining integral over the shifted
-variable $\rho = \lambda - \lambda_+$ has an $e^{-\rho/\tau}$ weight. The
-substitution $x = \rho / \tau$ transforms this into the standard
-Gauss-Laguerre form:
+Equivalently, the prefactor evaluated in the code is
 
-$$\int_0^\infty f(x)\, e^{-x}\, dx \approx \sum_{i=1}^{N_L} w_i\, f(x_i)$$
+$$
+\Sigma_0
+= \frac{N_e r_e^2 m_e c^2}{4E^2\tau}
+  \frac{\exp[-(\lambda_+-1)/\tau]}{\widetilde K_2(1/\tau)},
+\qquad
+r_e^2=\frac{3\sigma_T}{8\pi}.
+$$
 
-where $x_i$ and $w_i$ are precomputed Gauss-Laguerre nodes and weights.
-Supported quadrature orders are $N_L = 64, 128, 256$. The error is estimated
-Richardson-style by comparing $N_L$ vs $N_L / 2$.
+### Gauss-Laguerre quadrature
 
-Two algebraically equivalent integrand forms are implemented:
+The substitution $x=\rho/\tau$ converts the remaining Maxwell-Juttner weight
+into the standard Gauss-Laguerre weight:
 
-**Post-IBP (default):** Smoother $O(1/\sqrt{R})$ integrand obtained by
-integration by parts, producing a boundary term $\Psi$:
+$$
+\int_0^\infty f(x)e^{-x}\,dx
+\approx
+\sum_{i=1}^{N_L} w_i f(x_i),
+$$
 
-$$\Sigma_E = \Sigma_0 \left(\Psi + \tau \int_0^\infty H(\tau x)\, e^{-x}\, dx\right)$$
+where $x_i$ and $w_i$ are Gauss-Laguerre nodes and weights.
+Supported quadrature orders are $N_L=64,128,256$.
+The estimated error is obtained by comparing the selected order with
+$N_L/2$.
 
-with $r_\pm = \rho + \rho_\pm$, $R_\pm = r_\pm^2 + \omega^2$, and
+Two algebraically equivalent integrand forms are implemented.
 
-$$H(\rho) = \frac{A_+ - r_+ / (\tau a)}{\sqrt{R_+}} + \frac{-A_- + r_- / (\tau a)}{\sqrt{R_-}}$$
+**Post-IBP form, the default:**
 
-**Pre-IBP:** Original $O(1/R^{3/2})$ integrand, sharper but with no
-$\Psi$ cancellation:
+$$
+\Sigma_E
+= \Sigma_0\left[\Psi
+  + \tau\int_0^\infty H(\tau x)e^{-x}\,dx\right],
+$$
 
-$$\Sigma_E = \Sigma_0 \cdot \tau \int_0^\infty F(\tau x)\, e^{-x}\, dx$$
+with
 
-$$F(\rho) = \frac{2\gamma\gamma'}{q} + \frac{1}{a^2}\left[\frac{r_- s + 1 + \xi}{R_-^{3/2}} + \frac{r_+ s - 1 - \xi}{R_+^{3/2}}\right] + G\left(\frac{1}{\sqrt{R_+}} - \frac{1}{\sqrt{R_-}}\right)$$
+$$
+H(\rho)
+= \frac{\Lambda_+ - r_+(\rho)/(\tau a)}{\sqrt{R_+(\rho)}}
+  + \frac{r_-(\rho)/(\tau a)-\Lambda_-}{\sqrt{R_-(\rho)}}.
+$$
 
-The two forms satisfy the identity $\Psi + I_Q^{\text{post}} = I_Q^{\text{pre}}$.
+**Pre-IBP form:**
+
+$$
+\Sigma_E
+= \Sigma_0\,\tau\int_0^\infty F(\tau x)e^{-x}\,dx,
+$$
+
+with
+
+$$
+F(\rho)
+= \frac{2\gamma\gamma'}{q}
+  + \frac{1}{a^2}
+    \left[
+      \frac{s r_-(\rho)+1+\xi}{R_-(\rho)^{3/2}}
+      + \frac{s r_+(\rho)-1-\xi}{R_+(\rho)^{3/2}}
+    \right]
+  + G\left[\frac{1}{\sqrt{R_+(\rho)}}
+           -\frac{1}{\sqrt{R_-(\rho)}}\right].
+$$
+
+The two forms satisfy
+
+$$
+\Psi + \tau\int_0^\infty H(\tau x)e^{-x}\,dx
+= \tau\int_0^\infty F(\tau x)e^{-x}\,dx.
+$$
 
 ### Power series
 
-The normalized kernel is expanded as:
+Define
 
-$$\frac{\Sigma_E}{\Sigma_0} = \Psi + P_+ - P_-$$
+$$
+b=\frac{\omega}{2\tau},
+\qquad
+\theta_\pm=\sinh^{-1}\!\left(\frac{\rho_\pm}{\omega}\right),
+$$
 
-$$P_\pm = \sum_{n=0}^{N} w_n^\pm\, c_n^\pm\, \hat{E}_{n+1}(x_\pm)$$
+$$
+x_\pm=b e^{\theta_\pm},
+\qquad
+y_\pm=b e^{-\theta_\pm}.
+$$
 
-where:
+The generalized exponential integral and its scaled form are
 
-- $\hat{E}_m(x) = e^x E_m(x)$ is the scaled exponential integral, evaluated
-  via continued fraction and advanced via the recurrence
-  $\hat{E}_{n+1}(x) = (1 - x \hat{E}_n(x)) / n$.
-- **Poisson weights:** $w_0^\pm = e^{-y_\pm}$, $w_{n+1}^\pm = w_n^\pm \cdot y_\pm / (n+1)$.
-- **Coefficients:** $c_n^\pm = A_\pm + 2n / a$.
-- $x_\pm$ and $y_\pm$ are derived from a hyperbolic substitution
-  on $\rho_\pm$ and $\omega$.
+$$
+E_m(x)=\int_1^\infty e^{-xt}t^{-m}\,dt,
+\qquad
+\widehat E_m(x)=e^xE_m(x).
+$$
 
-The series converges when the Poisson weights decay, which requires the
-temperature to be sufficiently high relative to the scattering kinematics.
+The scaled recurrence used for advancing the exponential integrals is
 
-**Double-double precision.** The result involves a cancellation $P_+ - P_-$
-where both terms can be individually much larger than their difference. At low
-photon energies ($\gamma < 0.02$, roughly $E < 10$ keV), catastrophic
-cancellation causes the double-precision power series to lose significant
-digits. In this regime the computation is promoted to double-double arithmetic
-(~31 decimal digits) using the `doubledouble` library, recovering full
-accuracy. The Auto dispatch selects this path automatically.
+$$
+\widehat E_{n+1}(x)
+=\frac{1-x\widehat E_n(x)}{n},
+\qquad n\ge 1.
+$$
+
+The normalized kernel is
+
+$$
+\frac{\Sigma_E}{\Sigma_0}
+= \Psi + P_+ - P_-,
+$$
+
+where
+
+$$
+P_\pm
+= \sum_{n=0}^{N}
+  w_n^\pm
+  \left(\Lambda_\pm+\frac{2n}{a}\right)
+  \widehat E_{n+1}(x_\pm).
+$$
+
+The Poisson weights are
+
+$$
+w_0^\pm=e^{-y_\pm},
+\qquad
+w_{n+1}^\pm=w_n^\pm\frac{y_\pm}{n+1},
+$$
+
+or equivalently $w_n^\pm=e^{-y_\pm}y_\pm^n/n!$.
+
+The power series converges when the Poisson weights decay rapidly enough,
+which corresponds to sufficiently hot temperatures relative to the scattering
+kinematics.
+
+**Double-double precision.** The result involves a cancellation $P_+-P_-$,
+where the two terms can be individually much larger than their difference.
+At low photon energies ($\gamma<0.02$, roughly $E<10$ keV), the power-series
+calculation is promoted to double-double arithmetic using the `doubledouble`
+library. The Auto dispatch selects this path automatically.
 
 ### Asymptotic series
 
-$$\frac{\Sigma_E}{\Sigma_0} = \frac{2\tau\gamma\gamma'}{q} + S_+ + S_-$$
+For cold regimes, the code uses the divergent low-temperature asymptotic
+series and truncates it near the smallest term. Define
 
-where $S_\pm$ are Legendre polynomial expansions in powers of
-$(-\tau \alpha_\pm)^n$, with $P_n(\zeta_\pm)$ Legendre polynomials evaluated
-via the standard recurrence.
+$$
+\eta_+
+= \alpha_+\left(\frac{s}{a^2}+\frac{\rho_+}{a}\right),
+\qquad
+\eta_-
+= \alpha_-\left(-\frac{s}{a^2}+\frac{\rho_-}{a}\right).
+$$
 
-**Asymptotic truncation.** This is a divergent asymptotic series -- the terms
-initially decrease but eventually grow without bound. The implementation
-monitors consecutive term magnitudes and truncates the sum at the smallest
-term once two consecutive magnitude increases are detected. This gives the
-optimal asymptotic approximation. The series is only used in the cold where $\tau \cdot \max(\alpha_+, \alpha_-)$ is small and the optimal
-truncation point is reached quickly.
+Then
+
+$$
+\frac{\Sigma_E}{\Sigma_0}
+\sim
+\frac{2\tau\gamma\gamma'}{q}
++ S_+ + S_-,
+$$
+
+with
+
+$$
+S_+
+= \sum_{n=0}^{\infty}(-\tau\alpha_+)^{n+1}
+  \left[
+    \left(-G n!+\frac{(n+1)!}{a}\right)P_n(\chi_+)
+    - \eta_+(n+1)!P_{n+1}(\chi_+)
+  \right],
+$$
+
+$$
+S_-
+= \sum_{n=0}^{\infty}(-\tau\alpha_-)^{n+1}
+  \left[
+    \left(G n!-\frac{(n+1)!}{a}\right)P_n(\chi_-)
+    + \eta_-(n+1)!P_{n+1}(\chi_-)
+  \right].
+$$
+
+Here $P_n$ is the Legendre polynomial of degree $n$, evaluated by
+
+$$
+P_0(z)=1,
+\qquad
+P_1(z)=z,
+\qquad
+(n+1)P_{n+1}(z)=(2n+1)zP_n(z)-nP_{n-1}(z).
+$$
+
+The terms of this asymptotic series initially decrease and eventually grow.
+The implementation truncates at the smallest term after detecting consecutive
+term-magnitude increases.
 
 ### Series Auto dispatch
 
@@ -207,7 +408,7 @@ The thresholds are defined in `compton_common.hpp`:
 
 - `ASYMP_TAU_ALPHA_THRESHOLD = 0.025` -- below this, the asymptotic series
   reaches its optimal truncation with few terms.
-- `GAMMA_DOUBLE_PRECISION_SAFE = 0.02` -- above this, the $P_+ - P_-$
+- `GAMMA_DOUBLE_PRECISION_SAFE = 0.02` -- above this, the $P_+-P_-$
   cancellation is mild enough for double precision.
 
 ## Tests
