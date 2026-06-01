@@ -116,7 +116,7 @@ struct EhatCfConfig<double> {
 template<>
 struct EhatCfConfig<DD> {
     static constexpr double cf_tol = 1e-31;
-    static constexpr int max_iter = 200;
+    static constexpr int max_iter = 2000;
 };
 
 } // namespace details

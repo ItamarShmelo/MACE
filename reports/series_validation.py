@@ -23,11 +23,12 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.colors import LogNorm, ListedColormap, BoundaryNorm
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 sys.path.insert(0, os.path.join(ROOT, 'external', 'CMMC', 'cpp_modules'))
 sys.path.insert(0, os.path.join(ROOT, 'src', 'python'))
+sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
 from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
@@ -548,6 +549,284 @@ def section_timing_summary(report):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Section 6: Series Auto vs Quadrature Error Colorplot
+# ═══════════════════════════════════════════════════════════════════════════════
+
+HEATMAP_E_GRID = np.logspace(-1, 2.7, 50)
+HEATMAP_T_GRID = np.logspace(-0.3, 2.7, 50)
+HEATMAP_RATIOS = [0.5, 0.9, 1.01, 2.0, 5.0]
+HEATMAP_XIS = [-0.5, 0.0, 0.5]
+
+ASYMP_TAU_ALPHA_THRESHOLD = 0.025
+GAMMA_DOUBLE_PRECISION_SAFE = 0.02
+
+METHOD_ASYMPTOTIC = 0
+METHOD_POWER = 1
+METHOD_POWER_HP = 2
+
+
+def auto_method_select(E_kev, ratio, xi, T_kev):
+    E = E_kev * kev
+    Ep = E * ratio
+    gamma = E / me_c2
+    gamma_p = Ep / me_c2
+    tau = T_kev * kev_kelvin * k_boltz / me_c2
+
+    a = 1.0 - xi
+    dg = gamma_p - gamma
+    omega2 = (1.0 + xi) / a
+    gg_a = gamma * gamma_p * a
+    factor1 = 1.0 + gg_a / 2.0
+    factor2 = 1.0 + (dg * dg) / (2.0 * gg_a)
+    Delta = np.sqrt(factor1 * factor2)
+    lambda_plus = max(dg / 2.0 + Delta, 1.0)
+
+    rho_plus = lambda_plus + gamma
+    rho_minus = lambda_plus - gamma_p
+    alpha_plus = 1.0 / np.sqrt(rho_plus**2 + omega2)
+    alpha_minus = 1.0 / np.sqrt(rho_minus**2 + omega2)
+    tau_alpha_max = tau * max(alpha_plus, alpha_minus)
+
+    if tau_alpha_max < ASYMP_TAU_ALPHA_THRESHOLD:
+        return METHOD_ASYMPTOTIC
+    elif min(gamma, gamma_p) >= GAMMA_DOUBLE_PRECISION_SAFE:
+        return METHOD_POWER
+    else:
+        return METHOD_POWER_HP
+
+
+def section_auto_vs_quad_colorplot(report):
+    report.append("## 6. Series Auto vs Quadrature Error Map\n")
+    report.append("Relative discrepancy `|series_auto - Q256| / max(|auto|, |Q256|)` between")
+    report.append("the series Auto `sigma_E` and the 256-point Gauss-Laguerre quadrature")
+    report.append("`sigma_E` (PostIBP) over the (E, T) plane.\n")
+
+    series = ComptonKernelSeries(SeriesMethod.Auto)
+    quad = ComptonKernelQuadrature(256, QuadratureForm.PostIBP)
+
+    n_E = len(HEATMAP_E_GRID)
+    n_T = len(HEATMAP_T_GRID)
+    n_rows = len(HEATMAP_XIS)
+    n_cols = len(HEATMAP_RATIOS)
+
+    error_grids = {}
+    method_grids = {}
+    value_grids = {}
+    all_rel_errs = []
+    n_failed = 0
+
+    total_panels = n_rows * n_cols
+    done = 0
+
+    for xi in HEATMAP_XIS:
+        for ratio in HEATMAP_RATIOS:
+            done += 1
+            print(f'    auto vs quad panel {done}/{total_panels}: xi={xi}, ratio={ratio}')
+            err_grid = np.full((n_T, n_E), np.nan)
+            meth_grid = np.full((n_T, n_E), np.nan)
+            val_grid = np.full((n_T, n_E), np.nan)
+            for i, T_kev in enumerate(HEATMAP_T_GRID):
+                T_K = T_kev * kev_kelvin
+                for j, E_kev in enumerate(HEATMAP_E_GRID):
+                    E = E_kev * kev
+                    Ep = E * ratio
+                    try:
+                        r_s = series.sigma_E(E, Ep, xi, T_K, 1.0)
+                        r_q = quad.sigma_E(E, Ep, xi, T_K, 1.0)
+                        val_grid[i, j] = r_s.value
+                        scale = max(abs(r_s.value), abs(r_q.value))
+                        if scale > 1e-300:
+                            rel = abs(r_s.value - r_q.value) / scale
+                            err_grid[i, j] = rel
+                            all_rel_errs.append(rel)
+                        else:
+                            err_grid[i, j] = 0.0
+                        meth_grid[i, j] = auto_method_select(E_kev, ratio, xi, T_kev)
+                    except (RuntimeError, Exception):
+                        n_failed += 1
+            error_grids[(xi, ratio)] = err_grid
+            method_grids[(xi, ratio)] = meth_grid
+            value_grids[(xi, ratio)] = val_grid
+
+    # Error colorplot
+    fig, axes = plt.subplots(n_rows, n_cols,
+                             figsize=(4 * n_cols + 1.5, 3.5 * n_rows),
+                             sharex=True, sharey=True, squeeze=False)
+
+    norm = LogNorm(vmin=1e-16, vmax=1e0, clip=False)
+    cmap = plt.cm.inferno_r.copy()
+    cmap.set_bad('lightgray')
+    cmap.set_under('skyblue')
+
+    for row, xi in enumerate(HEATMAP_XIS):
+        for col, ratio in enumerate(HEATMAP_RATIOS):
+            ax = axes[row][col]
+            data = error_grids[(xi, ratio)]
+            safe = np.where(np.isnan(data), np.nan, np.maximum(data, 1e-20))
+            ax.pcolormesh(HEATMAP_E_GRID, HEATMAP_T_GRID, safe,
+                          norm=norm, cmap=cmap, shading='nearest')
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            if row == n_rows - 1:
+                ax.set_xlabel('E [keV]')
+            if col == 0:
+                ax.set_ylabel('T [keV]')
+            if row == 0:
+                ax.set_title(f"E'/E = {ratio}")
+            ax.text(0.97, 0.03, f'$\\xi={xi}$', transform=ax.transAxes,
+                    ha='right', va='bottom', fontsize=8,
+                    bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.7))
+
+    pcm = axes[0][0].collections[0]
+    all_axes = [ax for row_axes in axes for ax in row_axes]
+    cbar = fig.colorbar(pcm, ax=all_axes, shrink=0.85, pad=0.03)
+    cbar.set_label('|series_auto - Q256| / max(|auto|, |Q256|)')
+    fig.suptitle('Series Auto vs Quadrature (Q256 PostIBP)', fontsize=13, y=1.01)
+    fig.subplots_adjust(wspace=0.05, hspace=0.15)
+    err_fname = 'series_auto_vs_quad_TE.png'
+    fig.savefig(os.path.join(FIGS_DIR, err_fname), dpi=150, bbox_inches='tight')
+    plt.close(fig)
+
+    report.append(f"![Series Auto vs Q256](figs/{err_fname})\n")
+    report.append(f"Each panel shows the relative error on a {n_E}x{n_T} log-spaced grid "
+                  f"in (E, T) space. Columns vary E'/E ({', '.join(str(r) for r in HEATMAP_RATIOS)}); "
+                  f"rows vary xi ({', '.join(str(x) for x in HEATMAP_XIS)}). "
+                  f"Sky-blue cells indicate negligible kernel values (both methods < 1e-300) "
+                  f"or exact agreement; gray cells indicate convergence failure.\n")
+
+    # Value colorplot (per-panel normalization)
+    val_cmap = plt.cm.viridis.copy()
+    val_cmap.set_bad('lightgray')
+
+    fig_v, axes_v = plt.subplots(n_rows, n_cols,
+                                 figsize=(4 * n_cols + 1.5, 3.5 * n_rows),
+                                 sharex=True, sharey=True, squeeze=False)
+
+    for row, xi in enumerate(HEATMAP_XIS):
+        for col, ratio in enumerate(HEATMAP_RATIOS):
+            ax = axes_v[row][col]
+            data = value_grids[(xi, ratio)]
+            safe = np.where(np.isfinite(data) & (data > 0), data, np.nan)
+            finite = safe[np.isfinite(safe)]
+            if len(finite) > 0:
+                pmin, pmax = np.min(finite), np.max(finite)
+                pnorm = LogNorm(vmin=pmin, vmax=pmax)
+            else:
+                pnorm = LogNorm(vmin=1e-30, vmax=1e-15)
+            ax.pcolormesh(HEATMAP_E_GRID, HEATMAP_T_GRID, safe,
+                          norm=pnorm, cmap=val_cmap, shading='nearest')
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            if row == n_rows - 1:
+                ax.set_xlabel('E [keV]')
+            if col == 0:
+                ax.set_ylabel('T [keV]')
+            if row == 0:
+                ax.set_title(f"E'/E = {ratio}")
+            ax.text(0.97, 0.03, f'$\\xi={xi}$', transform=ax.transAxes,
+                    ha='right', va='bottom', fontsize=8,
+                    bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.7))
+            if len(finite) > 0:
+                ax.text(0.03, 0.97,
+                        f'{pmin:.0e}\n  to\n{pmax:.0e}',
+                        transform=ax.transAxes, ha='left', va='top',
+                        fontsize=6, family='monospace',
+                        bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.7))
+
+    fig_v.suptitle(r'Series Auto: $\Sigma_E$ Value Map (per-panel scale)',
+                   fontsize=13, y=1.01)
+    fig_v.subplots_adjust(wspace=0.05, hspace=0.15)
+    val_fname = 'series_auto_value_TE.png'
+    fig_v.savefig(os.path.join(FIGS_DIR, val_fname), dpi=150, bbox_inches='tight')
+    plt.close(fig_v)
+
+    report.append("### Kernel value map\n")
+    report.append(f"![Series Auto value map](figs/{val_fname})\n")
+    report.append(f"`sigma_E` from series Auto on the same "
+                  f"{n_E}x{n_T} (E, T) grid. Each panel is independently "
+                  f"scaled to its own [min, max] range (annotated top-left). "
+                  f"Gray cells indicate convergence failure.\n")
+
+    # Statistics
+    n_total = n_E * n_T * n_rows * n_cols
+    errs_arr = np.array(all_rel_errs) if all_rel_errs else np.array([0.0])
+
+    report.append("### Summary statistics\n")
+    report.append("| Metric | Value |")
+    report.append("|--------|-------|")
+    report.append(f"| Grid points evaluated | {n_total - n_failed} / {n_total} |")
+    report.append(f"| Failed (exception) | {n_failed} |")
+    report.append(f"| Points with valid comparison | {len(all_rel_errs)} |")
+    report.append("")
+
+    if len(all_rel_errs) > 0:
+        report.append("| Statistic | Value |")
+        report.append("|-----------|-------|")
+        report.append(f"| Minimum | {np.min(errs_arr):.2e} |")
+        report.append(f"| Median | {np.median(errs_arr):.2e} |")
+        report.append(f"| Mean | {np.mean(errs_arr):.2e} |")
+        report.append(f"| 90th percentile | {np.percentile(errs_arr, 90):.2e} |")
+        report.append(f"| 95th percentile | {np.percentile(errs_arr, 95):.2e} |")
+        report.append(f"| 99th percentile | {np.percentile(errs_arr, 99):.2e} |")
+        report.append(f"| Maximum | {np.max(errs_arr):.2e} |")
+        report.append("")
+
+        pct_1e8 = 100.0 * np.sum(errs_arr < 1e-8) / len(errs_arr)
+        pct_1e6 = 100.0 * np.sum(errs_arr < 1e-6) / len(errs_arr)
+        pct_1e4 = 100.0 * np.sum(errs_arr < 1e-4) / len(errs_arr)
+        report.append(f"| Points with error < 1e-8 | {pct_1e8:.1f}% |")
+        report.append(f"| Points with error < 1e-6 | {pct_1e6:.1f}% |")
+        report.append(f"| Points with error < 1e-4 | {pct_1e4:.1f}% |")
+        report.append("")
+
+    # Method selection colorplot
+    method_cmap = ListedColormap(['#2196F3', '#4CAF50', '#FF9800'])
+    method_norm = BoundaryNorm([-0.5, 0.5, 1.5, 2.5], method_cmap.N)
+    method_labels = ['Asymptotic', 'PowerSeries', 'PowerSeriesHP']
+
+    fig2, axes2 = plt.subplots(n_rows, n_cols,
+                               figsize=(4 * n_cols + 1.5, 3.5 * n_rows),
+                               sharex=True, sharey=True, squeeze=False)
+
+    for row, xi in enumerate(HEATMAP_XIS):
+        for col, ratio in enumerate(HEATMAP_RATIOS):
+            ax = axes2[row][col]
+            data = method_grids[(xi, ratio)]
+            ax.pcolormesh(HEATMAP_E_GRID, HEATMAP_T_GRID, data,
+                          cmap=method_cmap, norm=method_norm, shading='nearest')
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            if row == n_rows - 1:
+                ax.set_xlabel('E [keV]')
+            if col == 0:
+                ax.set_ylabel('T [keV]')
+            if row == 0:
+                ax.set_title(f"E'/E = {ratio}")
+            ax.text(0.97, 0.03, f'$\\xi={xi}$', transform=ax.transAxes,
+                    ha='right', va='bottom', fontsize=8,
+                    bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.7))
+
+    all_axes2 = [ax for row_axes in axes2 for ax in row_axes]
+    cbar2 = fig2.colorbar(
+        plt.cm.ScalarMappable(cmap=method_cmap, norm=method_norm),
+        ax=all_axes2, shrink=0.85, pad=0.03, ticks=[0, 1, 2])
+    cbar2.ax.set_yticklabels(method_labels)
+    fig2.suptitle('Auto Method Selection Map (sigma_E)', fontsize=13, y=1.01)
+    fig2.subplots_adjust(wspace=0.05, hspace=0.15)
+    meth_fname = 'series_method_selection_TE.png'
+    fig2.savefig(os.path.join(FIGS_DIR, meth_fname), dpi=150, bbox_inches='tight')
+    plt.close(fig2)
+
+    report.append("### Auto method selection map\n")
+    report.append(f"![Method selection map](figs/{meth_fname})\n")
+    report.append("Blue = Asymptotic, Green = PowerSeries (double), Orange = PowerSeriesHP (DD). "
+                  "The method is selected by the Auto dispatch logic based on "
+                  "`tau * max(alpha+, alpha-) < 0.025` (Asymptotic) and "
+                  "`min(gamma, gamma') >= 0.02` (PowerSeries vs HP).\n")
+    report.append("")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -562,29 +841,34 @@ def main():
 
     print("Running series validation report...")
 
-    print("  [1/5] Pointwise agreement and timing...")
+    print("  [1/6] Pointwise agreement and timing...")
     t0 = time.time()
     section_pointwise(report)
     print(f"        Done ({time.time()-t0:.1f}s)")
 
-    print("  [2/5] Spectra...")
+    print("  [2/6] Spectra...")
     t0 = time.time()
     section_spectra(report)
     print(f"        Done ({time.time()-t0:.1f}s)")
 
-    print("  [3/5] Pomraning multigroup comparison...")
+    print("  [3/6] Pomraning multigroup comparison...")
     t0 = time.time()
     section_pomraning(report)
     print(f"        Done ({time.time()-t0:.1f}s)")
 
-    print("  [4/5] Convergence diagnostics...")
+    print("  [4/6] Convergence diagnostics...")
     t0 = time.time()
     section_convergence(report)
     print(f"        Done ({time.time()-t0:.1f}s)")
 
-    print("  [5/5] Timing summary...")
+    print("  [5/6] Timing summary...")
     t0 = time.time()
     section_timing_summary(report)
+    print(f"        Done ({time.time()-t0:.1f}s)")
+
+    print("  [6/6] Auto vs quadrature error colorplot...")
+    t0 = time.time()
+    section_auto_vs_quad_colorplot(report)
     print(f"        Done ({time.time()-t0:.1f}s)")
 
     outpath = os.path.join(GEN_DIR, "series_validation.md")

@@ -155,11 +155,11 @@ class TestEdgeCases:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestOutOfDomain:
-    def test_very_high_T_raises(self, solver):
-        """T well beyond series convergence domain raises RuntimeError."""
+    def test_very_high_T_finite(self, solver):
+        """Very high T now converges with extended CF iterations."""
         E = 1.0 * kev; Ep = 1.5 * kev; T = 2000.0 * kev_kelvin
-        with pytest.raises(RuntimeError):
-            solver.sigma_E(E, Ep, 0.0, T, 1.0)
+        r = solver.sigma_E(E, Ep, 0.0, T, 1.0)
+        assert np.isfinite(r.value)
 
     def test_extreme_energy_ratio(self, solver):
         """E'/E = 100 beyond calibration grid."""

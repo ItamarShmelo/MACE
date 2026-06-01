@@ -134,6 +134,45 @@ public:
         double const Ne
     ) const;
 
+    /**
+     * @brief Evaluate ∂Σ_E/∂T at a single phase-space point.
+     *
+     * Temperature derivative of the Compton kernel with respect to T [K],
+     * computed analytically via series expansion and applying the chain
+     * rule dτ/dT = k_B / (m_e c²).  Uses the same Auto dispatch as
+     * sigma_E to select between power series and asymptotic methods.
+     *
+     * @param E        Incident photon energy [erg]
+     * @param E_prime  Scattered photon energy [erg]
+     * @param xi       cos(scattering angle), strictly in (−1, 1)
+     * @param T        Electron temperature [K]
+     * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
+     * @return SigmaResult with value and error estimates
+     */
+    SigmaResult dsigma_E_dT(
+        double const E,
+        double const E_prime,
+        double const xi,
+        double const T,
+        double const Ne
+    ) const;
+
+    /**
+     * @brief Run both double and DD power series derivatives, return the
+     *        relative error.
+     *
+     * Computes |dd_value - dbl_value| / (|dd_value| + 1e-300) on the
+     * derivative.  Useful for checking whether double precision is
+     * sufficient for the temperature derivative at a given parameter point.
+     */
+    double dsigma_E_dT_precision_check(
+        double const E,
+        double const E_prime,
+        double const xi,
+        double const T,
+        double const Ne
+    ) const;
+
 private:
     /**
      * @brief Power series evaluation of the normalized kernel.
@@ -188,6 +227,56 @@ private:
      * τ · max(α₊, α₋) < 0.05.
      */
     SigmaResult asymptotic_series(
+        double const gamma,
+        double const gamma_p,
+        double const xi,
+        double const tau,
+        double const E,
+        double const Ne
+    ) const;
+
+    /**
+     * @brief Power series temperature derivative of the normalized kernel.
+     *
+     * Computes both the series value (P₊ − P₋) and its τ-derivative
+     * (∂P₊/∂τ − ∂P₋/∂τ) simultaneously.
+     *
+     * Per-term derivative (n-th contribution to ∂P₊/∂τ):
+     *   w_n · { [s/(τ²a²) − (ρ₊/τ² + n/τ) L_n⁺] Ê_{n+1}(x₊)
+     *         + (x₊/τ) L_n⁺ Ê_n(x₊) }
+     *
+     * where L_n± = A± + 2n/a, and Ê_n is tracked alongside Ê_{n+1}
+     * via Ê₀(x) = 1/x as the base case.
+     *
+     * Full result (returned as d/dτ, without dτ/dT factor):
+     *   σ₀ · { 2γγ'/q + (∂P₊/∂τ − ∂P₋/∂τ)
+     *        + [(λ₊−κ)/τ² − 3/τ] · (Ψ + P₊ − P₋) }
+     */
+    template<typename T>
+    SigmaResult power_series_derivative(
+        double const gamma,
+        double const gamma_p,
+        double const xi,
+        double const tau,
+        double const E,
+        double const Ne
+    ) const;
+
+    /**
+     * @brief Low-temperature asymptotic derivative using Legendre polynomials.
+     *
+     * Since α±, ζ±, η±, G, a are all τ-independent, the derivative of
+     * each term is the term itself times a weight:
+     *
+     *   weight(n) = (λ₊ − κ)/τ² + (n − 2)/τ
+     *
+     * Base term derivative:
+     *   2γγ'/q · [(λ₊ − κ)/τ − 2]
+     *
+     * Same smallest-term truncation as the value series.
+     * Result returned as d/dτ (without dτ/dT factor).
+     */
+    SigmaResult asymptotic_series_derivative(
         double const gamma,
         double const gamma_p,
         double const xi,

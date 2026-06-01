@@ -618,3 +618,95 @@ $$
 The threshold 0.05 is chosen so that the asymptotic series achieves at least $\sim 10^{-8}$ relative accuracy before diverging.  The power series is reliable whenever Poisson weights don't underflow.
 
 If the selected method returns `converged = false`, Auto mode does **not** internally fall back to quadrature.  It returns `SeriesResult` with `converged = false` and lets the caller decide.
+
+---
+
+## Series Temperature Derivative
+
+The temperature derivative $\partial\Sigma_E / \partial\tau$ is computed analytically for
+both the power series and asymptotic series.  The public API `dsigma_E_dT` returns
+$\partial\Sigma_E / \partial T$ in Kelvin by applying the chain rule:
+
+$$
+\frac{\partial\Sigma_E}{\partial T} = \frac{\partial\Sigma_E}{\partial\tau} \cdot \frac{d\tau}{dT}, \qquad \frac{d\tau}{dT} = \frac{k_B}{m_e c^2}
+$$
+
+### Common prefactor derivative
+
+All series forms share the log-derivative of $\Sigma_0$:
+
+$$
+\frac{d \ln \Sigma_0}{d\tau} = \frac{\lambda_+ - \kappa}{\tau^2} - \frac{3}{\tau}
+$$
+
+where $\kappa(\tau) = K_1(1/\tau) / K_2(1/\tau)$ (same as the quadrature derivative).
+
+### Power series derivative
+
+The full $\tau$-derivative:
+
+$$
+\frac{\partial\Sigma_E}{\partial\tau} = \Sigma_0 \cdot \left[\frac{2\gamma\gamma'}{q} + \left(\frac{\partial P_+}{\partial\tau} - \frac{\partial P_-}{\partial\tau}\right) + \frac{d\ln\Sigma_0}{d\tau} \cdot (\Psi + P_+ - P_-)\right]
+$$
+
+The partial derivatives of the series sums, using the same Poisson weights $w_n^\pm$, kinematic
+coefficients $L_n^\pm = A_\pm + 2n/a$ (= `coeff_plus`/`coeff_minus`), and scaled exponential
+integrals $\hat{E}_m$:
+
+$$
+\frac{\partial P_+}{\partial\tau} = \sum_n w_n^+ \cdot \left\{ \left[\frac{s}{\tau^2 a^2} - \left(\frac{\rho_+}{\tau^2} + \frac{n}{\tau}\right) L_n^+ \right] \hat{E}_{n+1}(x_+) + \frac{x_+}{\tau} \, L_n^+ \, \hat{E}_n(x_+) \right\}
+$$
+
+$$
+\frac{\partial P_-}{\partial\tau} = \sum_n w_n^- \cdot \left\{ \left[-\frac{s}{\tau^2 a^2} - \left(\frac{\rho_-}{\tau^2} + \frac{n}{\tau}\right) L_n^- \right] \hat{E}_{n+1}(x_-) + \frac{x_-}{\tau} \, L_n^- \, \hat{E}_n(x_-) \right\}
+$$
+
+Implementation tracks $\hat{E}_n$ (previous order) alongside $\hat{E}_{n+1}$ (current order),
+with $\hat{E}_0(x) = 1/x$ as the base case.  Both the value accumulators $(P_+, P_-)$ and
+derivative accumulators $(\partial P_+/\partial\tau, \partial P_-/\partial\tau)$ are computed
+simultaneously in a single loop.
+
+#### Error estimate
+
+Same approach as the value series:
+
+$$
+\varepsilon_{\text{trunc}} = |dt_+^{(\text{last})}| + |dt_-^{(\text{last})}|
+$$
+
+$$
+\varepsilon_{\text{round}} = N_{\text{terms}} \cdot \varepsilon_{\text{machine}} \cdot \max(|\partial P_+/\partial\tau|, \, |\partial P_-/\partial\tau|)
+$$
+
+$$
+\varepsilon_{\text{rel}} = \max\!\left(\frac{\varepsilon_{\text{trunc}}}{|\text{deriv\_normalized}|}, \; \frac{\varepsilon_{\text{round}}}{|\text{deriv\_normalized}|}\right)
+$$
+
+### Asymptotic series derivative
+
+Since $\alpha_\pm$, $\zeta_\pm$, $\eta_\pm$, $G$, and $a$ are all $\tau$-independent,
+the derivative of each term is the existing term multiplied by a weight:
+
+$$
+w(n) = \frac{\lambda_+ - \kappa}{\tau^2} + \frac{n - 2}{\tau}
+$$
+
+Base term derivative:
+
+$$
+\frac{2\gamma\gamma'}{q} \cdot \left[\frac{\lambda_+ - \kappa}{\tau} - 2\right]
+$$
+
+Sum derivative:
+
+$$
+\frac{1}{\Sigma_0} \cdot \frac{\partial\Sigma_E}{\partial\tau} = \text{base\_deriv} + \sum_n w(n) \cdot (T_n^+ + T_n^-)
+$$
+
+Same smallest-term truncation logic as the value series.
+
+#### Error estimate
+
+$$
+\varepsilon_{\text{abs}} = |\Sigma_0| \cdot \min_n\left(|w(n) \cdot T_n^+| + |w(n) \cdot T_n^-|\right)
+$$

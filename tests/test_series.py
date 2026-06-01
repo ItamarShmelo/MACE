@@ -153,12 +153,12 @@ class TestConvergenceBehavior:
         r = series.sigma_E(E, Ep, 0.0, T, 1.0)
         assert r.value > 0
 
-    def test_power_series_raises_when_ehat_cf_stalls(self):
+    def test_power_series_hp_ehat_cf_converges(self):
         E, Ep = 8.5 * kev, 0.85 * kev
         T = 900.0 * kev_kelvin
         series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeriesHighPrecision)
-        with pytest.raises(RuntimeError, match="ehat failed to converge"):
-            series.sigma_E(E, Ep, -0.5, T, 1.0)
+        r = series.sigma_E(E, Ep, -0.5, T, 1.0)
+        assert np.isfinite(r.value)
 
     def test_asymptotic_converges(self):
         E, Ep = 1.0 * kev, 1.01 * kev
