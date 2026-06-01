@@ -23,12 +23,7 @@ import matplotlib
 matplotlib.style.use('classic')
 matplotlib.rcParams.update({'font.size': 14})
 
-# Constants
-ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2
-KEV = 1.602176634e-9
-KEV_KELVIN = KEV / 1.380649e-16
-BARN = 1e-24
-MBARN = 1e-3 * BARN
+from _units import me_c2, kev, kev_kelvin, mbarn
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'output')
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -93,13 +88,13 @@ def main():
             list(np.geomspace(0.01, case["emax"], 50))
         ))))
 
-        eb_erg = eb_kev * KEV
+        eb_erg = eb_kev * kev
         ec_erg = 0.5 * (eb_erg[:-1] + eb_erg[1:])
-        ec_kev = ec_erg / KEV
+        ec_kev = ec_erg / kev
         ewid_kev = np.diff(eb_kev)
 
-        T_kelvin = case["T"] * KEV_KELVIN
-        tau = case["T"] * KEV / ME_C2
+        T_kelvin = case["T"] * kev_kelvin
+        tau = case["T"] * kev / me_c2
 
         # CMMC Monte Carlo
         print("  Computing CMMC Monte Carlo...")
@@ -119,12 +114,12 @@ def main():
         quad_colors = plt.cm.Reds(np.linspace(0.4, 0.9, len(case["ein"])))
 
         for idx, e0_kev in enumerate(case["ein"]):
-            e0_erg = e0_kev * KEV
+            e0_erg = e0_kev * kev
             g = np.argmin(np.abs(ec_erg - e0_erg))
             actual_ein_kev = ec_kev[g]
 
             # MC result
-            mc_spectrum = S_mc[g, :] / ewid_kev / MBARN
+            mc_spectrum = S_mc[g, :] / ewid_kev / mbarn
             ax.stairs(edges=eb_kev, values=mc_spectrum,
                       color=mc_colors[idx], linewidth=1.2, linestyle='-',
                       label=f"MC  $E_{{in}}$={actual_ein_kev:.1f} keV")
@@ -133,7 +128,7 @@ def main():
             print(f"  Computing quadrature for E_in={actual_ein_kev:.1f} keV...")
             S_quad, S_err = compute_quadrature_spectrum(
                 engine, ec_erg[g], ec_erg, eb_erg, tau, report_errors=True)
-            quad_spectrum = S_quad / ewid_kev / MBARN
+            quad_spectrum = S_quad / ewid_kev / mbarn
             ax.plot(ec_kev, quad_spectrum,
                     color=quad_colors[idx], linewidth=2.0, linestyle='--',
                     label=f"Quad $E_{{in}}$={actual_ein_kev:.1f} keV")

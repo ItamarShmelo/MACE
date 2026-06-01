@@ -20,8 +20,9 @@ from typing import Tuple
 import numpy as np
 from scipy.special import expn, eval_legendre
 
+from _units import me_c2, k_boltz
 from .compton_kernel_quadrature import (
-    compute_params, stable_sigma0_E, me_c2, k_boltz, KershawParams,
+    compute_params, stable_sigma0_E, KershawParams,
 )
 
 

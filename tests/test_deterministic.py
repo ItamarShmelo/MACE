@@ -14,8 +14,7 @@ from _compton_kernel_quadrature import (
     gauss_laguerre_rule,
 )
 
-ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2  # erg
-K_BOLTZ = 1.380649e-16  # erg/K
+from _units import me_c2, kev, kev_kelvin, sigma_thomson
 
 
 def assert_close_mixed(a, b, rtol=1e-8, atol=1e-300):
@@ -76,16 +75,12 @@ TEST_POINTS = [
     (5.0, 3.0, 0.9, 10.0),
 ]
 
-KEV = 1.602176634e-9  # erg
-KEV_KELVIN = KEV / K_BOLTZ  # 1 keV in Kelvin
-
-
 def _to_erg(E_kev):
-    return E_kev * KEV
+    return E_kev * kev
 
 
 def _to_kelvin(T_kev):
-    return T_kev * KEV_KELVIN
+    return T_kev * kev_kelvin
 
 
 class TestFiniteOutput:
@@ -135,13 +130,13 @@ class TestDetailedBalance:
             E = _to_erg(E_kev)
             Ep = _to_erg(Ep_kev)
             T = _to_kelvin(T_kev)
-            tau = T_kev * KEV / ME_C2
+            tau = T_kev * kev / me_c2
 
             r_fwd = engine.sigma_E(E, Ep, xi, T, 1.0)
             r_rev = engine.sigma_E(Ep, E, xi, T, 1.0)
 
-            gamma = E / ME_C2
-            gamma_p = Ep / ME_C2
+            gamma = E / me_c2
+            gamma_p = Ep / me_c2
 
             log_lhs = 2.0 * np.log(E) - gamma / tau + np.log(abs(r_fwd.value) + 1e-300)
             log_rhs = 2.0 * np.log(Ep) - gamma_p / tau + np.log(abs(r_rev.value) + 1e-300)
@@ -239,7 +234,7 @@ class TestAngularNormalization:
 
         engine = ComptonKernelQuadrature(NL=64, form=QuadratureForm.PostIBP)
 
-        SIGMA_T = 6.652458732160e-25  # cm^2
+        sigma_t = sigma_thomson
         E_kev = 0.01  # very low energy (10 eV)
         T_kev = 10.0  # hot plasma so scattering is quasi-elastic
         E = _to_erg(E_kev)
@@ -263,10 +258,10 @@ class TestAngularNormalization:
         total_sigma = 0.5 * val  # angular average factor
         # For low energy and hot electrons, should be order-of-magnitude sigma_T
         assert total_sigma > 0, f"Total cross section is non-positive: {total_sigma}"
-        ratio = total_sigma / SIGMA_T
+        ratio = total_sigma / sigma_t
         assert 0.01 < ratio < 100.0, (
             f"Total cross section {total_sigma} is not within "
-            f"order-of-magnitude of sigma_T={SIGMA_T}, ratio={ratio}"
+            f"order-of-magnitude of sigma_T={sigma_t}, ratio={ratio}"
         )
 
 

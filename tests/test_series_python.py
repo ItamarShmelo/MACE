@@ -13,12 +13,12 @@ import numpy as np
 import pytest
 from scipy.special import expn
 
+sys.path.insert(0, "cpp_modules")
 sys.path.insert(0, "src/python")
 
+from _units import me_c2, kev, kev_kelvin
 from pycompton.compton_kernel_quadrature import (
     compute_params,
-    me_c2,
-    k_boltz,
     sigma_E,
     stable_sigma0_E,
 )
@@ -29,9 +29,6 @@ from pycompton.compton_kernel_series import (
     ehat_expn,
     sigma_E_series,
 )
-
-kev = 1.602176634e-9
-kev_kelvin = kev / k_boltz
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

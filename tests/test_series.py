@@ -20,11 +20,8 @@ sys.path.insert(0, "src/python")
 
 import _compton_kernel_quadrature as cq
 import _compton_kernel_series as cs
-from pycompton.compton_kernel_quadrature import me_c2, k_boltz
+from _units import me_c2, kev, kev_kelvin
 from pycompton.compton_kernel_series import sigma_E_series as py_sigma_E_series
-
-kev = 1.602176634e-9
-kev_kelvin = kev / k_boltz
 
 TEST_POINTS = [
     (1.0, 1.01, 0.0),

@@ -32,12 +32,9 @@ from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
 from pycompton.compton_kernel_quadrature import sigma_E as py_sigma_E
 from pycompton.compton_kernel_series import sigma_E_series as py_sigma_E_series
 
-ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2
-KEV = 1.602176634e-9
-K_BOLTZ = 1.380649e-16
-KEV_KELVIN = KEV / K_BOLTZ
+from _units import me_c2, kev, k_boltz, kev_kelvin, mbarn
+
 XI_EPS = 1e-10
-MBARN = 1e-3 * 1e-24
 
 GEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'generated')
 FIGS_DIR = os.path.join(GEN_DIR, 'figs')
@@ -84,9 +81,9 @@ def section_pointwise(report):
     case_labels = []
 
     for i, (E_kev, Ep_kev, xi, T_kev) in enumerate(POINTWISE_CASES):
-        E = E_kev * KEV
-        Ep = Ep_kev * KEV
-        T_K = T_kev * KEV_KELVIN
+        E = E_kev * kev
+        Ep = Ep_kev * kev
+        T_K = T_kev * kev_kelvin
 
         cpp_r = cpp_engine.sigma_E(E, Ep, xi, T_K, 1.0)
         cpp_val = cpp_r.value
@@ -148,9 +145,9 @@ def section_timing(report):
         t0 = time.perf_counter()
         for _ in range(n_repeats):
             for E_kev, Ep_kev, xi, T_kev in POINTWISE_CASES:
-                E = E_kev * KEV
-                Ep = Ep_kev * KEV
-                T_K = T_kev * KEV_KELVIN
+                E = E_kev * kev
+                Ep = Ep_kev * kev
+                T_K = T_kev * kev_kelvin
                 func(E, Ep, xi, T_K)
         return time.perf_counter() - t0
 
@@ -215,7 +212,7 @@ def make_energy_bins(emax_kev, n_bins=40):
         list(np.linspace(0.01, emax_kev, n_bins))
         + list(np.geomspace(0.01, emax_kev, n_bins // 2))
     )))
-    return eb_kev * KEV
+    return eb_kev * kev
 
 
 def integrate_bin_cpp(engine, E_in, E_lo, E_hi, T_K):
@@ -242,7 +239,7 @@ def get_cmmc_matrix(T_kev, eb_erg, num_samples=200000):
         from _compton_matrix_mc import ComptonMatrixMC
     except ImportError:
         return None
-    T_kelvin = T_kev * KEV_KELVIN
+    T_kelvin = T_kev * kev_kelvin
     ec = 0.5 * (eb_erg[:-1] + eb_erg[1:])
     compton_engine = ComptonMatrixMC(
         energy_groups_centers=ec.tolist(),
@@ -289,12 +286,12 @@ def section_pomraning(report):
         ein_kev = case["ein_kev"]
         ylim = case["ylim"]
         ref_dir = case.get("ref_dir")
-        T_K = T_kev * KEV_KELVIN
+        T_K = T_kev * kev_kelvin
 
         eb_erg = make_energy_bins(emax, n_bins=40)
-        eb_kev_arr = eb_erg / KEV
+        eb_kev_arr = eb_erg / kev
         ec_erg = 0.5 * (eb_erg[:-1] + eb_erg[1:])
-        ewid_kev = np.diff(eb_erg) / KEV
+        ewid_kev = np.diff(eb_erg) / kev
         num_groups = len(eb_erg) - 1
 
         print(f"    {name} ({num_groups} groups, {len(ein_kev)} E_in)...")
@@ -312,9 +309,9 @@ def section_pomraning(report):
         py_time_total = 0
 
         for idx, e0_kev in enumerate(ein_kev):
-            g = np.argmin(np.abs(ec_erg - e0_kev * KEV))
+            g = np.argmin(np.abs(ec_erg - e0_kev * kev))
             E_in = ec_erg[g]
-            e_label = f"{ec_erg[g] / KEV:.4g}"
+            e_label = f"{ec_erg[g] / kev:.4g}"
             color = colors[idx]
 
             t0 = time.perf_counter()
@@ -331,17 +328,17 @@ def section_pomraning(report):
                     E_in, eb_erg[gp], eb_erg[gp + 1], T_K)
             py_time_total += time.perf_counter() - t0
 
-            sigma_cpp = row_cpp / ewid_kev / MBARN
+            sigma_cpp = row_cpp / ewid_kev / mbarn
             ax.stairs(sigma_cpp, edges=eb_kev_arr, color=color,
                       linewidth=1.8,
                       label=f"$E_{{\\mathrm{{in}}}}$={e_label} keV")
 
-            sigma_py = row_py / ewid_kev / MBARN
+            sigma_py = row_py / ewid_kev / mbarn
             ax.stairs(sigma_py, edges=eb_kev_arr, color=color,
                       linewidth=1.2, linestyle='--')
 
             if S_mc is not None:
-                sigma_mc = S_mc[g, :] / ewid_kev / MBARN
+                sigma_mc = S_mc[g, :] / ewid_kev / mbarn
                 ax.stairs(sigma_mc, edges=eb_kev_arr, color=color,
                           linewidth=1.0, linestyle=':')
 
@@ -439,9 +436,9 @@ def section_series_pointwise(report):
     methods = []
 
     for i, (E_kev, Ep_kev, xi, T_kev) in enumerate(POINTWISE_CASES):
-        E = E_kev * KEV
-        Ep = Ep_kev * KEV
-        T_K = T_kev * KEV_KELVIN
+        E = E_kev * kev
+        Ep = Ep_kev * kev
+        T_K = T_kev * kev_kelvin
 
         cr = cpp_series.sigma_E(E, Ep, xi, T_K, 1.0)
         pr = py_sigma_E_series(E, Ep, xi, T_K, 1.0, method="auto")
@@ -512,12 +509,12 @@ def section_pomraning_with_series(report):
         ein_kev = case["ein_kev"]
         ylim = case["ylim"]
         ref_dir = case.get("ref_dir")
-        T_K = T_kev * KEV_KELVIN
+        T_K = T_kev * kev_kelvin
 
         eb_erg = make_energy_bins(emax, n_bins=40)
-        eb_kev_arr = eb_erg / KEV
+        eb_kev_arr = eb_erg / kev
         ec_erg = 0.5 * (eb_erg[:-1] + eb_erg[1:])
-        ewid_kev = np.diff(eb_erg) / KEV
+        ewid_kev = np.diff(eb_erg) / kev
         num_groups = len(eb_erg) - 1
 
         print(f"    {name} ({num_groups} groups)...")
@@ -528,9 +525,9 @@ def section_pomraning_with_series(report):
         colors = plt.cm.tab10(np.linspace(0, 1, max(len(ein_kev), 10)))
 
         for idx, e0_kev in enumerate(ein_kev):
-            g = np.argmin(np.abs(ec_erg - e0_kev * KEV))
+            g = np.argmin(np.abs(ec_erg - e0_kev * kev))
             E_in = ec_erg[g]
-            e_label = f"{ec_erg[g] / KEV:.4g}"
+            e_label = f"{ec_erg[g] / kev:.4g}"
             color = colors[idx]
 
             row_cpp = np.zeros(num_groups)
@@ -541,18 +538,18 @@ def section_pomraning_with_series(report):
                 row_py[gp] = integrate_bin_py(E_in, eb_erg[gp], eb_erg[gp+1], T_K)
                 row_series[gp] = integrate_bin_series(cpp_series, E_in, eb_erg[gp], eb_erg[gp+1], T_K)
 
-            sigma_cpp = row_cpp / ewid_kev / MBARN
+            sigma_cpp = row_cpp / ewid_kev / mbarn
             ax.stairs(sigma_cpp, edges=eb_kev_arr, color=color, linewidth=1.8,
                       label=f"$E_{{\\mathrm{{in}}}}$={e_label} keV")
 
-            sigma_py = row_py / ewid_kev / MBARN
+            sigma_py = row_py / ewid_kev / mbarn
             ax.stairs(sigma_py, edges=eb_kev_arr, color=color, linewidth=1.2, linestyle='--')
 
-            sigma_series = row_series / ewid_kev / MBARN
+            sigma_series = row_series / ewid_kev / mbarn
             ax.stairs(sigma_series, edges=eb_kev_arr, color=color, linewidth=1.2, linestyle='-.')
 
             if S_mc is not None:
-                sigma_mc = S_mc[g, :] / ewid_kev / MBARN
+                sigma_mc = S_mc[g, :] / ewid_kev / mbarn
                 ax.stairs(sigma_mc, edges=eb_kev_arr, color=color, linewidth=1.0, linestyle=':')
 
         if ref_data:
@@ -605,9 +602,9 @@ def section_series_timing(report):
         t0 = time.perf_counter()
         for _ in range(n_repeats):
             for E_kev, Ep_kev, xi, T_kev in POINTWISE_CASES:
-                E = E_kev * KEV
-                Ep = Ep_kev * KEV
-                T_K = T_kev * KEV_KELVIN
+                E = E_kev * kev
+                Ep = Ep_kev * kev
+                T_K = T_kev * kev_kelvin
                 func(E, Ep, xi, T_K)
         return time.perf_counter() - t0
 

@@ -19,18 +19,15 @@ from _compton_kernel_quadrature import (
     scaled_K1, scaled_K2, kappa_ratio,
 )
 
-ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2  # erg
-KEV = 1.602176634e-9  # erg
-K_BOLTZ = 1.380649e-16  # erg/K
-KEV_KELVIN = KEV / K_BOLTZ  # 1 keV in Kelvin
+from _units import kev, kev_kelvin
 
 
 def _to_erg(E_kev):
-    return E_kev * KEV
+    return E_kev * kev
 
 
 def _to_kelvin(T_kev):
-    return T_kev * KEV_KELVIN
+    return T_kev * kev_kelvin
 
 
 NICE_POINTS = [

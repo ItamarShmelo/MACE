@@ -16,11 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'python'
 
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
 from pycompton.compton_kernel_quadrature import sigma_E as py_sigma_E
-
-ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2
-KEV = 1.602176634e-9
-K_BOLTZ = 1.380649e-16
-KEV_KELVIN = KEV / K_BOLTZ
+from _units import kev, kev_kelvin
 
 TEST_POINTS = [
     # (E_kev, E_prime_kev, xi, tau_kev)
@@ -53,9 +49,9 @@ class TestFixedRuleAgreement:
         cpp_engine = ComptonKernelQuadrature(NL=NL, form=QuadratureForm.PostIBP)
 
         for E_kev, Ep_kev, xi, T_kev in TEST_POINTS:
-            E = E_kev * KEV
-            Ep = Ep_kev * KEV
-            T = T_kev * KEV_KELVIN
+            E = E_kev * kev
+            Ep = Ep_kev * kev
+            T = T_kev * kev_kelvin
 
             cpp_r = cpp_engine.sigma_E(E, Ep, xi, T, 1.0)
             py_val, py_aerr, py_rerr = py_sigma_E(
@@ -71,9 +67,9 @@ class TestFixedRuleAgreement:
         cpp_engine = ComptonKernelQuadrature(NL=NL, form=QuadratureForm.PreIBP)
 
         for E_kev, Ep_kev, xi, T_kev in TEST_POINTS:
-            E = E_kev * KEV
-            Ep = Ep_kev * KEV
-            T = T_kev * KEV_KELVIN
+            E = E_kev * kev
+            Ep = Ep_kev * kev
+            T = T_kev * kev_kelvin
 
             cpp_r = cpp_engine.sigma_E(E, Ep, xi, T, 1.0)
             py_val, _, _ = py_sigma_E(
@@ -90,9 +86,9 @@ class TestFixedRuleAgreement:
         cpp_engine = ComptonKernelQuadrature(NL=NL, form=QuadratureForm.PostIBP)
 
         for E_kev, Ep_kev, xi, T_kev in TEST_POINTS:
-            E = E_kev * KEV
-            Ep = Ep_kev * KEV
-            T = T_kev * KEV_KELVIN
+            E = E_kev * kev
+            Ep = Ep_kev * kev
+            T = T_kev * kev_kelvin
 
             cpp_r = cpp_engine.sigma_E(E, Ep, xi, T, 1.0)
             _, py_aerr, _ = py_sigma_E(
@@ -117,9 +113,9 @@ class TestAdaptiveDiagnostic:
         cpp_engine = ComptonKernelQuadrature(NL=128, form=QuadratureForm.PostIBP)
 
         for E_kev, Ep_kev, xi, T_kev in TEST_POINTS:
-            E = E_kev * KEV
-            Ep = Ep_kev * KEV
-            T = T_kev * KEV_KELVIN
+            E = E_kev * kev
+            Ep = Ep_kev * kev
+            T = T_kev * kev_kelvin
 
             cpp_r = cpp_engine.sigma_E(E, Ep, xi, T, 1.0)
             py_val, _, _ = py_sigma_E(
@@ -134,9 +130,9 @@ class TestAdaptiveDiagnostic:
         cpp_engine = ComptonKernelQuadrature(NL=128, form=QuadratureForm.PreIBP)
 
         for E_kev, Ep_kev, xi, T_kev in TEST_POINTS:
-            E = E_kev * KEV
-            Ep = Ep_kev * KEV
-            T = T_kev * KEV_KELVIN
+            E = E_kev * kev
+            Ep = Ep_kev * kev
+            T = T_kev * kev_kelvin
 
             cpp_r = cpp_engine.sigma_E(E, Ep, xi, T, 1.0)
             py_val, _, _ = py_sigma_E(

@@ -31,10 +31,8 @@ sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm, scaled_K2
 from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
 
-ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2
-KEV = 1.602176634e-9
-K_BOLTZ = 1.380649e-16
-KEV_KELVIN = KEV / K_BOLTZ
+from _units import kev, kev_kelvin
+
 XI_EPS = 1e-10
 
 GEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'generated')
@@ -82,9 +80,9 @@ def section_quadrature_order_convergence(report):
 
     for case_idx, case in enumerate(GL_TEST_CASES):
         T_kev = case["T_kev"]
-        T_K = T_kev * KEV_KELVIN
-        tau = T_kev * KEV / ME_C2
-        E_in = case["E_in_kev"] * KEV
+        T_K = T_kev * kev_kelvin
+        tau = T_kev * kev / ME_C2
+        E_in = case["E_in_kev"] * kev
         ax = axes[case_idx]
 
         report.append(f"\n### T = {T_kev} keV (tau = {tau:.4e}), E_in = {case['E_in_kev']} keV\n")
@@ -93,8 +91,8 @@ def section_quadrature_order_convergence(report):
         report.append("|---|" + "---|" * (len([64, 128, 256]) + 2))
 
         for bin_idx, (bin_lo, bin_hi) in enumerate(case["bins_kev"]):
-            E_lo = bin_lo * KEV
-            E_hi = bin_hi * KEV
+            E_lo = bin_lo * kev
+            E_hi = bin_hi * kev
 
             all_results = {}
             for NL in NL_VALUES:
@@ -168,10 +166,10 @@ def section_scipy_tolerance_sensitivity(report):
 
     for pt_idx, pt in enumerate(TOLERANCE_POINTS):
         T_kev = pt["T_kev"]
-        T_K = T_kev * KEV_KELVIN
-        E_in = pt["E_in_kev"] * KEV
-        E_lo = pt["bin_kev"][0] * KEV
-        E_hi = pt["bin_kev"][1] * KEV
+        T_K = T_kev * kev_kelvin
+        E_in = pt["E_in_kev"] * kev
+        E_lo = pt["bin_kev"][0] * kev
+        E_hi = pt["bin_kev"][1] * kev
         ax = axes[pt_idx]
 
         report.append(f"\n### T={T_kev} keV, E_in={pt['E_in_kev']} keV, bin=[{pt['bin_kev'][0]}-{pt['bin_kev'][1]}] keV\n")
@@ -264,10 +262,10 @@ def section_post_vs_pre_ibp(report):
         diffs_case = []
 
         for T_kev in IBP_TEMPERATURES:
-            T_K = T_kev * KEV_KELVIN
-            tau = T_kev * KEV / ME_C2
-            E = E_kev * KEV
-            Ep = Ep_kev * KEV
+            T_K = T_kev * kev_kelvin
+            tau = T_kev * kev / ME_C2
+            E = E_kev * kev
+            Ep = Ep_kev * kev
 
             eng_post = ComptonKernelQuadrature(NL=128, form=QuadratureForm.PostIBP)
             eng_pre = ComptonKernelQuadrature(NL=128, form=QuadratureForm.PreIBP)
@@ -365,10 +363,10 @@ def section_pointwise_error_estimates(report):
     rel_errs = []
 
     for T_kev, E_kev, Ep_kev, xi in RICHARDSON_POINTS:
-        T_K = T_kev * KEV_KELVIN
-        tau = T_kev * KEV / ME_C2
-        E = E_kev * KEV
-        Ep = Ep_kev * KEV
+        T_K = T_kev * kev_kelvin
+        tau = T_kev * kev / ME_C2
+        E = E_kev * kev
+        Ep = Ep_kev * kev
 
         try:
             r = engine.sigma_E(E, Ep, xi, T_K, 1.0)
@@ -421,9 +419,9 @@ def section_timing(report):
     report.append("Timing for single-point evaluations and bin integrations.\n")
 
     engine = ComptonKernelQuadrature(NL=64, form=QuadratureForm.PostIBP)
-    T_K = 100.0 * KEV_KELVIN
-    E = 100.0 * KEV
-    Ep = 80.0 * KEV
+    T_K = 100.0 * kev_kelvin
+    E = 100.0 * kev
+    Ep = 80.0 * kev
 
     N_eval = 10000
     t0 = time.time()
@@ -431,8 +429,8 @@ def section_timing(report):
         engine.sigma_E(E, Ep, 0.0, T_K, 1.0)
     t_single = (time.time() - t0) / N_eval * 1e6
 
-    E_lo = 60.0 * KEV
-    E_hi = 140.0 * KEV
+    E_lo = 60.0 * kev
+    E_hi = 140.0 * kev
     N_bins = 5
     t0 = time.time()
     for _ in range(N_bins):
@@ -503,9 +501,9 @@ def section_power_series_convergence(report):
     report.append("|---|---|---|---|---|---|---|---|---|")
 
     for ci, (T_kev, E_kev, Ep_kev, xi) in enumerate(POWER_SERIES_CASES):
-        T_K = T_kev * KEV_KELVIN
-        E = E_kev * KEV
-        Ep = Ep_kev * KEV
+        T_K = T_kev * kev_kelvin
+        E = E_kev * kev
+        Ep = Ep_kev * kev
 
         ref = quad_eng.sigma_E(E, Ep, xi, T_K, 1.0)
         ref_val = ref.value
@@ -594,10 +592,10 @@ def section_asymptotic_series_convergence(report):
     report.append("|---|---|---|---|---|---|---|---|---|---|")
 
     for ci, (T_kev, E_kev, Ep_kev, xi) in enumerate(ASYMPTOTIC_SERIES_CASES):
-        T_K = T_kev * KEV_KELVIN
-        tau = T_kev * KEV / ME_C2
-        E = E_kev * KEV
-        Ep = Ep_kev * KEV
+        T_K = T_kev * kev_kelvin
+        tau = T_kev * kev / ME_C2
+        E = E_kev * kev
+        Ep = Ep_kev * kev
 
         ref = quad_eng.sigma_E(E, Ep, xi, T_K, 1.0)
         ref_val = ref.value

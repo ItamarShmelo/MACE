@@ -12,11 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'cpp_modules'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'external', 'CMMC', 'cpp_modules'))
 
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
-
-ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2
-KEV = 1.602176634e-9
-KEV_KELVIN = KEV / 1.380649e-16
-SIGMA_T = 6.652458732160e-25
+from _units import kev, kev_kelvin
 
 XI_EPS = 1e-10
 
@@ -51,7 +47,7 @@ def get_cmmc_matrix(T_kev, eb_erg, num_samples=500000):
     except ImportError:
         pytest.skip("CMMC _compton_matrix_mc not importable")
 
-    T_kelvin = T_kev * KEV_KELVIN
+    T_kelvin = T_kev * kev_kelvin
     ec = 0.5 * (eb_erg[:-1] + eb_erg[1:])
 
     compton_engine = ComptonMatrixMC(
@@ -69,7 +65,7 @@ def get_quad_matrix(T_kev, eb_erg, angular_norm_mode="moment0"):
     """Generate S-matrix from quadrature."""
     engine = ComptonKernelQuadrature(NL=64, form=QuadratureForm.PostIBP)
 
-    T = T_kev * KEV_KELVIN
+    T = T_kev * kev_kelvin
     num_groups = len(eb_erg) - 1
     ec = 0.5 * (eb_erg[:-1] + eb_erg[1:])
 
@@ -124,7 +120,7 @@ class TestVsMonteCarlo:
         """
         T_kev = 100.0
         eb_kev = np.array([10.0, 50.0, 100.0, 200.0, 500.0])
-        eb_erg = eb_kev * KEV
+        eb_erg = eb_kev * kev
 
         S_mc = get_cmmc_matrix(T_kev, eb_erg, num_samples=1000000)
         S_quad = get_quad_matrix(T_kev, eb_erg, "moment0")
@@ -155,7 +151,7 @@ class TestVsMonteCarlo:
         """
         T_kev = 20.0
         eb_kev = np.array([5.0, 10.0, 20.0, 40.0, 80.0])
-        eb_erg = eb_kev * KEV
+        eb_erg = eb_kev * kev
 
         S_mc = get_cmmc_matrix(T_kev, eb_erg, num_samples=1000000)
         S_quad = get_quad_matrix(T_kev, eb_erg, "moment0")
@@ -191,7 +187,7 @@ class TestVsMonteCarlo:
         """
         T_kev = 1.0
         eb_kev = np.array([0.5, 1.0, 2.0, 5.0, 10.0])
-        eb_erg = eb_kev * KEV
+        eb_erg = eb_kev * kev
 
         S_mc = get_cmmc_matrix(T_kev, eb_erg, num_samples=500000)
         S_quad = get_quad_matrix(T_kev, eb_erg, "moment0")
@@ -212,7 +208,7 @@ class TestVsMonteCarlo:
         """Pomraning T=1 keV, low-energy incoming photons."""
         T_kev = 1.0
         eb_kev = np.array([0.5, 2.0, 5.0, 10.0, 20.0, 40.0, 60.0, 75.0])
-        eb_erg = eb_kev * KEV
+        eb_erg = eb_kev * kev
 
         S_mc = get_cmmc_matrix(T_kev, eb_erg, num_samples=1000000)
         S_quad = get_quad_matrix(T_kev, eb_erg, "moment0")
@@ -232,7 +228,7 @@ class TestVsMonteCarlo:
         """
         T_kev = 1.0
         eb_kev = np.array([10.0, 40.0, 80.0, 120.0, 200.0, 300.0, 340.0])
-        eb_erg = eb_kev * KEV
+        eb_erg = eb_kev * kev
 
         S_mc = get_cmmc_matrix(T_kev, eb_erg, num_samples=1000000)
         S_quad = get_quad_matrix(T_kev, eb_erg, "moment0")
@@ -246,7 +242,7 @@ class TestVsMonteCarlo:
         """Pomraning T=20 keV, low-energy incoming photons."""
         T_kev = 20.0
         eb_kev = np.array([1.0, 5.0, 10.0, 20.0, 40.0, 60.0, 100.0, 140.0])
-        eb_erg = eb_kev * KEV
+        eb_erg = eb_kev * kev
 
         S_mc = get_cmmc_matrix(T_kev, eb_erg, num_samples=1000000)
         S_quad = get_quad_matrix(T_kev, eb_erg, "moment0")
@@ -260,7 +256,7 @@ class TestVsMonteCarlo:
         """Pomraning T=20 keV, high-energy incoming photons."""
         T_kev = 20.0
         eb_kev = np.array([10.0, 40.0, 80.0, 120.0, 200.0, 300.0, 440.0])
-        eb_erg = eb_kev * KEV
+        eb_erg = eb_kev * kev
 
         S_mc = get_cmmc_matrix(T_kev, eb_erg, num_samples=1000000)
         S_quad = get_quad_matrix(T_kev, eb_erg, "moment0")

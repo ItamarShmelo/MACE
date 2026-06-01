@@ -32,12 +32,9 @@ sys.path.insert(0, os.path.join(ROOT, 'src', 'python'))
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
 from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
 
-ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2
-KEV = 1.602176634e-9
-K_BOLTZ = 1.380649e-16
-KEV_KELVIN = KEV / K_BOLTZ
+from _units import me_c2, kev, k_boltz, kev_kelvin, mbarn
+
 XI_EPS = 1e-10
-MBARN = 1e-3 * 1e-24
 
 GEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'generated')
 FIGS_DIR = os.path.join(GEN_DIR, 'figs')
@@ -93,9 +90,9 @@ def section_pointwise(report):
     t_series_list = []
 
     for i, (E_kev, Ep_kev, xi, T_kev) in enumerate(POINTWISE_CASES):
-        E = E_kev * KEV
-        Ep = Ep_kev * KEV
-        T_K = T_kev * KEV_KELVIN
+        E = E_kev * kev
+        Ep = Ep_kev * kev
+        T_K = T_kev * kev_kelvin
 
         for _ in range(n_warmup):
             quad.sigma_E(E, Ep, xi, T_K, 1.0)
@@ -184,11 +181,11 @@ def section_spectra(report):
         E_kev = case["E_kev"]
         T_kev = case["T_kev"]
         Ep_lo, Ep_hi = case["Ep_range"]
-        E = E_kev * KEV
-        T_K = T_kev * KEV_KELVIN
+        E = E_kev * kev
+        T_K = T_kev * kev_kelvin
         xi = 0.0
 
-        Ep_arr = np.linspace(Ep_lo * KEV, Ep_hi * KEV, 200)
+        Ep_arr = np.linspace(Ep_lo * kev, Ep_hi * kev, 200)
 
         sigma_q = np.zeros(len(Ep_arr))
         sigma_s = np.zeros(len(Ep_arr))
@@ -202,7 +199,7 @@ def section_spectra(report):
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 7),
                                         gridspec_kw={'height_ratios': [3, 1]},
                                         sharex=True)
-        Ep_kev_arr = Ep_arr / KEV
+        Ep_kev_arr = Ep_arr / kev
         ax1.plot(Ep_kev_arr, sigma_q, '-', color='steelblue', lw=1.8,
                  label='Quadrature NL=128')
         ax1.plot(Ep_kev_arr, sigma_s, '--', color='coral', lw=1.2,
@@ -253,7 +250,7 @@ def make_energy_bins(emax_kev, n_bins=40):
         list(np.linspace(0.01, emax_kev, n_bins))
         + list(np.geomspace(0.01, emax_kev, n_bins // 2))
     )))
-    return eb_kev * KEV
+    return eb_kev * kev
 
 
 def integrate_bin(engine, E_in, E_lo, E_hi, T_K):
@@ -280,7 +277,7 @@ def get_cmmc_matrix(T_kev, eb_erg, num_samples=200000):
         from _compton_matrix_mc import ComptonMatrixMC
     except ImportError:
         return None
-    T_kelvin = T_kev * KEV_KELVIN
+    T_kelvin = T_kev * kev_kelvin
     ec = 0.5 * (eb_erg[:-1] + eb_erg[1:])
     compton_engine = ComptonMatrixMC(
         energy_groups_centers=ec.tolist(),
@@ -325,12 +322,12 @@ def section_pomraning(report):
         ein_kev = case["ein_kev"]
         ylim = case["ylim"]
         ref_dir = case.get("ref_dir")
-        T_K = T_kev * KEV_KELVIN
+        T_K = T_kev * kev_kelvin
 
         eb_erg = make_energy_bins(emax, n_bins=40)
-        eb_kev_arr = eb_erg / KEV
+        eb_kev_arr = eb_erg / kev
         ec_erg = 0.5 * (eb_erg[:-1] + eb_erg[1:])
-        ewid_kev = np.diff(eb_erg) / KEV
+        ewid_kev = np.diff(eb_erg) / kev
         num_groups = len(eb_erg) - 1
 
         print(f"    {name} ({num_groups} groups, {len(ein_kev)} E_in)...")
@@ -345,9 +342,9 @@ def section_pomraning(report):
         t_series_total = 0
 
         for idx, e0_kev in enumerate(ein_kev):
-            g = np.argmin(np.abs(ec_erg - e0_kev * KEV))
+            g = np.argmin(np.abs(ec_erg - e0_kev * kev))
             E_in = ec_erg[g]
-            e_label = f"{ec_erg[g] / KEV:.4g}"
+            e_label = f"{ec_erg[g] / kev:.4g}"
             color = colors[idx]
 
             t0 = time.perf_counter()
@@ -364,17 +361,17 @@ def section_pomraning(report):
                     series, E_in, eb_erg[gp], eb_erg[gp + 1], T_K)
             t_series_total += time.perf_counter() - t0
 
-            sigma_quad = row_quad / ewid_kev / MBARN
+            sigma_quad = row_quad / ewid_kev / mbarn
             ax.stairs(sigma_quad, edges=eb_kev_arr, color=color,
                       linewidth=1.8,
                       label=f"$E_{{\\mathrm{{in}}}}$={e_label} keV")
 
-            sigma_series = row_series / ewid_kev / MBARN
+            sigma_series = row_series / ewid_kev / mbarn
             ax.stairs(sigma_series, edges=eb_kev_arr, color=color,
                       linewidth=1.2, linestyle='--')
 
             if S_mc is not None:
-                sigma_mc = S_mc[g, :] / ewid_kev / MBARN
+                sigma_mc = S_mc[g, :] / ewid_kev / mbarn
                 ax.stairs(sigma_mc, edges=eb_kev_arr, color=color,
                           linewidth=1.0, linestyle=':')
 
@@ -437,15 +434,15 @@ def section_convergence(report):
     E_kev = 1.0
     Ep_kev = 1.5
     xi = 0.0
-    E = E_kev * KEV
-    Ep = Ep_kev * KEV
+    E = E_kev * kev
+    Ep = Ep_kev * kev
 
     taus = np.geomspace(0.0001, 0.5, 80)
     values_list = []
     n_success = 0
 
     for tau in taus:
-        T_K = tau * ME_C2 / K_BOLTZ
+        T_K = tau * me_c2 / k_boltz
         try:
             r = series.sigma_E(E, Ep, xi, T_K, 1.0)
             values_list.append(r.value)
@@ -502,9 +499,9 @@ def section_timing_summary(report):
     for label, engine, is_quad in methods_to_bench:
         times = []
         for E_kev, Ep_kev, xi, T_kev in POINTWISE_CASES:
-            E = E_kev * KEV
-            Ep = Ep_kev * KEV
-            T_K = T_kev * KEV_KELVIN
+            E = E_kev * kev
+            Ep = Ep_kev * kev
+            T_K = T_kev * kev_kelvin
             try:
                 for _ in range(n_warmup):
                     engine.sigma_E(E, Ep, xi, T_K, 1.0)

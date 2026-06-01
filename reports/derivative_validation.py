@@ -30,10 +30,7 @@ from _compton_kernel_quadrature import (
     scaled_K1, scaled_K2, kappa_ratio,
 )
 
-ME_C2 = 9.109383713928e-28 * (2.99792458e10)**2
-KEV = 1.602176634e-9
-K_BOLTZ = 1.380649e-16
-KEV_KELVIN = KEV / K_BOLTZ
+from _units import kev, kev_kelvin
 
 GEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'generated')
 FIGS_DIR = os.path.join(GEN_DIR, 'figs')
@@ -81,9 +78,9 @@ def section_gl_convergence():
         emit('|---------|-----------|------|---------|-------|--------|--------|')
 
         for E_kev, Ep_kev, xi, tau_kev in NICE_POINTS:
-            E = E_kev * KEV
-            Ep = Ep_kev * KEV
-            T_K = tau_kev * KEV_KELVIN
+            E = E_kev * kev
+            Ep = Ep_kev * kev
+            T_K = tau_kev * kev_kelvin
 
             vals = []
             for NL in [64, 128, 256]:
@@ -111,9 +108,9 @@ def section_fd_comparison():
     h_fracs = np.logspace(-6, -1, 30)
 
     for idx, (E_kev, Ep_kev, xi, tau_kev) in enumerate(NICE_POINTS[:4]):
-        E = E_kev * KEV
-        Ep = Ep_kev * KEV
-        T_K = tau_kev * KEV_KELVIN
+        E = E_kev * kev
+        Ep = Ep_kev * kev
+        T_K = tau_kev * kev_kelvin
 
         sig = engine.sigma_E(E, Ep, xi, T_K, 1.0)
         if sig.estimated_rel_error > 1e-6:
@@ -148,9 +145,9 @@ def section_fd_comparison():
     emit('|---------|-----------|------|---------|----------|---------|---------|')
 
     for E_kev, Ep_kev, xi, tau_kev in NICE_POINTS:
-        E = E_kev * KEV
-        Ep = Ep_kev * KEV
-        T_K = tau_kev * KEV_KELVIN
+        E = E_kev * kev
+        Ep = Ep_kev * kev
+        T_K = tau_kev * kev_kelvin
 
         sig = engine.sigma_E(E, Ep, xi, T_K, 1.0)
         if sig.estimated_rel_error > 1e-6:
@@ -184,9 +181,9 @@ def section_pre_post_agreement():
 
     rel_diffs = []
     for tau_kev in tau_kevs:
-        E = E_kev * KEV
-        Ep = Ep_kev * KEV
-        T_K = tau_kev * KEV_KELVIN
+        E = E_kev * kev
+        Ep = Ep_kev * kev
+        T_K = tau_kev * kev_kelvin
 
         eng_pre = ComptonKernelQuadrature(256, QuadratureForm.PreIBP)
         eng_post = ComptonKernelQuadrature(256, QuadratureForm.PostIBP)
@@ -264,13 +261,13 @@ def section_small_tau():
     emit('| T (keV) | tau | dsigma/dT (pre) | rel_error | finite? |')
     emit('|---------|-----|-----------------|-----------|---------|')
 
-    E = 1.0 * KEV
-    Ep = 1.0 * KEV
+    E = 1.0 * kev
+    Ep = 1.0 * kev
     xi = 0.0
 
     for tau_kev in [0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0]:
-        tau = tau_kev * KEV / ME_C2
-        T_K = tau_kev * KEV_KELVIN
+        tau = tau_kev * kev / ME_C2
+        T_K = tau_kev * kev_kelvin
         eng = ComptonKernelQuadrature(128, QuadratureForm.PreIBP)
         r = eng.dsigma_E_dT(E, Ep, xi, T_K, 1.0)
         finite = np.isfinite(r.value) and np.isfinite(r.estimated_rel_error)
@@ -304,13 +301,13 @@ def section_derivative_profiles():
         E_kev = cfg['E_kev']
         xi = cfg['xi']
         Ep_lo, Ep_hi = cfg['Ep_range']
-        E = E_kev * KEV
-        Ep_arr = np.linspace(Ep_lo, Ep_hi, 800) * KEV
+        E = E_kev * kev
+        Ep_arr = np.linspace(Ep_lo, Ep_hi, 800) * kev
 
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9, 7), sharex=True)
 
         for tau_kev in cfg['tau_kevs']:
-            T_K = tau_kev * KEV_KELVIN
+            T_K = tau_kev * kev_kelvin
             label = f'T = {tau_kev} keV'
 
             sig_vals = []
@@ -319,8 +316,8 @@ def section_derivative_profiles():
                 sig_vals.append(engine.sigma_E(E, Ep, xi, T_K, 1.0).value)
                 dsig_vals.append(engine.dsigma_E_dT(E, Ep, xi, T_K, 1.0).value)
 
-            ax1.semilogy(Ep_arr / KEV, np.abs(sig_vals), label=label)
-            ax2.plot(Ep_arr / KEV, dsig_vals, label=label)
+            ax1.semilogy(Ep_arr / kev, np.abs(sig_vals), label=label)
+            ax2.plot(Ep_arr / kev, dsig_vals, label=label)
 
         ax1.set_ylabel('|$\\Sigma_E$|')
         ax1.set_title(f'E = {E_kev} keV, $\\xi$ = {xi}')
@@ -364,13 +361,13 @@ def section_angular_distribution():
     for cfg in ANGULAR_CONFIGS:
         E_kev = cfg['E_kev']
         Ep_kev = cfg['Ep_kev']
-        E = E_kev * KEV
-        Ep = Ep_kev * KEV
+        E = E_kev * kev
+        Ep = Ep_kev * kev
 
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9, 7), sharex=True)
 
         for tau_kev in cfg['tau_kevs']:
-            T_K = tau_kev * KEV_KELVIN
+            T_K = tau_kev * kev_kelvin
             label = f'T = {tau_kev} keV'
 
             sig_vals = []

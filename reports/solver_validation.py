@@ -34,10 +34,7 @@ sys.path.insert(0, os.path.join(ROOT, 'src', 'python'))
 from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
 
-ME_C2 = 9.109383713928e-28 * (2.99792458e10)**2
-KEV = 1.602176634e-9
-K_BOLTZ = 1.380649e-16
-KEV_KELVIN = KEV / K_BOLTZ
+from _units import kev, kev_kelvin
 
 GEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'generated')
 FIGS_DIR = os.path.join(GEN_DIR, 'figs')
@@ -68,10 +65,10 @@ def section_regime_map():
     ratio_vals = np.logspace(-0.5, 0.7, 30)  # 0.32 to 5.0
 
     method_map = np.zeros((len(T_vals), len(ratio_vals)), dtype=int)
-    E = 10.0 * KEV
+    E = 10.0 * kev
 
     for i, T_keV in enumerate(T_vals):
-        T_K = T_keV * KEV_KELVIN
+        T_K = T_keV * kev_kelvin
         for j, ratio in enumerate(ratio_vals):
             Ep = E * ratio
             try:
@@ -114,9 +111,9 @@ def section_accuracy():
     rel_errors = []
 
     for T_keV in T_vals:
-        T_K = T_keV * KEV_KELVIN
+        T_K = T_keV * kev_kelvin
         for E_keV in E_vals:
-            E = E_keV * KEV
+            E = E_keV * kev
             for ratio in ratios:
                 Ep = E * ratio
                 for xi in xi_vals:
@@ -177,9 +174,9 @@ def section_fallback_stats():
     n_nonneg = 0
 
     for T_keV in T_vals:
-        T_K = T_keV * KEV_KELVIN
+        T_K = T_keV * kev_kelvin
         for E_keV in E_vals:
-            E = E_keV * KEV
+            E = E_keV * kev
             for ratio in ratios:
                 Ep = E * ratio
                 for xi in xi_vals:
@@ -219,7 +216,7 @@ def section_edge_cases():
     emit("|------|-------|-----------|")
 
     for label, E_keV, Ep_keV, xi, T_keV in cases:
-        E = E_keV * KEV; Ep = Ep_keV * KEV; T_K = T_keV * KEV_KELVIN
+        E = E_keV * kev; Ep = Ep_keV * kev; T_K = T_keV * kev_kelvin
         try:
             r = solver.sigma_E(E, Ep, xi, T_K, 1.0)
             emit(f"| {label} | {r.value:.3e} | {r.estimated_rel_error:.2e} |")
@@ -248,7 +245,7 @@ def section_out_of_domain():
     emit("| Case | Value | rel_error |")
     emit("|------|-------|-----------|")
     for label, E_keV, Ep_keV, xi, T_keV in cases:
-        E = E_keV * KEV; Ep = Ep_keV * KEV; T_K = T_keV * KEV_KELVIN
+        E = E_keV * kev; Ep = Ep_keV * kev; T_K = T_keV * kev_kelvin
         try:
             r = solver.sigma_E(E, Ep, xi, T_K, 1.0)
             emit(f"| {label} | {r.value:.3e} | {r.estimated_rel_error:.2e} |")
@@ -265,15 +262,15 @@ def section_timing():
     emit("## 6. Timing Comparison")
     emit()
 
-    E = 10.0 * KEV
-    Ep_arr = np.linspace(5.0, 20.0, 200) * KEV
+    E = 10.0 * kev
+    Ep_arr = np.linspace(5.0, 20.0, 200) * kev
     xi = 0.0
     n_repeats = 5
 
     timings = {}
 
     for T_keV, label in [(1.0, "T=1keV (asymptotic)"), (50.0, "T=50keV (mixed)"), (100.0, "T=100keV (power/quad)")]:
-        T_K = T_keV * KEV_KELVIN
+        T_K = T_keV * kev_kelvin
 
         t0 = time.perf_counter()
         for _ in range(n_repeats):
@@ -322,9 +319,9 @@ def section_non_negativity():
     n_negative = 0
 
     for T_keV in T_vals:
-        T_K = T_keV * KEV_KELVIN
+        T_K = T_keV * kev_kelvin
         for E_keV in E_vals:
-            E = E_keV * KEV
+            E = E_keV * kev
             for ratio in ratios:
                 Ep = E * ratio
                 for xi in xi_vals:

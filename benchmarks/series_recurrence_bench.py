@@ -18,8 +18,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'python'
 
 import numpy as np
 from _compton_kernel_series import ComptonKernelSeries, SeriesMethod, ehat_cf
+from _units import me_c2, kev
 from pycompton.compton_kernel_series import sigma_E_series
-from pycompton.compton_kernel_quadrature import compute_params, me_c2, kev
+from pycompton.compton_kernel_quadrature import compute_params
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Configuration

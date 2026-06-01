@@ -54,7 +54,7 @@ set_target_properties(_compton_kernel_series PROPERTIES
 
 
 pybind11_add_module(_units
-    src/units/bind_units.cpp
+    src/units/bind/_units.cpp
 )
 target_compile_options(_units PRIVATE
     -O3 -Wall -Wextra -Wpedantic

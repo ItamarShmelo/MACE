@@ -14,11 +14,7 @@ sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 
 from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
-
-ME_C2 = 9.109383713928e-28 * (2.99792458e10)**2
-KEV = 1.602176634e-9
-K_BOLTZ = 1.380649e-16
-KEV_KELVIN = KEV / K_BOLTZ
+from _units import kev, kev_kelvin
 
 
 @pytest.fixture
@@ -38,35 +34,35 @@ def quad256():
 class TestDomainValidation:
     def test_E_zero(self, solver):
         with pytest.raises(Exception):
-            solver.sigma_E(0.0, 1.0 * KEV, 0.0, 1e6, 1.0)
+            solver.sigma_E(0.0, 1.0 * kev, 0.0, 1e6, 1.0)
 
     def test_E_negative(self, solver):
         with pytest.raises(Exception):
-            solver.sigma_E(-1.0 * KEV, 1.0 * KEV, 0.0, 1e6, 1.0)
+            solver.sigma_E(-1.0 * kev, 1.0 * kev, 0.0, 1e6, 1.0)
 
     def test_Eprime_zero(self, solver):
         with pytest.raises(Exception):
-            solver.sigma_E(1.0 * KEV, 0.0, 0.0, 1e6, 1.0)
+            solver.sigma_E(1.0 * kev, 0.0, 0.0, 1e6, 1.0)
 
     def test_T_zero(self, solver):
         with pytest.raises(Exception):
-            solver.sigma_E(1.0 * KEV, 1.5 * KEV, 0.0, 0.0, 1.0)
+            solver.sigma_E(1.0 * kev, 1.5 * kev, 0.0, 0.0, 1.0)
 
     def test_T_negative(self, solver):
         with pytest.raises(Exception):
-            solver.sigma_E(1.0 * KEV, 1.5 * KEV, 0.0, -1e6, 1.0)
+            solver.sigma_E(1.0 * kev, 1.5 * kev, 0.0, -1e6, 1.0)
 
     def test_xi_plus_one(self, solver):
         with pytest.raises(Exception):
-            solver.sigma_E(1.0 * KEV, 1.5 * KEV, 1.0, 1e6, 1.0)
+            solver.sigma_E(1.0 * kev, 1.5 * kev, 1.0, 1e6, 1.0)
 
     def test_xi_minus_one(self, solver):
         with pytest.raises(Exception):
-            solver.sigma_E(1.0 * KEV, 1.5 * KEV, -1.0, 1e6, 1.0)
+            solver.sigma_E(1.0 * kev, 1.5 * kev, -1.0, 1e6, 1.0)
 
     def test_xi_beyond_plus_one(self, solver):
         with pytest.raises(Exception):
-            solver.sigma_E(1.0 * KEV, 1.5 * KEV, 1.1, 1e6, 1.0)
+            solver.sigma_E(1.0 * kev, 1.5 * kev, 1.1, 1e6, 1.0)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -88,7 +84,7 @@ class TestAccuracy:
     def test_solver_vs_quadrature(self, solver, quad256):
         """Solver should agree with Q256 to within solver's reported error or 1e-6."""
         for E_keV, Ep_keV, xi, T_keV in self.ACCURACY_CASES:
-            E = E_keV * KEV; Ep = Ep_keV * KEV; T = T_keV * KEV_KELVIN
+            E = E_keV * kev; Ep = Ep_keV * kev; T = T_keV * kev_kelvin
             sr = solver.sigma_E(E, Ep, xi, T, 1.0)
             qr = quad256.sigma_E(E, Ep, xi, T, 1.0)
 
@@ -110,46 +106,46 @@ class TestAccuracy:
 class TestEdgeCases:
     def test_xi_near_plus_one(self, solver):
         """xi very close to +1 should not crash."""
-        E = 1.0 * KEV; Ep = 1.5 * KEV; T = 5.0 * KEV_KELVIN
+        E = 1.0 * kev; Ep = 1.5 * kev; T = 5.0 * kev_kelvin
         r = solver.sigma_E(E, Ep, 0.999, T, 1.0)
         assert math.isfinite(r.value)
 
     def test_xi_near_minus_one(self, solver):
         """xi very close to -1 should not crash."""
-        E = 1.0 * KEV; Ep = 1.5 * KEV; T = 5.0 * KEV_KELVIN
+        E = 1.0 * kev; Ep = 1.5 * kev; T = 5.0 * kev_kelvin
         r = solver.sigma_E(E, Ep, -0.999, T, 1.0)
         assert math.isfinite(r.value)
 
     def test_near_elastic(self, solver):
         """E'/E very close to 1 should produce valid result."""
-        E = 10.0 * KEV; Ep = 10.001 * KEV; T = 5.0 * KEV_KELVIN
+        E = 10.0 * kev; Ep = 10.001 * kev; T = 5.0 * kev_kelvin
         r = solver.sigma_E(E, Ep, 0.0, T, 1.0)
         assert math.isfinite(r.value)
         assert r.value >= 0.0
 
     def test_strongly_separated_energies(self, solver):
         """E'/E = 10 should work."""
-        E = 1.0 * KEV; Ep = 10.0 * KEV; T = 50.0 * KEV_KELVIN
+        E = 1.0 * kev; Ep = 10.0 * kev; T = 50.0 * kev_kelvin
         r = solver.sigma_E(E, Ep, 0.0, T, 1.0)
         assert math.isfinite(r.value)
         assert r.value >= 0.0
 
     def test_very_small_T(self, solver):
         """Very cold electrons (deep asymptotic regime)."""
-        E = 10.0 * KEV; Ep = 10.5 * KEV; T = 0.001 * KEV_KELVIN
+        E = 10.0 * kev; Ep = 10.5 * kev; T = 0.001 * kev_kelvin
         r = solver.sigma_E(E, Ep, 0.0, T, 1.0)
         assert math.isfinite(r.value)
 
     def test_high_T(self, solver):
         """Hot electrons (power series or quadrature regime)."""
-        E = 100.0 * KEV; Ep = 120.0 * KEV; T = 500.0 * KEV_KELVIN
+        E = 100.0 * kev; Ep = 120.0 * kev; T = 500.0 * kev_kelvin
         r = solver.sigma_E(E, Ep, 0.0, T, 1.0)
         assert math.isfinite(r.value)
         assert r.value >= 0.0
 
     def test_sigma0_underflow(self, solver):
         """Large energy transfer at low T: sigma0 underflows, kernel is negligible."""
-        E = 1.0 * KEV; Ep = 100.0 * KEV; T = 0.01 * KEV_KELVIN
+        E = 1.0 * kev; Ep = 100.0 * kev; T = 0.01 * kev_kelvin
         r = solver.sigma_E(E, Ep, 0.0, T, 1.0)
         assert r.value == 0.0 or abs(r.value) < 1e-100
 
@@ -161,19 +157,19 @@ class TestEdgeCases:
 class TestOutOfDomain:
     def test_very_high_T_raises(self, solver):
         """T well beyond series convergence domain raises RuntimeError."""
-        E = 1.0 * KEV; Ep = 1.5 * KEV; T = 2000.0 * KEV_KELVIN
+        E = 1.0 * kev; Ep = 1.5 * kev; T = 2000.0 * kev_kelvin
         with pytest.raises(RuntimeError):
             solver.sigma_E(E, Ep, 0.0, T, 1.0)
 
     def test_extreme_energy_ratio(self, solver):
         """E'/E = 100 beyond calibration grid."""
-        E = 1.0 * KEV; Ep = 100.0 * KEV; T = 200.0 * KEV_KELVIN
+        E = 1.0 * kev; Ep = 100.0 * kev; T = 200.0 * kev_kelvin
         r = solver.sigma_E(E, Ep, 0.0, T, 1.0)
         assert math.isfinite(r.value)
 
     def test_xi_0999_works(self, solver):
         """xi=0.999 beyond calibration grid (calibrated to 0.9)."""
-        E = 10.0 * KEV; Ep = 15.0 * KEV; T = 10.0 * KEV_KELVIN
+        E = 10.0 * kev; Ep = 15.0 * kev; T = 10.0 * kev_kelvin
         r = solver.sigma_E(E, Ep, 0.999, T, 1.0)
         assert math.isfinite(r.value)
 
@@ -194,7 +190,7 @@ class TestPhysicalConsistency:
             (50.0, 55.0, 0.3, 5.0),
         ]
         for E_keV, Ep_keV, xi, T_keV in cases:
-            E = E_keV * KEV; Ep = Ep_keV * KEV; T = T_keV * KEV_KELVIN
+            E = E_keV * kev; Ep = Ep_keV * kev; T = T_keV * kev_kelvin
             r = solver.sigma_E(E, Ep, xi, T, 1.0)
             assert r.value >= 0.0, (
                 f"Negative value at E={E_keV}, Ep={Ep_keV}, xi={xi}, T={T_keV}: "
@@ -206,7 +202,7 @@ class TestPhysicalConsistency:
         q128 = ComptonKernelQuadrature(128, QuadratureForm.PostIBP)
         q256 = ComptonKernelQuadrature(256, QuadratureForm.PostIBP)
 
-        E = 10.0 * KEV; Ep = 15.0 * KEV; xi = 0.0; T = 20.0 * KEV_KELVIN
+        E = 10.0 * kev; Ep = 15.0 * kev; xi = 0.0; T = 20.0 * kev_kelvin
         r128 = q128.sigma_E(E, Ep, xi, T, 1.0)
         r256 = q256.sigma_E(E, Ep, xi, T, 1.0)
 
@@ -222,9 +218,9 @@ class TestPhysicalConsistency:
 class TestVectorized:
     def test_sigma_E_vec(self, solver):
         """Vectorized API should produce same results as scalar."""
-        E = 10.0 * KEV
-        Ep_arr = np.array([10.5, 11.0, 12.0, 15.0, 20.0]) * KEV
-        xi = 0.0; T = 10.0 * KEV_KELVIN
+        E = 10.0 * kev
+        Ep_arr = np.array([10.5, 11.0, 12.0, 15.0, 20.0]) * kev
+        xi = 0.0; T = 10.0 * kev_kelvin
 
         values, errors = solver.sigma_E_vec(E, Ep_arr, xi, T, 1.0)
 

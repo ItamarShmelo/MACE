@@ -20,17 +20,7 @@ import numpy as np
 from scipy.special import kve, roots_laguerre
 from scipy.integrate import quad
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Physical constants (CGS, matching external/CMMC/src/units/units.hpp)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-me = 9.109383713928e-28        # electron mass [g]
-clight = 2.99792458000e10      # speed of light [cm/s]
-me_c2 = me * clight**2         # electron rest energy [erg]
-k_boltz = 1.380649e-16         # Boltzmann constant [erg/K]
-sigma_thomson = 6.652458732160e-25  # Thomson cross section [cm^2]
-r_e2 = sigma_thomson / (8.0 * math.pi / 3.0)  # classical electron radius squared
-kev = 1.602176634e-9           # 1 keV in erg
+from _units import me, clight, me_c2, k_boltz, sigma_thomson, r_e2, kev
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Scaled Bessel function

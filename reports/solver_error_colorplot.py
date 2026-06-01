@@ -28,10 +28,7 @@ sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
 
-ME_C2 = 9.109383713928e-28 * (2.99792458e10)**2
-KEV = 1.602176634e-9
-K_BOLTZ = 1.380649e-16
-KEV_KELVIN = KEV / K_BOLTZ
+from _units import kev, kev_kelvin
 
 GEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'generated')
 FIGS_DIR = os.path.join(GEN_DIR, 'figs')
@@ -41,11 +38,11 @@ os.makedirs(FIGS_DIR, exist_ok=True)
 solver = ComptonKernelSeries(SeriesMethod.Auto)
 quad256 = ComptonKernelQuadrature(256, QuadratureForm.PostIBP)
 
-E_REF_KEV = 10.0
-E_REF = E_REF_KEV * KEV
+E_REF_kev = 10.0
+E_REF = E_REF_kev * kev
 
 RATIO_GRID = np.logspace(-0.7, 1.0, 60)
-TAU_GRID_KEV = np.logspace(-1, 2.7, 60)
+TAU_GRID_kev = np.logspace(-1, 2.7, 60)
 XI_VALUES = [-0.5, 0.0, 0.5, 0.9]
 
 lines = []
@@ -66,7 +63,7 @@ def evaluate_grid(E, xi_val, ratio_grid, tau_kev_grid):
     failed = np.zeros((n_tau, n_ratio), dtype=bool)
 
     for i, T_keV in enumerate(tau_kev_grid):
-        T_K = T_keV * KEV_KELVIN
+        T_K = T_keV * kev_kelvin
         for j, ratio in enumerate(ratio_grid):
             Ep = E * ratio
             try:
@@ -109,7 +106,7 @@ def plot_error_panels(ratio_grid, tau_kev_grid, data_dict, title, filename,
 
     cbar = fig.colorbar(pcm, ax=axes.tolist(), shrink=0.85, pad=0.03)
     cbar.set_label(cbar_label)
-    fig.suptitle(f"{title}   (E = {E_REF_KEV:.0f} keV)", fontsize=13, y=1.02)
+    fig.suptitle(f"{title}   (E = {E_REF_kev:.0f} keV)", fontsize=13, y=1.02)
     fig.tight_layout()
     fig.savefig(os.path.join(FIGS_DIR, filename), dpi=150, bbox_inches='tight')
     plt.close(fig)
@@ -141,7 +138,7 @@ def plot_reliability_panels(ratio_grid, tau_kev_grid, reliability_dict, filename
     cbar = fig.colorbar(pcm, ax=axes.tolist(), shrink=0.85, pad=0.03)
     cbar.set_label("True error / Reported error")
     fig.suptitle(
-        f"Error Estimate Reliability   (E = {E_REF_KEV:.0f} keV)\n"
+        f"Error Estimate Reliability   (E = {E_REF_kev:.0f} keV)\n"
         "Red > 1 = underestimated,  Blue < 1 = conservative",
         fontsize=12, y=1.05)
     fig.tight_layout()
@@ -192,11 +189,11 @@ def collect_statistics(all_reported, all_true, all_failed):
 def main():
     emit("# Solver Error Accuracy Report")
     emit()
-    emit(f"Reference energy E = {E_REF_KEV:.0f} keV.  "
+    emit(f"Reference energy E = {E_REF_kev:.0f} keV.  "
          f"Grid: {len(RATIO_GRID)} E'/E values "
-         f"x {len(TAU_GRID_KEV)} temperatures "
+         f"x {len(TAU_GRID_kev)} temperatures "
          f"x {len(XI_VALUES)} xi values "
-         f"= {len(RATIO_GRID) * len(TAU_GRID_KEV) * len(XI_VALUES)} points.")
+         f"= {len(RATIO_GRID) * len(TAU_GRID_kev) * len(XI_VALUES)} points.")
     emit()
 
     # ── Evaluate on grid ─────────────────────────────────────────────────
@@ -210,7 +207,7 @@ def main():
     for xi_val in XI_VALUES:
         print(f"  evaluating xi={xi_val} ...")
         rep, tru, vals, fail = evaluate_grid(
-            E_REF, xi_val, RATIO_GRID, TAU_GRID_KEV)
+            E_REF, xi_val, RATIO_GRID, TAU_GRID_kev)
         all_reported[xi_val] = rep
         all_true[xi_val] = tru
         all_values[xi_val] = vals
@@ -230,7 +227,7 @@ def main():
     emit()
 
     plot_error_panels(
-        RATIO_GRID, TAU_GRID_KEV, all_reported,
+        RATIO_GRID, TAU_GRID_kev, all_reported,
         "Solver Reported Relative Error",
         "solver_reported_error.png",
         cbar_label="Reported relative error")
@@ -246,7 +243,7 @@ def main():
     emit()
 
     plot_error_panels(
-        RATIO_GRID, TAU_GRID_KEV, all_true,
+        RATIO_GRID, TAU_GRID_kev, all_true,
         "True Relative Error  (Solver vs Q256)",
         "solver_true_error.png",
         cbar_label="True relative error")
@@ -263,7 +260,7 @@ def main():
     emit()
 
     plot_reliability_panels(
-        RATIO_GRID, TAU_GRID_KEV, all_reliability,
+        RATIO_GRID, TAU_GRID_kev, all_reliability,
         "solver_error_reliability.png")
 
     emit("![Error reliability](figs/solver_error_reliability.png)")

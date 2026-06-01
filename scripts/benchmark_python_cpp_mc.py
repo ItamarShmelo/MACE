@@ -34,10 +34,8 @@ sys.path.insert(0, os.path.join(ROOT, 'src', 'python'))
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
 from pycompton.compton_kernel_quadrature import sigma_E as py_sigma_E
 
-ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2
-KEV = 1.602176634e-9
-K_BOLTZ = 1.380649e-16
-KEV_KELVIN = KEV / K_BOLTZ
+from _units import kev, kev_kelvin, mbarn
+
 XI_EPS = 1e-10
 
 
@@ -74,9 +72,9 @@ def run_pointwise_benchmark(n_repeats=20):
     t0 = time.perf_counter()
     for _ in range(n_repeats):
         for E_kev, Ep_kev, xi, tau_kev in POINTWISE_CASES:
-            E = E_kev * KEV
-            Ep = Ep_kev * KEV
-            T_K = tau_kev * KEV_KELVIN
+            E = E_kev * kev
+            Ep = Ep_kev * kev
+            T_K = tau_kev * kev_kelvin
             cpp_engine.sigma_E(E, Ep, xi, T_K, 1.0)
     cpp_time = time.perf_counter() - t0
 
@@ -84,9 +82,9 @@ def run_pointwise_benchmark(n_repeats=20):
     t0 = time.perf_counter()
     for _ in range(n_repeats):
         for E_kev, Ep_kev, xi, tau_kev in POINTWISE_CASES:
-            E = E_kev * KEV
-            Ep = Ep_kev * KEV
-            T_K = tau_kev * KEV_KELVIN
+            E = E_kev * kev
+            Ep = Ep_kev * kev
+            T_K = tau_kev * kev_kelvin
             py_sigma_E(E, Ep, xi, T_K, 1.0, NL=128, method="fixed")
     py_fixed_time = time.perf_counter() - t0
 
@@ -94,9 +92,9 @@ def run_pointwise_benchmark(n_repeats=20):
     t0 = time.perf_counter()
     for _ in range(n_repeats):
         for E_kev, Ep_kev, xi, tau_kev in POINTWISE_CASES:
-            E = E_kev * KEV
-            Ep = Ep_kev * KEV
-            T_K = tau_kev * KEV_KELVIN
+            E = E_kev * kev
+            Ep = Ep_kev * kev
+            T_K = tau_kev * kev_kelvin
             py_sigma_E(E, Ep, xi, T_K, 1.0, method="adaptive")
     py_adaptive_time = time.perf_counter() - t0
 
@@ -117,8 +115,6 @@ def run_pointwise_benchmark(n_repeats=20):
 # ═══════════════════════════════════════════════════════════════════════════════
 # Part 2: Multigroup S-matrix benchmark with Pomraning comparison plots
 # ═══════════════════════════════════════════════════════════════════════════════
-
-MBARN = 1e-3 * 1e-24  # millibarn in cm^2
 
 POMRANING_CASES = [
     dict(name="Pomraning_1keV_low",  T_kev=1.0,  emax=75.0,
@@ -150,7 +146,7 @@ def make_energy_bins(emax_kev, n_bins=40):
         list(np.linspace(0.01, emax_kev, n_bins))
         + list(np.geomspace(0.01, emax_kev, n_bins // 2))
     )))
-    return eb_kev * KEV
+    return eb_kev * kev
 
 
 def integrate_bin_cpp(engine, E_in, E_lo, E_hi, T_K):
@@ -179,7 +175,7 @@ def get_cmmc_matrix(T_kev, eb_erg, num_samples=500000):
         print("  WARNING: CMMC not available, skipping MC benchmark")
         return None
 
-    T_kelvin = T_kev * KEV_KELVIN
+    T_kelvin = T_kev * kev_kelvin
     ec = 0.5 * (eb_erg[:-1] + eb_erg[1:])
 
     compton_engine = ComptonMatrixMC(
@@ -238,12 +234,12 @@ def run_multigroup_benchmark():
         ein_kev = case["ein_kev"]
         ylim = case["ylim"]
         ref_dir = case.get("ref_dir")
-        T_K = T_kev * KEV_KELVIN
+        T_K = T_kev * kev_kelvin
 
         eb_erg = make_energy_bins(emax, n_bins=40)
-        eb_kev_arr = eb_erg / KEV
+        eb_kev_arr = eb_erg / kev
         ec_erg = 0.5 * (eb_erg[:-1] + eb_erg[1:])
-        ewid_kev = np.diff(eb_erg) / KEV
+        ewid_kev = np.diff(eb_erg) / kev
         num_groups = len(eb_erg) - 1
 
         print(f"--- {name} (T={T_kev}keV, {num_groups} groups, "
@@ -267,9 +263,9 @@ def run_multigroup_benchmark():
         colors = plt.cm.tab10(np.linspace(0, 1, max(len(ein_kev), 10)))
 
         for idx, e0_kev in enumerate(ein_kev):
-            g = np.argmin(np.abs(ec_erg - e0_kev * KEV))
+            g = np.argmin(np.abs(ec_erg - e0_kev * kev))
             E_in = ec_erg[g]
-            e_label = f"{ec_erg[g] / KEV:.4g}"
+            e_label = f"{ec_erg[g] / kev:.4g}"
             color = colors[idx]
 
             # C++
@@ -285,19 +281,19 @@ def run_multigroup_benchmark():
             py_times.append(dt)
 
             # Plot: C++ as solid stair
-            sigma_cpp = row_cpp / ewid_kev / MBARN
+            sigma_cpp = row_cpp / ewid_kev / mbarn
             ax.stairs(sigma_cpp, edges=eb_kev_arr, color=color,
                       linewidth=1.8,
                       label=f"$E_{{\\mathrm{{in}}}}$={e_label} keV (C++)")
 
             # Plot: Python as dashed stair
-            sigma_py = row_py / ewid_kev / MBARN
+            sigma_py = row_py / ewid_kev / mbarn
             ax.stairs(sigma_py, edges=eb_kev_arr, color=color,
                       linewidth=1.2, linestyle='--')
 
             # Plot: MC as dotted stair
             if S_mc is not None:
-                sigma_mc = S_mc[g, :] / ewid_kev / MBARN
+                sigma_mc = S_mc[g, :] / ewid_kev / mbarn
                 ax.stairs(sigma_mc, edges=eb_kev_arr, color=color,
                           linewidth=1.0, linestyle=':')
 
