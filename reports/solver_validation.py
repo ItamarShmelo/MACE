@@ -36,6 +36,8 @@ from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
 
 ME_C2 = 9.109383713928e-28 * (2.99792458e10)**2
 KEV = 1.602176634e-9
+K_BOLTZ = 1.380649e-16
+KEV_KELVIN = KEV / K_BOLTZ
 
 GEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'generated')
 FIGS_DIR = os.path.join(GEN_DIR, 'figs')
@@ -69,11 +71,11 @@ def section_regime_map():
     E = 10.0 * KEV
 
     for i, T_keV in enumerate(T_vals):
-        tau = T_keV * KEV / ME_C2
+        T_K = T_keV * KEV_KELVIN
         for j, ratio in enumerate(ratio_vals):
             Ep = E * ratio
             try:
-                r = solver.sigma_E(E, Ep, 0.0, tau, 1.0)
+                r = solver.sigma_E(E, Ep, 0.0, T_K, 1.0)
                 method_map[i, j] = 0 if r.value >= 0 else 1
             except Exception:
                 method_map[i, j] = -1
@@ -112,15 +114,15 @@ def section_accuracy():
     rel_errors = []
 
     for T_keV in T_vals:
-        tau = T_keV * KEV / ME_C2
+        T_K = T_keV * KEV_KELVIN
         for E_keV in E_vals:
             E = E_keV * KEV
             for ratio in ratios:
                 Ep = E * ratio
                 for xi in xi_vals:
                     try:
-                        sr = solver.sigma_E(E, Ep, xi, tau, 1.0)
-                        qr = quad256.sigma_E(E, Ep, xi, tau, 1.0)
+                        sr = solver.sigma_E(E, Ep, xi, T_K, 1.0)
+                        qr = quad256.sigma_E(E, Ep, xi, T_K, 1.0)
                     except Exception:
                         continue
 
@@ -175,14 +177,14 @@ def section_fallback_stats():
     n_nonneg = 0
 
     for T_keV in T_vals:
-        tau = T_keV * KEV / ME_C2
+        T_K = T_keV * KEV_KELVIN
         for E_keV in E_vals:
             E = E_keV * KEV
             for ratio in ratios:
                 Ep = E * ratio
                 for xi in xi_vals:
                     try:
-                        r = solver.sigma_E(E, Ep, xi, tau, 1.0)
+                        r = solver.sigma_E(E, Ep, xi, T_K, 1.0)
                     except Exception:
                         continue
                     n_total += 1
@@ -217,9 +219,9 @@ def section_edge_cases():
     emit("|------|-------|-----------|")
 
     for label, E_keV, Ep_keV, xi, T_keV in cases:
-        E = E_keV * KEV; Ep = Ep_keV * KEV; tau = T_keV * KEV / ME_C2
+        E = E_keV * KEV; Ep = Ep_keV * KEV; T_K = T_keV * KEV_KELVIN
         try:
-            r = solver.sigma_E(E, Ep, xi, tau, 1.0)
+            r = solver.sigma_E(E, Ep, xi, T_K, 1.0)
             emit(f"| {label} | {r.value:.3e} | {r.estimated_rel_error:.2e} |")
         except Exception as e:
             emit(f"| {label} | ERROR: {e} | - |")
@@ -246,9 +248,9 @@ def section_out_of_domain():
     emit("| Case | Value | rel_error |")
     emit("|------|-------|-----------|")
     for label, E_keV, Ep_keV, xi, T_keV in cases:
-        E = E_keV * KEV; Ep = Ep_keV * KEV; tau = T_keV * KEV / ME_C2
+        E = E_keV * KEV; Ep = Ep_keV * KEV; T_K = T_keV * KEV_KELVIN
         try:
-            r = solver.sigma_E(E, Ep, xi, tau, 1.0)
+            r = solver.sigma_E(E, Ep, xi, T_K, 1.0)
             emit(f"| {label} | {r.value:.3e} | {r.estimated_rel_error:.2e} |")
         except Exception as e:
             emit(f"| {label} | ERROR | - |")
@@ -271,24 +273,24 @@ def section_timing():
     timings = {}
 
     for T_keV, label in [(1.0, "T=1keV (asymptotic)"), (50.0, "T=50keV (mixed)"), (100.0, "T=100keV (power/quad)")]:
-        tau = T_keV * KEV / ME_C2
+        T_K = T_keV * KEV_KELVIN
 
         t0 = time.perf_counter()
         for _ in range(n_repeats):
-            solver.sigma_E_vec(E, Ep_arr, xi, tau, 1.0)
+            solver.sigma_E_vec(E, Ep_arr, xi, T_K, 1.0)
         t_solver = (time.perf_counter() - t0) / n_repeats
 
         from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
         series = ComptonKernelSeries(SeriesMethod.Auto)
         t0 = time.perf_counter()
         for _ in range(n_repeats):
-            series.sigma_E_vec(E, Ep_arr, xi, tau, 1.0)
+            series.sigma_E_vec(E, Ep_arr, xi, T_K, 1.0)
         t_series = (time.perf_counter() - t0) / n_repeats
 
         t0 = time.perf_counter()
         for _ in range(n_repeats):
             for Ep in Ep_arr:
-                quad256.sigma_E(E, float(Ep), xi, tau, 1.0)
+                quad256.sigma_E(E, float(Ep), xi, T_K, 1.0)
         t_quad = (time.perf_counter() - t0) / n_repeats
 
         timings[label] = (t_solver * 1000, t_series * 1000, t_quad * 1000)
@@ -320,14 +322,14 @@ def section_non_negativity():
     n_negative = 0
 
     for T_keV in T_vals:
-        tau = T_keV * KEV / ME_C2
+        T_K = T_keV * KEV_KELVIN
         for E_keV in E_vals:
             E = E_keV * KEV
             for ratio in ratios:
                 Ep = E * ratio
                 for xi in xi_vals:
                     try:
-                        r = solver.sigma_E(E, Ep, xi, tau, 1.0)
+                        r = solver.sigma_E(E, Ep, xi, T_K, 1.0)
                     except Exception:
                         continue
                     n_total += 1

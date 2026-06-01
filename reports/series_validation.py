@@ -34,7 +34,8 @@ from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
 
 ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2
 KEV = 1.602176634e-9
-KEV_KELVIN = KEV / 1.380649e-16
+K_BOLTZ = 1.380649e-16
+KEV_KELVIN = KEV / K_BOLTZ
 XI_EPS = 1e-10
 MBARN = 1e-3 * 1e-24
 
@@ -94,20 +95,20 @@ def section_pointwise(report):
     for i, (E_kev, Ep_kev, xi, T_kev) in enumerate(POINTWISE_CASES):
         E = E_kev * KEV
         Ep = Ep_kev * KEV
-        tau = T_kev * KEV / ME_C2
+        T_K = T_kev * KEV_KELVIN
 
         for _ in range(n_warmup):
-            quad.sigma_E(E, Ep, xi, tau, 1.0)
-            series.sigma_E(E, Ep, xi, tau, 1.0)
+            quad.sigma_E(E, Ep, xi, T_K, 1.0)
+            series.sigma_E(E, Ep, xi, T_K, 1.0)
 
         t0 = time.perf_counter()
         for _ in range(n_bench):
-            qr = quad.sigma_E(E, Ep, xi, tau, 1.0)
+            qr = quad.sigma_E(E, Ep, xi, T_K, 1.0)
         t_q = (time.perf_counter() - t0) / n_bench * 1e6
 
         t0 = time.perf_counter()
         for _ in range(n_bench):
-            sr = series.sigma_E(E, Ep, xi, tau, 1.0)
+            sr = series.sigma_E(E, Ep, xi, T_K, 1.0)
         t_s = (time.perf_counter() - t0) / n_bench * 1e6
 
         scale = max(abs(qr.value), 1e-300)
@@ -184,7 +185,7 @@ def section_spectra(report):
         T_kev = case["T_kev"]
         Ep_lo, Ep_hi = case["Ep_range"]
         E = E_kev * KEV
-        tau = T_kev * KEV / ME_C2
+        T_K = T_kev * KEV_KELVIN
         xi = 0.0
 
         Ep_arr = np.linspace(Ep_lo * KEV, Ep_hi * KEV, 200)
@@ -193,8 +194,8 @@ def section_spectra(report):
         sigma_s = np.zeros(len(Ep_arr))
         for j, Ep in enumerate(Ep_arr):
             try:
-                sigma_q[j] = quad.sigma_E(E, Ep, xi, tau, 1.0).value
-                sigma_s[j] = series.sigma_E(E, Ep, xi, tau, 1.0).value
+                sigma_q[j] = quad.sigma_E(E, Ep, xi, T_K, 1.0).value
+                sigma_s[j] = series.sigma_E(E, Ep, xi, T_K, 1.0).value
             except Exception:
                 pass
 
@@ -255,18 +256,18 @@ def make_energy_bins(emax_kev, n_bins=40):
     return eb_kev * KEV
 
 
-def integrate_bin(engine, E_in, E_lo, E_hi, tau):
+def integrate_bin(engine, E_in, E_lo, E_hi, T_K):
     def integrand(Ep, xi):
-        return engine.sigma_E(E_in, Ep, xi, tau, 1.0).value
+        return engine.sigma_E(E_in, Ep, xi, T_K, 1.0).value
     val, _ = dblquad(integrand, -1.0 + XI_EPS, 1.0 - XI_EPS,
                      lambda xi: E_lo, lambda xi: E_hi,
                      epsabs=1e-35, epsrel=1e-2)
     return 2.0 * np.pi * val
 
 
-def integrate_bin_series(engine, E_in, E_lo, E_hi, tau):
+def integrate_bin_series(engine, E_in, E_lo, E_hi, T_K):
     def integrand(Ep, xi):
-        r = engine.sigma_E(E_in, Ep, xi, tau, 1.0)
+        r = engine.sigma_E(E_in, Ep, xi, T_K, 1.0)
         return r.value
     val, _ = dblquad(integrand, -1.0 + XI_EPS, 1.0 - XI_EPS,
                      lambda xi: E_lo, lambda xi: E_hi,
@@ -324,7 +325,7 @@ def section_pomraning(report):
         ein_kev = case["ein_kev"]
         ylim = case["ylim"]
         ref_dir = case.get("ref_dir")
-        tau = T_kev * KEV / ME_C2
+        T_K = T_kev * KEV_KELVIN
 
         eb_erg = make_energy_bins(emax, n_bins=40)
         eb_kev_arr = eb_erg / KEV
@@ -353,14 +354,14 @@ def section_pomraning(report):
             row_quad = np.zeros(num_groups)
             for gp in range(num_groups):
                 row_quad[gp] = integrate_bin(
-                    quad, E_in, eb_erg[gp], eb_erg[gp + 1], tau)
+                    quad, E_in, eb_erg[gp], eb_erg[gp + 1], T_K)
             t_quad_total += time.perf_counter() - t0
 
             t0 = time.perf_counter()
             row_series = np.zeros(num_groups)
             for gp in range(num_groups):
                 row_series[gp] = integrate_bin_series(
-                    series, E_in, eb_erg[gp], eb_erg[gp + 1], tau)
+                    series, E_in, eb_erg[gp], eb_erg[gp + 1], T_K)
             t_series_total += time.perf_counter() - t0
 
             sigma_quad = row_quad / ewid_kev / MBARN
@@ -444,8 +445,9 @@ def section_convergence(report):
     n_success = 0
 
     for tau in taus:
+        T_K = tau * ME_C2 / K_BOLTZ
         try:
-            r = series.sigma_E(E, Ep, xi, tau, 1.0)
+            r = series.sigma_E(E, Ep, xi, T_K, 1.0)
             values_list.append(r.value)
             n_success += 1
         except RuntimeError:
@@ -502,16 +504,13 @@ def section_timing_summary(report):
         for E_kev, Ep_kev, xi, T_kev in POINTWISE_CASES:
             E = E_kev * KEV
             Ep = Ep_kev * KEV
-            tau = T_kev * KEV / ME_C2
+            T_K = T_kev * KEV_KELVIN
             try:
                 for _ in range(n_warmup):
-                    if is_quad:
-                        engine.sigma_E(E, Ep, xi, tau, 1.0)
-                    else:
-                        engine.sigma_E(E, Ep, xi, tau, 1.0)
+                    engine.sigma_E(E, Ep, xi, T_K, 1.0)
                 t0 = time.perf_counter()
                 for _ in range(n_bench):
-                    engine.sigma_E(E, Ep, xi, tau, 1.0)
+                    engine.sigma_E(E, Ep, xi, T_K, 1.0)
                 t_us = (time.perf_counter() - t0) / n_bench * 1e6
                 times.append(t_us)
             except Exception:

@@ -30,6 +30,8 @@ from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
 
 ME_C2 = 9.109383713928e-28 * (2.99792458e10)**2
 KEV = 1.602176634e-9
+K_BOLTZ = 1.380649e-16
+KEV_KELVIN = KEV / K_BOLTZ
 
 GEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'generated')
 FIGS_DIR = os.path.join(GEN_DIR, 'figs')
@@ -64,15 +66,15 @@ def evaluate_grid(E, xi_val, ratio_grid, tau_kev_grid):
     failed = np.zeros((n_tau, n_ratio), dtype=bool)
 
     for i, T_keV in enumerate(tau_kev_grid):
-        tau = T_keV * KEV / ME_C2
+        T_K = T_keV * KEV_KELVIN
         for j, ratio in enumerate(ratio_grid):
             Ep = E * ratio
             try:
-                sr = solver.sigma_E(E, Ep, xi_val, tau, 1.0)
+                sr = solver.sigma_E(E, Ep, xi_val, T_K, 1.0)
                 values[i, j] = sr.value
                 reported_rel[i, j] = sr.estimated_rel_error
 
-                qr = quad256.sigma_E(E, Ep, xi_val, tau, 1.0)
+                qr = quad256.sigma_E(E, Ep, xi_val, T_K, 1.0)
                 if abs(qr.value) > 1e-300:
                     true_rel[i, j] = abs(sr.value - qr.value) / abs(qr.value)
             except Exception:

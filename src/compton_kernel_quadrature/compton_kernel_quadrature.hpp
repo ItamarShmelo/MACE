@@ -72,40 +72,41 @@ public:
                             QuadratureForm form = QuadratureForm::PostIntegrationByParts);
 
     /**
-     * @brief Evaluate Σ_E(E → E', ξ; τ, Nₑ).
+     * @brief Evaluate Σ_E(E → E', ξ; T, Nₑ).
      *
      * @param E        Incident photon energy [erg]
      * @param E_prime  Scattered photon energy [erg]
      * @param xi       cos(scattering angle), strictly in (−1, 1)
-     * @param tau      Dimensionless electron temperature kT/(m_e c²)
+     * @param T        Electron temperature [K]
      * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
      * @return SigmaResult with value and error estimates
      */
     SigmaResult sigma_E(double const E,
                         double const E_prime,
                         double const xi,
-                        double const tau,
+                        double const T,
                         double const Ne) const;
 
     /**
-     * @brief Evaluate ∂Σ_E/∂τ at a single phase-space point.
+     * @brief Evaluate ∂Σ_E/∂T at a single phase-space point.
      *
-     * Temperature derivative of the Compton kernel, computed analytically
-     * by differentiating through the Gauss-Laguerre integrand.  Uses
-     * κ(τ) = K₁(1/τ) / K₂(1/τ) via scaled Bessel functions for stability.
+     * Temperature derivative of the Compton kernel with respect to T [K],
+     * computed analytically by differentiating through the Gauss-Laguerre
+     * integrand and applying the chain rule dτ/dT = k_B / (m_e c²).
+     * Uses κ(τ) = K₁(1/τ) / K₂(1/τ) via scaled Bessel functions for stability.
      *
      * @param E        Incident photon energy [erg]
      * @param E_prime  Scattered photon energy [erg]
      * @param xi       cos(scattering angle), strictly in (−1, 1)
-     * @param tau      Dimensionless electron temperature kT/(m_e c²)
+     * @param T        Electron temperature [K]
      * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
      * @return SigmaResult with value and error estimates
      */
-    SigmaResult dsigma_E_dtau(double const E,
-                               double const E_prime,
-                               double const xi,
-                               double const tau,
-                               double const Ne) const;
+    SigmaResult dsigma_E_dT(double const E,
+                             double const E_prime,
+                             double const xi,
+                             double const T,
+                             double const Ne) const;
 
 private:
     /**

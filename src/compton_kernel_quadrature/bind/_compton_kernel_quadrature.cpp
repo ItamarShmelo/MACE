@@ -22,13 +22,13 @@ PYBIND11_MODULE(_compton_kernel_quadrature, m) {
              py::arg("form") = QuadratureForm::PostIntegrationByParts)
         .def("sigma_E", &ComptonKernelQuadrature::sigma_E,
              py::arg("E"), py::arg("E_prime"), py::arg("xi"),
-             py::arg("tau"), py::arg("Ne"))
-        .def("sigma_E_vec", [](const ComptonKernelQuadrature& self,
+             py::arg("T"), py::arg("Ne"))
+        .def("sigma_E_vec", [](ComptonKernelQuadrature const& self,
                                double E,
                                py::array_t<double, py::array::c_style | py::array::forcecast> E_prime_arr,
-                               double xi, double tau, double Ne) {
+                               double xi, double T, double Ne) {
             auto in = E_prime_arr.unchecked<1>();
-            const py::ssize_t n = in.shape(0);
+            py::ssize_t const n = in.shape(0);
 
             py::array_t<double> values(n);
             py::array_t<double> errors(n);
@@ -36,22 +36,22 @@ PYBIND11_MODULE(_compton_kernel_quadrature, m) {
             auto out_errors = errors.mutable_unchecked<1>();
 
             for (py::ssize_t i = 0; i < n; ++i) {
-                SigmaResult r = self.sigma_E(E, in(i), xi, tau, Ne);
+                SigmaResult r = self.sigma_E(E, in(i), xi, T, Ne);
                 out_values(i) = r.value;
                 out_errors(i) = r.estimated_abs_error;
             }
             return py::make_tuple(values, errors);
         }, py::arg("E"), py::arg("E_prime_arr"), py::arg("xi"),
-           py::arg("tau"), py::arg("Ne"))
-        .def("dsigma_E_dtau", &ComptonKernelQuadrature::dsigma_E_dtau,
+           py::arg("T"), py::arg("Ne"))
+        .def("dsigma_E_dT", &ComptonKernelQuadrature::dsigma_E_dT,
              py::arg("E"), py::arg("E_prime"), py::arg("xi"),
-             py::arg("tau"), py::arg("Ne"))
-        .def("dsigma_E_dtau_vec", [](const ComptonKernelQuadrature& self,
-                                      double E,
-                                      py::array_t<double, py::array::c_style | py::array::forcecast> E_prime_arr,
-                                      double xi, double tau, double Ne) {
+             py::arg("T"), py::arg("Ne"))
+        .def("dsigma_E_dT_vec", [](ComptonKernelQuadrature const& self,
+                                    double E,
+                                    py::array_t<double, py::array::c_style | py::array::forcecast> E_prime_arr,
+                                    double xi, double T, double Ne) {
             auto in = E_prime_arr.unchecked<1>();
-            const py::ssize_t n = in.shape(0);
+            py::ssize_t const n = in.shape(0);
 
             py::array_t<double> values(n);
             py::array_t<double> errors(n);
@@ -59,13 +59,13 @@ PYBIND11_MODULE(_compton_kernel_quadrature, m) {
             auto out_errors = errors.mutable_unchecked<1>();
 
             for (py::ssize_t i = 0; i < n; ++i) {
-                SigmaResult r = self.dsigma_E_dtau(E, in(i), xi, tau, Ne);
+                SigmaResult r = self.dsigma_E_dT(E, in(i), xi, T, Ne);
                 out_values(i) = r.value;
                 out_errors(i) = r.estimated_abs_error;
             }
             return py::make_tuple(values, errors);
         }, py::arg("E"), py::arg("E_prime_arr"), py::arg("xi"),
-           py::arg("tau"), py::arg("Ne"));
+           py::arg("T"), py::arg("Ne"));
 
     m.def("scaled_K2", &scaled_K2, py::arg("x"),
           "Returns kve(2, x) = exp(x) * K_2(x)");

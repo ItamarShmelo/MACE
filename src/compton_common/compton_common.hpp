@@ -415,20 +415,26 @@ struct SigmaResult {
  * @brief Validate the five common kernel parameters.
  *
  * Throws std::invalid_argument when any precondition is violated.
+ *
+ * @param E        Incident photon energy [erg]
+ * @param E_prime  Scattered photon energy [erg]
+ * @param xi       cos(scattering angle), strictly in (-1, 1)
+ * @param T        Electron temperature [K]
+ * @param Ne       Electron number density [cm^-3]
  */
 inline void assert_parameters(
     double const E,
     double const E_prime,
     double const xi,
-    double const tau,
+    double const T,
     double const Ne)
 {
     if (!(E > 0.0) || !std::isfinite(E))
         throw std::invalid_argument("E must be finite and > 0");
     if (!(E_prime > 0.0) || !std::isfinite(E_prime))
         throw std::invalid_argument("E_prime must be finite and > 0");
-    if (!(tau > 0.0) || !std::isfinite(tau))
-        throw std::invalid_argument("tau must be finite and > 0");
+    if (!(T > 0.0) || !std::isfinite(T))
+        throw std::invalid_argument("T must be finite and > 0");
     if (!(xi > -1.0 && xi < 1.0) || !std::isfinite(xi))
         throw std::invalid_argument("xi must be finite and strictly inside (-1, 1)");
     if (!std::isfinite(Ne))

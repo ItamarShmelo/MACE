@@ -101,13 +101,13 @@ public:
     );
 
     /**
-     * @brief Evaluate Σ_E(E → E', ξ; τ, Nₑ) using the configured
+     * @brief Evaluate Σ_E(E → E', ξ; T, Nₑ) using the configured
      *        series method.
      *
      * @param E        Incident photon energy [erg]
      * @param E_prime  Scattered photon energy [erg]
      * @param xi       cos(scattering angle), strictly in (−1, 1)
-     * @param tau      Dimensionless electron temperature kT/(m_e c²)
+     * @param T        Electron temperature [K]
      * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
      * @return SigmaResult with value and error estimates
      */
@@ -115,7 +115,7 @@ public:
         double const E,
         double const E_prime,
         double const xi,
-        double const tau,
+        double const T,
         double const Ne
     ) const;
 
@@ -130,7 +130,7 @@ public:
         double const E,
         double const E_prime,
         double const xi,
-        double const tau,
+        double const T,
         double const Ne
     ) const;
 

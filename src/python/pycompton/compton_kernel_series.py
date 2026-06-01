@@ -21,7 +21,7 @@ import numpy as np
 from scipy.special import expn, eval_legendre
 
 from .compton_kernel_quadrature import (
-    compute_params, stable_sigma0_E, me_c2, KershawParams,
+    compute_params, stable_sigma0_E, me_c2, k_boltz, KershawParams,
 )
 
 
@@ -547,7 +547,7 @@ def _asymptotic_series_normalized(p: KershawParams, gamma: float, gamma_p: float
 # Top-level API
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def sigma_E_series(E, E_prime, xi, tau, Ne=1.0, method="auto",
+def sigma_E_series(E, E_prime, xi, T, Ne=1.0, method="auto",
                    eps_rel=1e-12, n_min=4, n_max=200):
     """
     Evaluate the Compton frequency kernel via Section 4 series.
@@ -557,7 +557,7 @@ def sigma_E_series(E, E_prime, xi, tau, Ne=1.0, method="auto",
     E        : Incident photon energy [erg]
     E_prime  : Scattered photon energy [erg]
     xi       : cos(scattering angle), strictly in (-1, 1)
-    tau      : Dimensionless electron temperature kT/(m_e c^2)
+    T        : Electron temperature [K]
     Ne       : Electron number density [cm^-3] (use 1.0 for microscopic)
     method   : "power", "asymptotic", or "auto"
     eps_rel  : Relative tolerance for convergence (default 1e-12)
@@ -576,8 +576,8 @@ def sigma_E_series(E, E_prime, xi, tau, Ne=1.0, method="auto",
         raise ValueError("E must be finite and > 0")
     if not (E_prime > 0.0 and math.isfinite(E_prime)):
         raise ValueError("E_prime must be finite and > 0")
-    if not (tau > 0.0 and math.isfinite(tau)):
-        raise ValueError("tau must be finite and > 0")
+    if not (T > 0.0 and math.isfinite(T)):
+        raise ValueError("T must be finite and > 0")
     if not (-1.0 < xi < 1.0 and math.isfinite(xi)):
         raise ValueError("xi must be finite and strictly inside (-1, 1)")
     if not math.isfinite(Ne):
@@ -585,6 +585,7 @@ def sigma_E_series(E, E_prime, xi, tau, Ne=1.0, method="auto",
     if 1.0 - xi < 1e-14:
         raise ValueError("xi too close to 1")
 
+    tau = T * k_boltz / me_c2
     gamma = E / me_c2
     gamma_p = E_prime / me_c2
 

@@ -266,10 +266,11 @@ SigmaResult ComptonKernelSeries::sigma_E(
     double const E,
     double const E_prime,
     double const xi,
-    double const tau,
+    double const T,
     double const Ne) const
 {
-    assert_parameters(E, E_prime, xi, tau, Ne);
+    assert_parameters(E, E_prime, xi, T, Ne);
+    double const tau = T * units::k_boltz / units::me_c2;
 
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
@@ -303,10 +304,11 @@ double ComptonKernelSeries::sigma_E_precision_check(
     double const E,
     double const E_prime,
     double const xi,
-    double const tau,
+    double const T,
     double const Ne) const
 {
-    assert_parameters(E, E_prime, xi, tau, Ne);
+    assert_parameters(E, E_prime, xi, T, Ne);
+    double const tau = T * units::k_boltz / units::me_c2;
 
     double const gamma   = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;

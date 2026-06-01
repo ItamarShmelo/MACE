@@ -34,7 +34,8 @@ from pycompton.compton_kernel_series import sigma_E_series as py_sigma_E_series
 
 ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2
 KEV = 1.602176634e-9
-KEV_KELVIN = KEV / 1.380649e-16
+K_BOLTZ = 1.380649e-16
+KEV_KELVIN = KEV / K_BOLTZ
 XI_EPS = 1e-10
 MBARN = 1e-3 * 1e-24
 
@@ -85,13 +86,13 @@ def section_pointwise(report):
     for i, (E_kev, Ep_kev, xi, T_kev) in enumerate(POINTWISE_CASES):
         E = E_kev * KEV
         Ep = Ep_kev * KEV
-        tau = T_kev * KEV / ME_C2
+        T_K = T_kev * KEV_KELVIN
 
-        cpp_r = cpp_engine.sigma_E(E, Ep, xi, tau, 1.0)
+        cpp_r = cpp_engine.sigma_E(E, Ep, xi, T_K, 1.0)
         cpp_val = cpp_r.value
 
-        py_fixed, _, _ = py_sigma_E(E, Ep, xi, tau, 1.0, NL=128, method="fixed")
-        py_adapt, _, _ = py_sigma_E(E, Ep, xi, tau, 1.0, method="adaptive")
+        py_fixed, _, _ = py_sigma_E(E, Ep, xi, T_K, 1.0, NL=128, method="fixed")
+        py_adapt, _, _ = py_sigma_E(E, Ep, xi, T_K, 1.0, method="adaptive")
 
         scale = max(abs(cpp_val), 1e-300)
         d_fixed = abs(py_fixed - cpp_val) / scale if scale > 1e-300 else 0
@@ -149,13 +150,13 @@ def section_timing(report):
             for E_kev, Ep_kev, xi, T_kev in POINTWISE_CASES:
                 E = E_kev * KEV
                 Ep = Ep_kev * KEV
-                tau = T_kev * KEV / ME_C2
-                func(E, Ep, xi, tau)
+                T_K = T_kev * KEV_KELVIN
+                func(E, Ep, xi, T_K)
         return time.perf_counter() - t0
 
-    cpp_time = bench(lambda E, Ep, xi, tau: cpp_engine.sigma_E(E, Ep, xi, tau, 1.0))
-    py_fixed_time = bench(lambda E, Ep, xi, tau: py_sigma_E(E, Ep, xi, tau, 1.0, NL=128, method="fixed"))
-    py_adapt_time = bench(lambda E, Ep, xi, tau: py_sigma_E(E, Ep, xi, tau, 1.0, method="adaptive"))
+    cpp_time = bench(lambda E, Ep, xi, T_K: cpp_engine.sigma_E(E, Ep, xi, T_K, 1.0))
+    py_fixed_time = bench(lambda E, Ep, xi, T_K: py_sigma_E(E, Ep, xi, T_K, 1.0, NL=128, method="fixed"))
+    py_adapt_time = bench(lambda E, Ep, xi, T_K: py_sigma_E(E, Ep, xi, T_K, 1.0, method="adaptive"))
 
     n_total = len(POINTWISE_CASES) * n_repeats
 
@@ -217,18 +218,18 @@ def make_energy_bins(emax_kev, n_bins=40):
     return eb_kev * KEV
 
 
-def integrate_bin_cpp(engine, E_in, E_lo, E_hi, tau):
+def integrate_bin_cpp(engine, E_in, E_lo, E_hi, T_K):
     def integrand(Ep, xi):
-        return engine.sigma_E(E_in, Ep, xi, tau, 1.0).value
+        return engine.sigma_E(E_in, Ep, xi, T_K, 1.0).value
     val, _ = dblquad(integrand, -1.0 + XI_EPS, 1.0 - XI_EPS,
                      lambda xi: E_lo, lambda xi: E_hi,
                      epsabs=1e-35, epsrel=1e-2)
     return 2.0 * np.pi * val
 
 
-def integrate_bin_py(E_in, E_lo, E_hi, tau, NL=128):
+def integrate_bin_py(E_in, E_lo, E_hi, T_K, NL=128):
     def integrand(Ep, xi):
-        val, _, _ = py_sigma_E(E_in, Ep, xi, tau, 1.0, NL=NL, method="fixed")
+        val, _, _ = py_sigma_E(E_in, Ep, xi, T_K, 1.0, NL=NL, method="fixed")
         return val
     val, _ = dblquad(integrand, -1.0 + XI_EPS, 1.0 - XI_EPS,
                      lambda xi: E_lo, lambda xi: E_hi,
@@ -288,7 +289,7 @@ def section_pomraning(report):
         ein_kev = case["ein_kev"]
         ylim = case["ylim"]
         ref_dir = case.get("ref_dir")
-        tau = T_kev * KEV / ME_C2
+        T_K = T_kev * KEV_KELVIN
 
         eb_erg = make_energy_bins(emax, n_bins=40)
         eb_kev_arr = eb_erg / KEV
@@ -320,14 +321,14 @@ def section_pomraning(report):
             row_cpp = np.zeros(num_groups)
             for gp in range(num_groups):
                 row_cpp[gp] = integrate_bin_cpp(
-                    cpp_engine, E_in, eb_erg[gp], eb_erg[gp + 1], tau)
+                    cpp_engine, E_in, eb_erg[gp], eb_erg[gp + 1], T_K)
             cpp_time_total += time.perf_counter() - t0
 
             t0 = time.perf_counter()
             row_py = np.zeros(num_groups)
             for gp in range(num_groups):
                 row_py[gp] = integrate_bin_py(
-                    E_in, eb_erg[gp], eb_erg[gp + 1], tau)
+                    E_in, eb_erg[gp], eb_erg[gp + 1], T_K)
             py_time_total += time.perf_counter() - t0
 
             sigma_cpp = row_cpp / ewid_kev / MBARN
@@ -440,10 +441,10 @@ def section_series_pointwise(report):
     for i, (E_kev, Ep_kev, xi, T_kev) in enumerate(POINTWISE_CASES):
         E = E_kev * KEV
         Ep = Ep_kev * KEV
-        tau = T_kev * KEV / ME_C2
+        T_K = T_kev * KEV_KELVIN
 
-        cr = cpp_series.sigma_E(E, Ep, xi, tau, 1.0)
-        pr = py_sigma_E_series(E, Ep, xi, tau, 1.0, method="auto")
+        cr = cpp_series.sigma_E(E, Ep, xi, T_K, 1.0)
+        pr = py_sigma_E_series(E, Ep, xi, T_K, 1.0, method="auto")
 
         scale = max(abs(cr.value), abs(pr.value), 1e-300)
         rd = abs(cr.value - pr.value) / scale
@@ -482,9 +483,9 @@ def section_series_pointwise(report):
 # Section 5: Series in Pomraning multigroup plots
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def integrate_bin_series(engine, E_in, E_lo, E_hi, tau):
+def integrate_bin_series(engine, E_in, E_lo, E_hi, T_K):
     def integrand(Ep, xi):
-        return engine.sigma_E(E_in, Ep, xi, tau, 1.0).value
+        return engine.sigma_E(E_in, Ep, xi, T_K, 1.0).value
     val, _ = dblquad(integrand, -1.0 + XI_EPS, 1.0 - XI_EPS,
                      lambda xi: E_lo, lambda xi: E_hi,
                      epsabs=1e-35, epsrel=1e-2)
@@ -511,7 +512,7 @@ def section_pomraning_with_series(report):
         ein_kev = case["ein_kev"]
         ylim = case["ylim"]
         ref_dir = case.get("ref_dir")
-        tau = T_kev * KEV / ME_C2
+        T_K = T_kev * KEV_KELVIN
 
         eb_erg = make_energy_bins(emax, n_bins=40)
         eb_kev_arr = eb_erg / KEV
@@ -536,9 +537,9 @@ def section_pomraning_with_series(report):
             row_py = np.zeros(num_groups)
             row_series = np.zeros(num_groups)
             for gp in range(num_groups):
-                row_cpp[gp] = integrate_bin_cpp(cpp_engine, E_in, eb_erg[gp], eb_erg[gp+1], tau)
-                row_py[gp] = integrate_bin_py(E_in, eb_erg[gp], eb_erg[gp+1], tau)
-                row_series[gp] = integrate_bin_series(cpp_series, E_in, eb_erg[gp], eb_erg[gp+1], tau)
+                row_cpp[gp] = integrate_bin_cpp(cpp_engine, E_in, eb_erg[gp], eb_erg[gp+1], T_K)
+                row_py[gp] = integrate_bin_py(E_in, eb_erg[gp], eb_erg[gp+1], T_K)
+                row_series[gp] = integrate_bin_series(cpp_series, E_in, eb_erg[gp], eb_erg[gp+1], T_K)
 
             sigma_cpp = row_cpp / ewid_kev / MBARN
             ax.stairs(sigma_cpp, edges=eb_kev_arr, color=color, linewidth=1.8,
@@ -606,14 +607,14 @@ def section_series_timing(report):
             for E_kev, Ep_kev, xi, T_kev in POINTWISE_CASES:
                 E = E_kev * KEV
                 Ep = Ep_kev * KEV
-                tau = T_kev * KEV / ME_C2
-                func(E, Ep, xi, tau)
+                T_K = T_kev * KEV_KELVIN
+                func(E, Ep, xi, T_K)
         return time.perf_counter() - t0
 
-    t_cpp_quad = bench(lambda E, Ep, xi, tau: cpp_quad.sigma_E(E, Ep, xi, tau, 1.0))
-    t_py_quad = bench(lambda E, Ep, xi, tau: py_sigma_E(E, Ep, xi, tau, 1.0, NL=128, method="fixed"))
-    t_cpp_series = bench(lambda E, Ep, xi, tau: cpp_series.sigma_E(E, Ep, xi, tau, 1.0))
-    t_py_series = bench(lambda E, Ep, xi, tau: py_sigma_E_series(E, Ep, xi, tau, 1.0, method="auto"))
+    t_cpp_quad = bench(lambda E, Ep, xi, T_K: cpp_quad.sigma_E(E, Ep, xi, T_K, 1.0))
+    t_py_quad = bench(lambda E, Ep, xi, T_K: py_sigma_E(E, Ep, xi, T_K, 1.0, NL=128, method="fixed"))
+    t_cpp_series = bench(lambda E, Ep, xi, T_K: cpp_series.sigma_E(E, Ep, xi, T_K, 1.0))
+    t_py_series = bench(lambda E, Ep, xi, T_K: py_sigma_E_series(E, Ep, xi, T_K, 1.0, method="auto"))
 
     n_total = len(POINTWISE_CASES) * n_repeats
 

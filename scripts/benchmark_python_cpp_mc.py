@@ -36,7 +36,8 @@ from pycompton.compton_kernel_quadrature import sigma_E as py_sigma_E
 
 ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2
 KEV = 1.602176634e-9
-KEV_KELVIN = KEV / 1.380649e-16
+K_BOLTZ = 1.380649e-16
+KEV_KELVIN = KEV / K_BOLTZ
 XI_EPS = 1e-10
 
 
@@ -75,8 +76,8 @@ def run_pointwise_benchmark(n_repeats=20):
         for E_kev, Ep_kev, xi, tau_kev in POINTWISE_CASES:
             E = E_kev * KEV
             Ep = Ep_kev * KEV
-            tau = tau_kev * KEV / ME_C2
-            cpp_engine.sigma_E(E, Ep, xi, tau, 1.0)
+            T_K = tau_kev * KEV_KELVIN
+            cpp_engine.sigma_E(E, Ep, xi, T_K, 1.0)
     cpp_time = time.perf_counter() - t0
 
     # Python fixed Gauss-Laguerre
@@ -85,8 +86,8 @@ def run_pointwise_benchmark(n_repeats=20):
         for E_kev, Ep_kev, xi, tau_kev in POINTWISE_CASES:
             E = E_kev * KEV
             Ep = Ep_kev * KEV
-            tau = tau_kev * KEV / ME_C2
-            py_sigma_E(E, Ep, xi, tau, 1.0, NL=128, method="fixed")
+            T_K = tau_kev * KEV_KELVIN
+            py_sigma_E(E, Ep, xi, T_K, 1.0, NL=128, method="fixed")
     py_fixed_time = time.perf_counter() - t0
 
     # Python adaptive quad
@@ -95,8 +96,8 @@ def run_pointwise_benchmark(n_repeats=20):
         for E_kev, Ep_kev, xi, tau_kev in POINTWISE_CASES:
             E = E_kev * KEV
             Ep = Ep_kev * KEV
-            tau = tau_kev * KEV / ME_C2
-            py_sigma_E(E, Ep, xi, tau, 1.0, method="adaptive")
+            T_K = tau_kev * KEV_KELVIN
+            py_sigma_E(E, Ep, xi, T_K, 1.0, method="adaptive")
     py_adaptive_time = time.perf_counter() - t0
 
     n_total = len(POINTWISE_CASES) * n_repeats
@@ -152,18 +153,18 @@ def make_energy_bins(emax_kev, n_bins=40):
     return eb_kev * KEV
 
 
-def integrate_bin_cpp(engine, E_in, E_lo, E_hi, tau):
+def integrate_bin_cpp(engine, E_in, E_lo, E_hi, T_K):
     def integrand(Ep, xi):
-        return engine.sigma_E(E_in, Ep, xi, tau, 1.0).value
+        return engine.sigma_E(E_in, Ep, xi, T_K, 1.0).value
     val, err = dblquad(integrand, -1.0 + XI_EPS, 1.0 - XI_EPS,
                        lambda xi: E_lo, lambda xi: E_hi,
                        epsabs=1e-35, epsrel=1e-2)
     return 2.0 * np.pi * val
 
 
-def integrate_bin_py(E_in, E_lo, E_hi, tau, NL=128):
+def integrate_bin_py(E_in, E_lo, E_hi, T_K, NL=128):
     def integrand(Ep, xi):
-        val, _, _ = py_sigma_E(E_in, Ep, xi, tau, 1.0, NL=NL, method="fixed")
+        val, _, _ = py_sigma_E(E_in, Ep, xi, T_K, 1.0, NL=NL, method="fixed")
         return val
     val, err = dblquad(integrand, -1.0 + XI_EPS, 1.0 - XI_EPS,
                        lambda xi: E_lo, lambda xi: E_hi,
@@ -205,20 +206,20 @@ def load_pomraning_reference(ref_dir):
     return data
 
 
-def compute_row_cpp(engine, E_in, eb_erg, tau):
+def compute_row_cpp(engine, E_in, eb_erg, T_K):
     num_groups = len(eb_erg) - 1
     row = np.zeros(num_groups)
     for gp in range(num_groups):
         row[gp] = integrate_bin_cpp(engine, E_in, eb_erg[gp], eb_erg[gp + 1],
-                                    tau)
+                                    T_K)
     return row
 
 
-def compute_row_py(E_in, eb_erg, tau, NL=128):
+def compute_row_py(E_in, eb_erg, T_K, NL=128):
     num_groups = len(eb_erg) - 1
     row = np.zeros(num_groups)
     for gp in range(num_groups):
-        row[gp] = integrate_bin_py(E_in, eb_erg[gp], eb_erg[gp + 1], tau, NL)
+        row[gp] = integrate_bin_py(E_in, eb_erg[gp], eb_erg[gp + 1], T_K, NL)
     return row
 
 
@@ -237,7 +238,7 @@ def run_multigroup_benchmark():
         ein_kev = case["ein_kev"]
         ylim = case["ylim"]
         ref_dir = case.get("ref_dir")
-        tau = T_kev * KEV / ME_C2
+        T_K = T_kev * KEV_KELVIN
 
         eb_erg = make_energy_bins(emax, n_bins=40)
         eb_kev_arr = eb_erg / KEV
@@ -273,13 +274,13 @@ def run_multigroup_benchmark():
 
             # C++
             t0 = time.perf_counter()
-            row_cpp = compute_row_cpp(cpp_engine, E_in, eb_erg, tau)
+            row_cpp = compute_row_cpp(cpp_engine, E_in, eb_erg, T_K)
             dt = time.perf_counter() - t0
             cpp_times.append(dt)
 
             # Python
             t0 = time.perf_counter()
-            row_py = compute_row_py(E_in, eb_erg, tau)
+            row_py = compute_row_py(E_in, eb_erg, T_K)
             dt = time.perf_counter() - t0
             py_times.append(dt)
 

@@ -26,14 +26,14 @@ PYBIND11_MODULE(_compton_kernel_series, m) {
              py::arg("n_max") = 200)
         .def("sigma_E", &ComptonKernelSeries::sigma_E,
              py::arg("E"), py::arg("E_prime"), py::arg("xi"),
-             py::arg("tau"), py::arg("Ne"))
+             py::arg("T"), py::arg("Ne"))
         .def("sigma_E_precision_check", &ComptonKernelSeries::sigma_E_precision_check,
              py::arg("E"), py::arg("E_prime"), py::arg("xi"),
-             py::arg("tau"), py::arg("Ne"))
+             py::arg("T"), py::arg("Ne"))
         .def("sigma_E_vec", [](ComptonKernelSeries const& self,
                                double E,
                                py::array_t<double, py::array::c_style | py::array::forcecast> E_prime_arr,
-                               double xi, double tau, double Ne) {
+                               double xi, double T, double Ne) {
             auto in = E_prime_arr.unchecked<1>();
             py::ssize_t const n = in.shape(0);
 
@@ -43,13 +43,13 @@ PYBIND11_MODULE(_compton_kernel_series, m) {
             auto out_errors = errors.mutable_unchecked<1>();
 
             for (py::ssize_t i = 0; i < n; ++i) {
-                SigmaResult r = self.sigma_E(E, in(i), xi, tau, Ne);
+                SigmaResult r = self.sigma_E(E, in(i), xi, T, Ne);
                 out_values(i) = r.value;
                 out_errors(i) = r.estimated_abs_error;
             }
             return py::make_tuple(values, errors);
         }, py::arg("E"), py::arg("E_prime_arr"), py::arg("xi"),
-           py::arg("tau"), py::arg("Ne"));
+           py::arg("T"), py::arg("Ne"));
 
     m.def("ehat_cf", [](int const m, double const x) {
         return ehat(m, x);

@@ -27,6 +27,7 @@ from scipy.integrate import quad
 me = 9.109383713928e-28        # electron mass [g]
 clight = 2.99792458000e10      # speed of light [cm/s]
 me_c2 = me * clight**2         # electron rest energy [erg]
+k_boltz = 1.380649e-16         # Boltzmann constant [erg/K]
 sigma_thomson = 6.652458732160e-25  # Thomson cross section [cm^2]
 r_e2 = sigma_thomson / (8.0 * math.pi / 3.0)  # classical electron radius squared
 kev = 1.602176634e-9           # 1 keV in erg
@@ -264,17 +265,17 @@ def compute_IQ_pre_ibp_adaptive(p, tau, epsabs=1e-30, epsrel=1e-12,
 # Top-level API
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def sigma_E(E, E_prime, xi, tau, Ne=1.0, form="post_ibp", NL=128,
+def sigma_E(E, E_prime, xi, T, Ne=1.0, form="post_ibp", NL=128,
             method="fixed"):
     """
-    Evaluate the Compton frequency kernel Sigma_E(E -> E', xi; tau, Ne).
+    Evaluate the Compton frequency kernel Sigma_E(E -> E', xi; T, Ne).
 
     Parameters
     ----------
     E        : Incident photon energy [erg]
     E_prime  : Scattered photon energy [erg]
     xi       : cos(scattering angle), strictly in (-1, 1)
-    tau      : Dimensionless electron temperature kT/(m_e c^2)
+    T        : Electron temperature [K]
     Ne       : Electron number density [cm^-3] (use 1.0 for microscopic)
     form     : "post_ibp" or "pre_ibp"
     NL       : Gauss-Laguerre order (used only for method="fixed")
@@ -288,8 +289,8 @@ def sigma_E(E, E_prime, xi, tau, Ne=1.0, form="post_ibp", NL=128,
         raise ValueError("E must be finite and > 0")
     if not (E_prime > 0.0 and math.isfinite(E_prime)):
         raise ValueError("E_prime must be finite and > 0")
-    if not (tau > 0.0 and math.isfinite(tau)):
-        raise ValueError("tau must be finite and > 0")
+    if not (T > 0.0 and math.isfinite(T)):
+        raise ValueError("T must be finite and > 0")
     if not (-1.0 < xi < 1.0 and math.isfinite(xi)):
         raise ValueError("xi must be finite and strictly inside (-1, 1)")
     if not math.isfinite(Ne):
@@ -297,6 +298,7 @@ def sigma_E(E, E_prime, xi, tau, Ne=1.0, form="post_ibp", NL=128,
     if 1.0 - xi < 1e-14:
         raise ValueError("xi too close to 1 for direct quadrature")
 
+    tau = T * k_boltz / me_c2
     gamma = E / me_c2
     gamma_p = E_prime / me_c2
 

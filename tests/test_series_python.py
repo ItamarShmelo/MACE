@@ -18,6 +18,7 @@ sys.path.insert(0, "src/python")
 from pycompton.compton_kernel_quadrature import (
     compute_params,
     me_c2,
+    k_boltz,
     sigma_E,
     stable_sigma0_E,
 )
@@ -30,6 +31,7 @@ from pycompton.compton_kernel_series import (
 )
 
 kev = 1.602176634e-9
+kev_kelvin = kev / k_boltz
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -113,11 +115,11 @@ class TestPowerSeriesVsQuadrature:
     def test_high_temp_agreement(self, E_kev, Ep_kev, xi):
         """Power series should agree with quadrature at high temperature."""
         T_kev = 100.0
-        tau = T_kev * kev / me_c2
+        T = T_kev * kev_kelvin
         E = E_kev * kev
         Ep = Ep_kev * kev
-        val_quad, _, _ = sigma_E(E, Ep, xi, tau, 1.0, NL=256)
-        res = sigma_E_series(E, Ep, xi, tau, 1.0, method="power")
+        val_quad, _, _ = sigma_E(E, Ep, xi, T, 1.0, NL=256)
+        res = sigma_E_series(E, Ep, xi, T, 1.0, method="power")
         reldiff = abs(res.value - val_quad) / (abs(val_quad) + 1e-300)
         assert reldiff < 1e-4, f"reldiff={reldiff}"
 
@@ -135,11 +137,11 @@ class TestAsymptoticVsQuadrature:
     )
     @pytest.mark.parametrize("T_kev", [0.1, 1.0, 5.0])
     def test_low_temp_agreement(self, E_kev, Ep_kev, xi, T_kev):
-        tau = T_kev * kev / me_c2
+        T = T_kev * kev_kelvin
         E = E_kev * kev
         Ep = Ep_kev * kev
-        val_quad, _, _ = sigma_E(E, Ep, xi, tau, 1.0, NL=256)
-        res = sigma_E_series(E, Ep, xi, tau, 1.0, method="asymptotic")
+        val_quad, _, _ = sigma_E(E, Ep, xi, T, 1.0, NL=256)
+        res = sigma_E_series(E, Ep, xi, T, 1.0, method="asymptotic")
         reldiff = abs(res.value - val_quad) / (abs(val_quad) + 1e-300)
         assert reldiff < 1e-3, f"reldiff={reldiff}"
 
@@ -157,11 +159,11 @@ class TestAutoModeVsQuadrature:
     )
     @pytest.mark.parametrize("T_kev", TEMPS_KEV)
     def test_auto_agreement(self, E_kev, Ep_kev, xi, T_kev):
-        tau = T_kev * kev / me_c2
+        T = T_kev * kev_kelvin
         E = E_kev * kev
         Ep = Ep_kev * kev
-        val_quad, _, _ = sigma_E(E, Ep, xi, tau, 1.0, NL=256)
-        res = sigma_E_series(E, Ep, xi, tau, 1.0, method="auto")
+        val_quad, _, _ = sigma_E(E, Ep, xi, T, 1.0, NL=256)
+        res = sigma_E_series(E, Ep, xi, T, 1.0, method="auto")
         reldiff = abs(res.value - val_quad) / (abs(val_quad) + 1e-300)
         assert reldiff < 1e-3, (
             f"reldiff={reldiff}: T={T_kev}, E={E_kev}, Ep={Ep_kev}, xi={xi}"
@@ -182,12 +184,13 @@ class TestDetailedBalance:
     )
     @pytest.mark.parametrize("T_kev", [1.0, 20.0, 100.0])
     def test_detailed_balance(self, E_kev, Ep_kev, xi, T_kev):
-        tau = T_kev * kev / me_c2
+        T = T_kev * kev_kelvin
         E = E_kev * kev
         Ep = Ep_kev * kev
-        res_fwd = sigma_E_series(E, Ep, xi, tau, 1.0, method="auto")
-        res_rev = sigma_E_series(Ep, E, xi, tau, 1.0, method="auto")
+        res_fwd = sigma_E_series(E, Ep, xi, T, 1.0, method="auto")
+        res_rev = sigma_E_series(Ep, E, xi, T, 1.0, method="auto")
 
+        tau = T_kev * kev / me_c2
         lhs = E * E * res_fwd.value * math.exp(-E / (tau * me_c2))
         rhs = Ep * Ep * res_rev.value * math.exp(-Ep / (tau * me_c2))
 
@@ -214,10 +217,10 @@ class TestPositivity:
     )
     @pytest.mark.parametrize("T_kev", TEMPS_KEV)
     def test_positive(self, E_kev, Ep_kev, xi, T_kev):
-        tau = T_kev * kev / me_c2
+        T = T_kev * kev_kelvin
         E = E_kev * kev
         Ep = Ep_kev * kev
-        res = sigma_E_series(E, Ep, xi, tau, 1.0, method="auto")
+        res = sigma_E_series(E, Ep, xi, T, 1.0, method="auto")
         assert res.value >= 0, (
             f"Negative kernel: {res.value}, T={T_kev}, E={E_kev}, "
             f"Ep={Ep_kev}, xi={xi}"
@@ -235,21 +238,21 @@ class TestConvergenceBehavior:
     def test_power_series_converges_high_temp(self):
         E = 10.0 * kev
         Ep = 10.5 * kev
-        tau = 100.0 * kev / me_c2
-        res = sigma_E_series(E, Ep, 0.0, tau, 1.0, method="power")
+        T = 100.0 * kev_kelvin
+        res = sigma_E_series(E, Ep, 0.0, T, 1.0, method="power")
         assert res.value > 0
 
     def test_asymptotic_converges_low_temp(self):
         E = 1.0 * kev
         Ep = 1.01 * kev
-        tau = 0.1 * kev / me_c2
-        res = sigma_E_series(E, Ep, 0.0, tau, 1.0, method="asymptotic")
+        T = 0.1 * kev_kelvin
+        res = sigma_E_series(E, Ep, 0.0, T, 1.0, method="asymptotic")
         assert res.value > 0
 
     def test_error_estimates_positive(self):
         E = 1.0 * kev
         Ep = 1.5 * kev
-        tau = 10.0 * kev / me_c2
-        res = sigma_E_series(E, Ep, 0.0, tau, 1.0, method="auto")
+        T = 10.0 * kev_kelvin
+        res = sigma_E_series(E, Ep, 0.0, T, 1.0, method="auto")
         assert res.estimated_abs_error >= 0
         assert res.estimated_rel_error >= 0

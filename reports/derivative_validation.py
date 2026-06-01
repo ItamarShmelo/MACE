@@ -1,12 +1,12 @@
 """
-Derivative validation report: validates dsigma_E_dtau implementation.
+Derivative validation report: validates dsigma_E_dT implementation.
 
 Generates reports/generated/derivative_validation.md with embedded plots covering:
   1. Gauss-Laguerre convergence (NL=64/128/256) for both forms
   2. Finite-difference comparison (Richardson-extrapolated)
   3. Pre-IBP vs Post-IBP derivative agreement across temperature
   4. Kappa ratio validation (C++ vs scipy)
-  5. Small-tau stability
+  5. Small-T stability
 
 Usage:
     python3 reports/derivative_validation.py
@@ -32,6 +32,8 @@ from _compton_kernel_quadrature import (
 
 ME_C2 = 9.109383713928e-28 * (2.99792458e10)**2
 KEV = 1.602176634e-9
+K_BOLTZ = 1.380649e-16
+KEV_KELVIN = KEV / K_BOLTZ
 
 GEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'generated')
 FIGS_DIR = os.path.join(GEN_DIR, 'figs')
@@ -81,12 +83,12 @@ def section_gl_convergence():
         for E_kev, Ep_kev, xi, tau_kev in NICE_POINTS:
             E = E_kev * KEV
             Ep = Ep_kev * KEV
-            tau = tau_kev * KEV / ME_C2
+            T_K = tau_kev * KEV_KELVIN
 
             vals = []
             for NL in [64, 128, 256]:
                 eng = ComptonKernelQuadrature(NL, form_enum)
-                r = eng.dsigma_E_dtau(E, Ep, xi, tau, 1.0)
+                r = eng.dsigma_E_dT(E, Ep, xi, T_K, 1.0)
                 vals.append(r.estimated_rel_error)
 
             emit(f'| {E_kev} | {Ep_kev} | {xi} | {tau_kev} | '
@@ -111,28 +113,28 @@ def section_fd_comparison():
     for idx, (E_kev, Ep_kev, xi, tau_kev) in enumerate(NICE_POINTS[:4]):
         E = E_kev * KEV
         Ep = Ep_kev * KEV
-        tau = tau_kev * KEV / ME_C2
+        T_K = tau_kev * KEV_KELVIN
 
-        sig = engine.sigma_E(E, Ep, xi, tau, 1.0)
+        sig = engine.sigma_E(E, Ep, xi, T_K, 1.0)
         if sig.estimated_rel_error > 1e-6:
             continue
 
-        analytic = engine.dsigma_E_dtau(E, Ep, xi, tau, 1.0).value
+        analytic = engine.dsigma_E_dT(E, Ep, xi, T_K, 1.0).value
         if abs(analytic) < 1e-300:
             continue
 
         rel_errs = []
         for hf in h_fracs:
-            h = hf * tau
-            vp = engine.sigma_E(E, Ep, xi, tau + h, 1.0).value
-            vm = engine.sigma_E(E, Ep, xi, tau - h, 1.0).value
+            h = hf * T_K
+            vp = engine.sigma_E(E, Ep, xi, T_K + h, 1.0).value
+            vm = engine.sigma_E(E, Ep, xi, T_K - h, 1.0).value
             fd = (vp - vm) / (2.0 * h)
             rel_errs.append(abs(fd - analytic) / abs(analytic))
 
         label = f'E={E_kev}, E\'={Ep_kev}, xi={xi}, T={tau_kev}'
         ax.loglog(h_fracs, rel_errs, '-o', markersize=3, label=label)
 
-    ax.set_xlabel('h / tau')
+    ax.set_xlabel('h / T_K')
     ax.set_ylabel('|FD - analytic| / |analytic|')
     ax.set_title('FD Error vs Step Size (pre-IBP)')
     ax.legend(fontsize=7)
@@ -148,17 +150,17 @@ def section_fd_comparison():
     for E_kev, Ep_kev, xi, tau_kev in NICE_POINTS:
         E = E_kev * KEV
         Ep = Ep_kev * KEV
-        tau = tau_kev * KEV / ME_C2
+        T_K = tau_kev * KEV_KELVIN
 
-        sig = engine.sigma_E(E, Ep, xi, tau, 1.0)
+        sig = engine.sigma_E(E, Ep, xi, T_K, 1.0)
         if sig.estimated_rel_error > 1e-6:
             emit(f'| {E_kev} | {Ep_kev} | {xi} | {tau_kev} | -- | -- | skipped |')
             continue
 
-        analytic = engine.dsigma_E_dtau(E, Ep, xi, tau, 1.0).value
-        h = 1e-4 * tau
-        fd_h = lambda step: (engine.sigma_E(E, Ep, xi, tau + step, 1.0).value
-                             - engine.sigma_E(E, Ep, xi, tau - step, 1.0).value) / (2.0 * step)
+        analytic = engine.dsigma_E_dT(E, Ep, xi, T_K, 1.0).value
+        h = 1e-4 * T_K
+        fd_h = lambda step: (engine.sigma_E(E, Ep, xi, T_K + step, 1.0).value
+                             - engine.sigma_E(E, Ep, xi, T_K - step, 1.0).value) / (2.0 * step)
         fd_rich = (4.0 * fd_h(h / 2.0) - fd_h(h)) / 3.0
 
         rel = abs(analytic - fd_rich) / (abs(fd_rich) + 1e-300)
@@ -184,13 +186,13 @@ def section_pre_post_agreement():
     for tau_kev in tau_kevs:
         E = E_kev * KEV
         Ep = Ep_kev * KEV
-        tau = tau_kev * KEV / ME_C2
+        T_K = tau_kev * KEV_KELVIN
 
         eng_pre = ComptonKernelQuadrature(256, QuadratureForm.PreIBP)
         eng_post = ComptonKernelQuadrature(256, QuadratureForm.PostIBP)
 
-        r_pre = eng_pre.dsigma_E_dtau(E, Ep, xi, tau, 1.0)
-        r_post = eng_post.dsigma_E_dtau(E, Ep, xi, tau, 1.0)
+        r_pre = eng_pre.dsigma_E_dT(E, Ep, xi, T_K, 1.0)
+        r_post = eng_post.dsigma_E_dT(E, Ep, xi, T_K, 1.0)
 
         scale = max(abs(r_pre.value), abs(r_post.value))
         if scale < 1e-300:
@@ -254,13 +256,13 @@ def section_kappa_validation():
     emit()
 
 
-# ─── Section 5: Small-tau Stability ───────────────────────────────────────
+# ─── Section 5: Small-T Stability ─────────────────────────────────────────
 
 def section_small_tau():
-    emit('## 5. Small-tau Stability')
+    emit('## 5. Small-T Stability')
     emit()
-    emit('| T (keV) | tau | dsigma/dtau (pre) | rel_error | finite? |')
-    emit('|---------|-----|-------------------|-----------|---------|')
+    emit('| T (keV) | tau | dsigma/dT (pre) | rel_error | finite? |')
+    emit('|---------|-----|-----------------|-----------|---------|')
 
     E = 1.0 * KEV
     Ep = 1.0 * KEV
@@ -268,8 +270,9 @@ def section_small_tau():
 
     for tau_kev in [0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0]:
         tau = tau_kev * KEV / ME_C2
+        T_K = tau_kev * KEV_KELVIN
         eng = ComptonKernelQuadrature(128, QuadratureForm.PreIBP)
-        r = eng.dsigma_E_dtau(E, Ep, xi, tau, 1.0)
+        r = eng.dsigma_E_dT(E, Ep, xi, T_K, 1.0)
         finite = np.isfinite(r.value) and np.isfinite(r.estimated_rel_error)
         emit(f'| {tau_kev} | {tau:.4e} | {r.value:.6e} | '
              f'{r.estimated_rel_error:.2e} | {"yes" if finite else "NO"} |')
@@ -290,7 +293,7 @@ PROFILE_CONFIGS = [
 def section_derivative_profiles():
     emit('## 6. Derivative Spectral Profiles')
     emit()
-    emit('Spectral shape of $\\Sigma_E$ (top) and $\\partial\\Sigma_E/\\partial\\tau$ (bottom) '
+    emit('Spectral shape of $\\Sigma_E$ (top) and $\\partial\\Sigma_E/\\partial T$ (bottom) '
          'as a function of scattered energy $E\'$ at fixed incident energy, angle, and '
          'several temperatures.  Pre-IBP, NL=256.')
     emit()
@@ -307,14 +310,14 @@ def section_derivative_profiles():
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9, 7), sharex=True)
 
         for tau_kev in cfg['tau_kevs']:
-            tau = tau_kev * KEV / ME_C2
+            T_K = tau_kev * KEV_KELVIN
             label = f'T = {tau_kev} keV'
 
             sig_vals = []
             dsig_vals = []
             for Ep in Ep_arr:
-                sig_vals.append(engine.sigma_E(E, Ep, xi, tau, 1.0).value)
-                dsig_vals.append(engine.dsigma_E_dtau(E, Ep, xi, tau, 1.0).value)
+                sig_vals.append(engine.sigma_E(E, Ep, xi, T_K, 1.0).value)
+                dsig_vals.append(engine.dsigma_E_dT(E, Ep, xi, T_K, 1.0).value)
 
             ax1.semilogy(Ep_arr / KEV, np.abs(sig_vals), label=label)
             ax2.plot(Ep_arr / KEV, dsig_vals, label=label)
@@ -325,7 +328,7 @@ def section_derivative_profiles():
         ax1.grid(True, alpha=0.3)
 
         ax2.set_xlabel("E' (keV)")
-        ax2.set_ylabel('$\\partial\\Sigma_E / \\partial\\tau$')
+        ax2.set_ylabel('$\\partial\\Sigma_E / \\partial T$')
         ax2.axhline(0, color='k', linewidth=0.5)
         ax2.legend(fontsize=8)
         ax2.grid(True, alpha=0.3)
@@ -350,7 +353,7 @@ ANGULAR_CONFIGS = [
 def section_angular_distribution():
     emit('## 7. Angular Distribution of the Derivative')
     emit()
-    emit('$\\Sigma_E$ (top) and $\\partial\\Sigma_E/\\partial\\tau$ (bottom) as a function '
+    emit('$\\Sigma_E$ (top) and $\\partial\\Sigma_E/\\partial T$ (bottom) as a function '
          'of scattering angle $\\xi = \\cos\\theta$ at fixed energies and several '
          'temperatures.  Pre-IBP, NL=256.')
     emit()
@@ -367,14 +370,14 @@ def section_angular_distribution():
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9, 7), sharex=True)
 
         for tau_kev in cfg['tau_kevs']:
-            tau = tau_kev * KEV / ME_C2
+            T_K = tau_kev * KEV_KELVIN
             label = f'T = {tau_kev} keV'
 
             sig_vals = []
             dsig_vals = []
             for xi in xi_arr:
-                sig_vals.append(engine.sigma_E(E, Ep, xi, tau, 1.0).value)
-                dsig_vals.append(engine.dsigma_E_dtau(E, Ep, xi, tau, 1.0).value)
+                sig_vals.append(engine.sigma_E(E, Ep, xi, T_K, 1.0).value)
+                dsig_vals.append(engine.dsigma_E_dT(E, Ep, xi, T_K, 1.0).value)
 
             ax1.semilogy(xi_arr, np.abs(sig_vals), label=label)
             ax2.plot(xi_arr, dsig_vals, label=label)
@@ -385,7 +388,7 @@ def section_angular_distribution():
         ax1.grid(True, alpha=0.3)
 
         ax2.set_xlabel('$\\xi = \\cos\\theta$')
-        ax2.set_ylabel('$\\partial\\Sigma_E / \\partial\\tau$')
+        ax2.set_ylabel('$\\partial\\Sigma_E / \\partial T$')
         ax2.axhline(0, color='k', linewidth=0.5)
         ax2.legend(fontsize=8)
         ax2.grid(True, alpha=0.3)
@@ -402,7 +405,7 @@ def section_angular_distribution():
 def main():
     emit('# Derivative Validation Report')
     emit()
-    emit('Validation of `dsigma_E_dtau` (temperature derivative of the Compton kernel).')
+    emit('Validation of `dsigma_E_dT` (temperature derivative of the Compton kernel).')
     emit()
 
     section_gl_convergence()

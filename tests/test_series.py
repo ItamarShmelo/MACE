@@ -20,10 +20,11 @@ sys.path.insert(0, "src/python")
 
 import _compton_kernel_quadrature as cq
 import _compton_kernel_series as cs
-from pycompton.compton_kernel_quadrature import me_c2
+from pycompton.compton_kernel_quadrature import me_c2, k_boltz
 from pycompton.compton_kernel_series import sigma_E_series as py_sigma_E_series
 
 kev = 1.602176634e-9
+kev_kelvin = kev / k_boltz
 
 TEST_POINTS = [
     (1.0, 1.01, 0.0),
@@ -79,14 +80,14 @@ class TestPowerSeriesVsQuadrature:
     )
     def test_high_temp(self, E_kev, Ep_kev, xi):
         T_kev = 100.0
-        tau = T_kev * kev / me_c2
+        T = T_kev * kev_kelvin
         E, Ep = E_kev * kev, Ep_kev * kev
 
         quad = cq.ComptonKernelQuadrature(256)
-        qres = quad.sigma_E(E, Ep, xi, tau, 1.0)
+        qres = quad.sigma_E(E, Ep, xi, T, 1.0)
 
         series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeries)
-        sres = series.sigma_E(E, Ep, xi, tau, 1.0)
+        sres = series.sigma_E(E, Ep, xi, T, 1.0)
 
         reldiff = abs(sres.value - qres.value) / (abs(qres.value) + 1e-300)
         assert reldiff < 1e-4, f"reldiff={reldiff}"
@@ -103,14 +104,14 @@ class TestAsymptoticVsQuadrature:
     )
     @pytest.mark.parametrize("T_kev", [0.1, 1.0, 5.0])
     def test_low_temp(self, E_kev, Ep_kev, xi, T_kev):
-        tau = T_kev * kev / me_c2
+        T = T_kev * kev_kelvin
         E, Ep = E_kev * kev, Ep_kev * kev
 
         quad = cq.ComptonKernelQuadrature(256)
-        qres = quad.sigma_E(E, Ep, xi, tau, 1.0)
+        qres = quad.sigma_E(E, Ep, xi, T, 1.0)
 
         series = cs.ComptonKernelSeries(cs.SeriesMethod.Asymptotic)
-        sres = series.sigma_E(E, Ep, xi, tau, 1.0)
+        sres = series.sigma_E(E, Ep, xi, T, 1.0)
 
         reldiff = abs(sres.value - qres.value) / (abs(qres.value) + 1e-300)
         assert reldiff < 1e-3, f"reldiff={reldiff}"
@@ -127,14 +128,14 @@ class TestAutoSwitching:
     )
     @pytest.mark.parametrize("T_kev", TEMPS_KEV)
     def test_auto_vs_quad(self, E_kev, Ep_kev, xi, T_kev):
-        tau = T_kev * kev / me_c2
+        T = T_kev * kev_kelvin
         E, Ep = E_kev * kev, Ep_kev * kev
 
         quad = cq.ComptonKernelQuadrature(256)
-        qres = quad.sigma_E(E, Ep, xi, tau, 1.0)
+        qres = quad.sigma_E(E, Ep, xi, T, 1.0)
 
         series = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
-        sres = series.sigma_E(E, Ep, xi, tau, 1.0)
+        sres = series.sigma_E(E, Ep, xi, T, 1.0)
 
         reldiff = abs(sres.value - qres.value) / (abs(qres.value) + 1e-300)
         assert reldiff < 1e-3, (
@@ -150,30 +151,30 @@ class TestAutoSwitching:
 class TestConvergenceBehavior:
     def test_power_series_converges(self):
         E, Ep = 10.0 * kev, 10.5 * kev
-        tau = 100.0 * kev / me_c2
+        T = 100.0 * kev_kelvin
         series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeries)
-        r = series.sigma_E(E, Ep, 0.0, tau, 1.0)
+        r = series.sigma_E(E, Ep, 0.0, T, 1.0)
         assert r.value > 0
 
     def test_power_series_raises_when_ehat_cf_stalls(self):
         E, Ep = 8.5 * kev, 0.85 * kev
-        tau = 900.0 * kev / me_c2
+        T = 900.0 * kev_kelvin
         series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeriesHighPrecision)
         with pytest.raises(RuntimeError, match="ehat failed to converge"):
-            series.sigma_E(E, Ep, -0.5, tau, 1.0)
+            series.sigma_E(E, Ep, -0.5, T, 1.0)
 
     def test_asymptotic_converges(self):
         E, Ep = 1.0 * kev, 1.01 * kev
-        tau = 0.1 * kev / me_c2
+        T = 0.1 * kev_kelvin
         series = cs.ComptonKernelSeries(cs.SeriesMethod.Asymptotic)
-        r = series.sigma_E(E, Ep, 0.0, tau, 1.0)
+        r = series.sigma_E(E, Ep, 0.0, T, 1.0)
         assert r.value > 0
 
     def test_error_estimates_nonneg(self):
         E, Ep = 1.0 * kev, 1.5 * kev
-        tau = 10.0 * kev / me_c2
+        T = 10.0 * kev_kelvin
         series = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
-        r = series.sigma_E(E, Ep, 0.0, tau, 1.0)
+        r = series.sigma_E(E, Ep, 0.0, T, 1.0)
         assert r.estimated_abs_error >= 0
         assert r.estimated_rel_error >= 0
 
@@ -190,13 +191,14 @@ class TestDetailedBalance:
     )
     @pytest.mark.parametrize("T_kev", [1.0, 20.0, 100.0])
     def test_detailed_balance(self, E_kev, Ep_kev, xi, T_kev):
-        tau = T_kev * kev / me_c2
+        T = T_kev * kev_kelvin
         E, Ep = E_kev * kev, Ep_kev * kev
 
         series = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
-        r_fwd = series.sigma_E(E, Ep, xi, tau, 1.0)
-        r_rev = series.sigma_E(Ep, E, xi, tau, 1.0)
+        r_fwd = series.sigma_E(E, Ep, xi, T, 1.0)
+        r_rev = series.sigma_E(Ep, E, xi, T, 1.0)
 
+        tau = T_kev * kev / me_c2
         lhs = E * E * r_fwd.value * math.exp(-E / (tau * me_c2))
         rhs = Ep * Ep * r_rev.value * math.exp(-Ep / (tau * me_c2))
 
@@ -218,10 +220,10 @@ class TestPositivity:
     )
     @pytest.mark.parametrize("T_kev", TEMPS_KEV)
     def test_positive(self, E_kev, Ep_kev, xi, T_kev):
-        tau = T_kev * kev / me_c2
+        T = T_kev * kev_kelvin
         E, Ep = E_kev * kev, Ep_kev * kev
         series = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
-        r = series.sigma_E(E, Ep, xi, tau, 1.0)
+        r = series.sigma_E(E, Ep, xi, T, 1.0)
         assert r.value >= 0, f"Negative: {r.value}"
 
 
@@ -236,13 +238,13 @@ class TestPythonVsCpp:
     )
     @pytest.mark.parametrize("T_kev", TEMPS_KEV)
     def test_agreement(self, E_kev, Ep_kev, xi, T_kev):
-        tau = T_kev * kev / me_c2
+        T = T_kev * kev_kelvin
         E, Ep = E_kev * kev, Ep_kev * kev
 
         cpp_series = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
-        cpp_res = cpp_series.sigma_E(E, Ep, xi, tau, 1.0)
+        cpp_res = cpp_series.sigma_E(E, Ep, xi, T, 1.0)
 
-        py_res = py_sigma_E_series(E, Ep, xi, tau, 1.0, method="auto")
+        py_res = py_sigma_E_series(E, Ep, xi, T, 1.0, method="auto")
 
         if abs(cpp_res.value) < 1e-300 and abs(py_res.value) < 1e-300:
             return
@@ -268,11 +270,11 @@ class TestPowerSeriesDoublePrecision:
     )
     def test_convergence_and_positivity(self, E_kev, Ep_kev, xi):
         T_kev = 100.0
-        tau = T_kev * kev / me_c2
+        T = T_kev * kev_kelvin
         E, Ep = E_kev * kev, Ep_kev * kev
 
         series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeries)
-        r = series.sigma_E(E, Ep, xi, tau, 1.0)
+        r = series.sigma_E(E, Ep, xi, T, 1.0)
 
         assert r.value >= 0
 
@@ -282,14 +284,14 @@ class TestPowerSeriesDoublePrecision:
     )
     def test_vs_quadrature(self, E_kev, Ep_kev, xi):
         T_kev = 100.0
-        tau = T_kev * kev / me_c2
+        T = T_kev * kev_kelvin
         E, Ep = E_kev * kev, Ep_kev * kev
 
         quad = cq.ComptonKernelQuadrature(256)
-        qres = quad.sigma_E(E, Ep, xi, tau, 1.0)
+        qres = quad.sigma_E(E, Ep, xi, T, 1.0)
 
         series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeries)
-        sres = series.sigma_E(E, Ep, xi, tau, 1.0)
+        sres = series.sigma_E(E, Ep, xi, T, 1.0)
 
         reldiff = abs(sres.value - qres.value) / (abs(qres.value) + 1e-300)
         assert reldiff < 1e-4, f"reldiff={reldiff}"
@@ -308,11 +310,11 @@ class TestPrecisionCheck:
     )
     @pytest.mark.parametrize("T_kev", [20.0, 100.0])
     def test_relative_error_nonneg_finite(self, E_kev, Ep_kev, xi, T_kev):
-        tau = T_kev * kev / me_c2
+        T = T_kev * kev_kelvin
         E, Ep = E_kev * kev, Ep_kev * kev
 
         series = cs.ComptonKernelSeries()
-        rel_err = series.sigma_E_precision_check(E, Ep, xi, tau, 1.0)
+        rel_err = series.sigma_E_precision_check(E, Ep, xi, T, 1.0)
 
         assert rel_err >= 0.0
         assert math.isfinite(rel_err)
@@ -323,10 +325,10 @@ class TestPrecisionCheck:
     )
     def test_small_for_well_conditioned(self, E_kev, Ep_kev, xi):
         T_kev = 100.0
-        tau = T_kev * kev / me_c2
+        T = T_kev * kev_kelvin
         E, Ep = E_kev * kev, Ep_kev * kev
 
         series = cs.ComptonKernelSeries()
-        rel_err = series.sigma_E_precision_check(E, Ep, xi, tau, 1.0)
+        rel_err = series.sigma_E_precision_check(E, Ep, xi, T, 1.0)
 
         assert rel_err < 1e-6, f"rel_err={rel_err}"

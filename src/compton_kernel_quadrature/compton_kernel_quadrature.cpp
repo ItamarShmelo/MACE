@@ -77,10 +77,11 @@ SigmaResult ComptonKernelQuadrature::sigma_E(
     double const E,
     double const E_prime,
     double const xi,
-    double const tau,
+    double const T,
     double const Ne) const
 {
-    assert_parameters(E, E_prime, xi, tau, Ne);
+    assert_parameters(E, E_prime, xi, T, Ne);
+    double const tau = T * units::k_boltz / units::me_c2;
 
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
@@ -190,14 +191,16 @@ double ComptonKernelQuadrature::compute_dIQ_pre_ibp(
     return laguerre_integrate(integrand, get_rule(NL));
 }
 
-SigmaResult ComptonKernelQuadrature::dsigma_E_dtau(
+SigmaResult ComptonKernelQuadrature::dsigma_E_dT(
     double const E,
     double const E_prime,
     double const xi,
-    double const tau,
+    double const T,
     double const Ne) const
 {
-    assert_parameters(E, E_prime, xi, tau, Ne);
+    assert_parameters(E, E_prime, xi, T, Ne);
+    double const tau = T * units::k_boltz / units::me_c2;
+    double const dtau_dT = units::k_boltz / units::me_c2;
 
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
@@ -213,18 +216,18 @@ SigmaResult ComptonKernelQuadrature::dsigma_E_dtau(
 
         double const dIQ_hi = compute_dIQ_post_ibp(p, tau, NL_, kappa_val);
         double const dIQ_lo = compute_dIQ_post_ibp(p, tau, NL_ / 2, kappa_val);
-        double const value = sigma0 * (non_integral + dIQ_hi);
+        double const value = sigma0 * (non_integral + dIQ_hi) * dtau_dT;
 
-        double const abs_err = std::abs(sigma0) * std::abs(dIQ_hi - dIQ_lo);
+        double const abs_err = std::abs(sigma0) * std::abs(dIQ_hi - dIQ_lo) * dtau_dT;
         double const rel_err = abs_err / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
         return SigmaResult{value, abs_err, rel_err};
 
     } else {
         double const dIQ_hi = compute_dIQ_pre_ibp(p, tau, NL_, kappa_val);
         double const dIQ_lo = compute_dIQ_pre_ibp(p, tau, NL_ / 2, kappa_val);
-        double const value = sigma0 * dIQ_hi;
+        double const value = sigma0 * dIQ_hi * dtau_dT;
 
-        double const abs_err = std::abs(sigma0) * std::abs(dIQ_hi - dIQ_lo);
+        double const abs_err = std::abs(sigma0) * std::abs(dIQ_hi - dIQ_lo) * dtau_dT;
         double const rel_err = abs_err / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
         return SigmaResult{value, abs_err, rel_err};
     }

@@ -21,10 +21,16 @@ from _compton_kernel_quadrature import (
 
 ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2  # erg
 KEV = 1.602176634e-9  # erg
+K_BOLTZ = 1.380649e-16  # erg/K
+KEV_KELVIN = KEV / K_BOLTZ  # 1 keV in Kelvin
 
 
 def _to_erg(E_kev):
     return E_kev * KEV
+
+
+def _to_kelvin(T_kev):
+    return T_kev * KEV_KELVIN
 
 
 NICE_POINTS = [
@@ -40,13 +46,13 @@ NICE_POINTS = [
 
 
 class TestFiniteDifference:
-    """Compare analytic dsigma_E_dtau against Richardson-extrapolated FD."""
+    """Compare analytic dsigma_E_dT against Richardson-extrapolated FD."""
 
-    def _fd_richardson(self, engine, E, Ep, xi, tau, Ne, h):
+    def _fd_richardson(self, engine, E, Ep, xi, T, Ne, h):
         """Centered FD at h and h/2, Richardson-extrapolated to O(h^4)."""
         def fd(step):
-            vp = engine.sigma_E(E, Ep, xi, tau + step, Ne).value
-            vm = engine.sigma_E(E, Ep, xi, tau - step, Ne).value
+            vp = engine.sigma_E(E, Ep, xi, T + step, Ne).value
+            vm = engine.sigma_E(E, Ep, xi, T - step, Ne).value
             return (vp - vm) / (2.0 * step)
 
         fd_h = fd(h)
@@ -57,25 +63,25 @@ class TestFiniteDifference:
         engine = ComptonKernelQuadrature(256, form)
         passed = 0
 
-        for E_kev, Ep_kev, xi, tau_kev in NICE_POINTS:
+        for E_kev, Ep_kev, xi, T_kev in NICE_POINTS:
             E = _to_erg(E_kev)
             Ep = _to_erg(Ep_kev)
-            tau = tau_kev * KEV / ME_C2
+            T = _to_kelvin(T_kev)
 
-            sig = engine.sigma_E(E, Ep, xi, tau, 1.0)
+            sig = engine.sigma_E(E, Ep, xi, T, 1.0)
             if sig.estimated_rel_error > 1e-6:
                 continue
 
-            h = 1e-4 * tau
-            fd_rich = self._fd_richardson(engine, E, Ep, xi, tau, 1.0, h)
-            analytic = engine.dsigma_E_dtau(E, Ep, xi, tau, 1.0)
+            h = 1e-4 * T
+            fd_rich = self._fd_richardson(engine, E, Ep, xi, T, 1.0, h)
+            analytic = engine.dsigma_E_dT(E, Ep, xi, T, 1.0)
 
             if abs(fd_rich) < 1e-300:
                 continue
 
             rel_err = abs(analytic.value - fd_rich) / abs(fd_rich)
             assert rel_err < tol, (
-                f"FD mismatch at E={E_kev}, Ep={Ep_kev}, xi={xi}, tau={tau_kev}: "
+                f"FD mismatch at E={E_kev}, Ep={Ep_kev}, xi={xi}, T={T_kev}keV: "
                 f"analytic={analytic.value}, fd_rich={fd_rich}, rel_err={rel_err}"
             )
             passed += 1
@@ -95,18 +101,18 @@ class TestFiniteDifference:
         engine = ComptonKernelQuadrature(256, QuadratureForm.PreIBP)
         checked = 0
 
-        for E_kev, Ep_kev, xi, tau_kev in NICE_POINTS:
+        for E_kev, Ep_kev, xi, T_kev in NICE_POINTS:
             E = _to_erg(E_kev)
             Ep = _to_erg(Ep_kev)
-            tau = tau_kev * KEV / ME_C2
+            T = _to_kelvin(T_kev)
 
-            sig = engine.sigma_E(E, Ep, xi, tau, 1.0)
+            sig = engine.sigma_E(E, Ep, xi, T, 1.0)
             if sig.estimated_rel_error > 1e-6:
                 continue
 
-            h = 1e-4 * tau
-            fd_rich = self._fd_richardson(engine, E, Ep, xi, tau, 1.0, h)
-            analytic = engine.dsigma_E_dtau(E, Ep, xi, tau, 1.0)
+            h = 1e-4 * T
+            fd_rich = self._fd_richardson(engine, E, Ep, xi, T, 1.0, h)
+            analytic = engine.dsigma_E_dT(E, Ep, xi, T, 1.0)
 
             if abs(analytic.value) < 1e-300:
                 continue
@@ -131,13 +137,13 @@ class TestPrePostIBPConsistency:
         engine_pre = ComptonKernelQuadrature(256, QuadratureForm.PreIBP)
         engine_post = ComptonKernelQuadrature(256, QuadratureForm.PostIBP)
 
-        for E_kev, Ep_kev, xi, tau_kev in NICE_POINTS:
+        for E_kev, Ep_kev, xi, T_kev in NICE_POINTS:
             E = _to_erg(E_kev)
             Ep = _to_erg(Ep_kev)
-            tau = tau_kev * KEV / ME_C2
+            T = _to_kelvin(T_kev)
 
-            r_pre = engine_pre.dsigma_E_dtau(E, Ep, xi, tau, 1.0)
-            r_post = engine_post.dsigma_E_dtau(E, Ep, xi, tau, 1.0)
+            r_pre = engine_pre.dsigma_E_dT(E, Ep, xi, T, 1.0)
+            r_post = engine_post.dsigma_E_dT(E, Ep, xi, T, 1.0)
 
             scale = max(abs(r_pre.value), abs(r_post.value))
             if scale < 1e-300:
@@ -146,23 +152,23 @@ class TestPrePostIBPConsistency:
             rel_diff = abs(r_pre.value - r_post.value) / scale
             assert rel_diff < 1e-4, (
                 f"Pre/post IBP mismatch at E={E_kev}, Ep={Ep_kev}, xi={xi}, "
-                f"tau={tau_kev}: pre={r_pre.value}, post={r_post.value}, "
+                f"T={T_kev}keV: pre={r_pre.value}, post={r_post.value}, "
                 f"rel_diff={rel_diff}"
             )
 
 
 class TestSmallTauStability:
-    """Verify dsigma_E_dtau returns finite values at small temperatures."""
+    """Verify dsigma_E_dT returns finite values at small temperatures."""
 
-    @pytest.mark.parametrize("tau_kev", [0.01, 0.1, 1.0])
-    def test_finite(self, tau_kev):
+    @pytest.mark.parametrize("T_kev", [0.01, 0.1, 1.0])
+    def test_finite(self, T_kev):
         engine = ComptonKernelQuadrature(128, QuadratureForm.PreIBP)
         E = _to_erg(1.0)
         Ep = _to_erg(1.0)
-        tau = tau_kev * KEV / ME_C2
+        T = _to_kelvin(T_kev)
 
-        r = engine.dsigma_E_dtau(E, Ep, 0.0, tau, 1.0)
-        assert np.isfinite(r.value), f"Non-finite at tau_kev={tau_kev}: {r.value}"
+        r = engine.dsigma_E_dT(E, Ep, 0.0, T, 1.0)
+        assert np.isfinite(r.value), f"Non-finite at T_kev={T_kev}: {r.value}"
         assert np.isfinite(r.estimated_abs_error)
         assert np.isfinite(r.estimated_rel_error)
 

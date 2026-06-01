@@ -15,6 +15,7 @@ from _compton_kernel_quadrature import (
 )
 
 ME_C2 = 9.109383713928e-28 * (2.99792458000e10)**2  # erg
+K_BOLTZ = 1.380649e-16  # erg/K
 
 
 def assert_close_mixed(a, b, rtol=1e-8, atol=1e-300):
@@ -76,10 +77,15 @@ TEST_POINTS = [
 ]
 
 KEV = 1.602176634e-9  # erg
+KEV_KELVIN = KEV / K_BOLTZ  # 1 keV in Kelvin
 
 
 def _to_erg(E_kev):
     return E_kev * KEV
+
+
+def _to_kelvin(T_kev):
+    return T_kev * KEV_KELVIN
 
 
 class TestFiniteOutput:
@@ -87,13 +93,13 @@ class TestFiniteOutput:
 
     def test_finite_output(self):
         engine = ComptonKernelQuadrature(NL=64, form=QuadratureForm.PostIBP)
-        for E_kev, Ep_kev, xi, tau_kev in TEST_POINTS:
+        for E_kev, Ep_kev, xi, T_kev in TEST_POINTS:
             E = _to_erg(E_kev)
             Ep = _to_erg(Ep_kev)
-            tau = tau_kev * KEV / ME_C2
-            r = engine.sigma_E(E, Ep, xi, tau, 1.0)
+            T = _to_kelvin(T_kev)
+            r = engine.sigma_E(E, Ep, xi, T, 1.0)
             assert np.isfinite(r.value), (
-                f"Non-finite at E={E_kev}, Ep={Ep_kev}, xi={xi}, tau_kev={tau_kev}"
+                f"Non-finite at E={E_kev}, Ep={Ep_kev}, xi={xi}, T_kev={T_kev}"
             )
             assert np.isfinite(r.estimated_abs_error)
             assert np.isfinite(r.estimated_rel_error)
@@ -104,12 +110,12 @@ class TestPositivity:
 
     def test_positivity(self):
         engine = ComptonKernelQuadrature(NL=128, form=QuadratureForm.PostIBP)
-        for E_kev, Ep_kev, xi, tau_kev in TEST_POINTS:
+        for E_kev, Ep_kev, xi, T_kev in TEST_POINTS:
             E = _to_erg(E_kev)
             Ep = _to_erg(Ep_kev)
-            tau = tau_kev * KEV / ME_C2
-            r = engine.sigma_E(E, Ep, xi, tau, 1.0)
-            r_rev = engine.sigma_E(Ep, E, xi, tau, 1.0)
+            T = _to_kelvin(T_kev)
+            r = engine.sigma_E(E, Ep, xi, T, 1.0)
+            r_rev = engine.sigma_E(Ep, E, xi, T, 1.0)
             local_scale = max(abs(r.value), abs(r_rev.value), 1e-300)
             assert r.value >= -1e-12 * local_scale, (
                 f"Negative at E={E_kev}, Ep={Ep_kev}, xi={xi}: {r.value}"
@@ -125,15 +131,15 @@ class TestDetailedBalance:
 
     def test_detailed_balance(self):
         engine = ComptonKernelQuadrature(NL=128, form=QuadratureForm.PostIBP)
-        for E_kev, Ep_kev, xi, tau_kev in TEST_POINTS:
+        for E_kev, Ep_kev, xi, T_kev in TEST_POINTS:
             E = _to_erg(E_kev)
             Ep = _to_erg(Ep_kev)
-            tau = tau_kev * KEV / ME_C2
+            T = _to_kelvin(T_kev)
+            tau = T_kev * KEV / ME_C2
 
-            r_fwd = engine.sigma_E(E, Ep, xi, tau, 1.0)
-            r_rev = engine.sigma_E(Ep, E, xi, tau, 1.0)
+            r_fwd = engine.sigma_E(E, Ep, xi, T, 1.0)
+            r_rev = engine.sigma_E(Ep, E, xi, T, 1.0)
 
-            # Use log-space to avoid underflow
             gamma = E / ME_C2
             gamma_p = Ep / ME_C2
 
@@ -143,10 +149,9 @@ class TestDetailedBalance:
             if abs(r_fwd.value) < 1e-300 and abs(r_rev.value) < 1e-300:
                 continue
 
-            # Relative error in log-space
             assert abs(log_lhs - log_rhs) < 1e-6, (
                 f"Detailed balance failed at E={E_kev}, Ep={Ep_kev}, xi={xi}, "
-                f"tau_kev={tau_kev}: log_lhs={log_lhs}, log_rhs={log_rhs}, "
+                f"T_kev={T_kev}: log_lhs={log_lhs}, log_rhs={log_rhs}, "
                 f"diff={abs(log_lhs - log_rhs)}"
             )
 
@@ -159,13 +164,13 @@ class TestNLConvergence:
         engine_128 = ComptonKernelQuadrature(NL=128, form=QuadratureForm.PreIBP)
         engine_256 = ComptonKernelQuadrature(NL=256, form=QuadratureForm.PreIBP)
 
-        for E_kev, Ep_kev, xi, tau_kev in TEST_POINTS:
+        for E_kev, Ep_kev, xi, T_kev in TEST_POINTS:
             E = _to_erg(E_kev)
             Ep = _to_erg(Ep_kev)
-            tau = tau_kev * KEV / ME_C2
+            T = _to_kelvin(T_kev)
 
-            r_128 = engine_128.sigma_E(E, Ep, xi, tau, 1.0)
-            r_256 = engine_256.sigma_E(E, Ep, xi, tau, 1.0)
+            r_128 = engine_128.sigma_E(E, Ep, xi, T, 1.0)
+            r_256 = engine_256.sigma_E(E, Ep, xi, T, 1.0)
 
             if abs(r_256.value) < 1e-300:
                 continue
@@ -173,7 +178,7 @@ class TestNLConvergence:
             rel_diff = abs(r_256.value - r_128.value) / (abs(r_256.value) + 1e-300)
             assert rel_diff < 5e-6, (
                 f"NL convergence failed at E={E_kev}, Ep={Ep_kev}, xi={xi}, "
-                f"tau_kev={tau_kev}: rel_diff={rel_diff}"
+                f"T_kev={T_kev}: rel_diff={rel_diff}"
             )
 
     def test_convergence_post_ibp_moderate(self):
@@ -181,15 +186,15 @@ class TestNLConvergence:
         engine_128 = ComptonKernelQuadrature(NL=128, form=QuadratureForm.PostIBP)
         engine_256 = ComptonKernelQuadrature(NL=256, form=QuadratureForm.PostIBP)
 
-        for E_kev, Ep_kev, xi, tau_kev in TEST_POINTS:
-            if tau_kev < 0.5:
+        for E_kev, Ep_kev, xi, T_kev in TEST_POINTS:
+            if T_kev < 0.5:
                 continue
             E = _to_erg(E_kev)
             Ep = _to_erg(Ep_kev)
-            tau = tau_kev * KEV / ME_C2
+            T = _to_kelvin(T_kev)
 
-            r_128 = engine_128.sigma_E(E, Ep, xi, tau, 1.0)
-            r_256 = engine_256.sigma_E(E, Ep, xi, tau, 1.0)
+            r_128 = engine_128.sigma_E(E, Ep, xi, T, 1.0)
+            r_256 = engine_256.sigma_E(E, Ep, xi, T, 1.0)
 
             if abs(r_256.value) < 1e-300:
                 continue
@@ -197,7 +202,7 @@ class TestNLConvergence:
             rel_diff = abs(r_256.value - r_128.value) / (abs(r_256.value) + 1e-300)
             assert rel_diff < 5e-6, (
                 f"NL convergence failed at E={E_kev}, Ep={Ep_kev}, xi={xi}, "
-                f"tau_kev={tau_kev}: rel_diff={rel_diff}"
+                f"T_kev={T_kev}: rel_diff={rel_diff}"
             )
 
 
@@ -208,16 +213,15 @@ class TestPostVsPreIBP:
         engine_post = ComptonKernelQuadrature(NL=128, form=QuadratureForm.PostIBP)
         engine_pre = ComptonKernelQuadrature(NL=128, form=QuadratureForm.PreIBP)
 
-        for E_kev, Ep_kev, xi, tau_kev in TEST_POINTS:
+        for E_kev, Ep_kev, xi, T_kev in TEST_POINTS:
             E = _to_erg(E_kev)
             Ep = _to_erg(Ep_kev)
-            tau = tau_kev * KEV / ME_C2
+            T = _to_kelvin(T_kev)
 
-            r_post = engine_post.sigma_E(E, Ep, xi, tau, 1.0)
-            r_pre = engine_pre.sigma_E(E, Ep, xi, tau, 1.0)
+            r_post = engine_post.sigma_E(E, Ep, xi, T, 1.0)
+            r_pre = engine_pre.sigma_E(E, Ep, xi, T, 1.0)
 
-            # Small-tau regime: post-IBP has Psi/IQ cancellation, relax tolerance
-            if tau_kev < 0.5:
+            if T_kev < 0.5:
                 assert_close_mixed(r_post.value, r_pre.value, rtol=1e-3, atol=1e-300)
             else:
                 assert_close_mixed(r_post.value, r_pre.value, rtol=1e-6, atol=1e-300)
@@ -237,18 +241,17 @@ class TestAngularNormalization:
 
         SIGMA_T = 6.652458732160e-25  # cm^2
         E_kev = 0.01  # very low energy (10 eV)
-        tau_kev = 10.0  # hot plasma so scattering is quasi-elastic
+        T_kev = 10.0  # hot plasma so scattering is quasi-elastic
         E = _to_erg(E_kev)
-        tau = tau_kev * KEV / ME_C2
+        T = _to_kelvin(T_kev)
 
-        # Integrate over xi in (-1,1) and E' in a wide range around E
         E_lo = _to_erg(E_kev * 0.5)
         E_hi = _to_erg(E_kev * 2.0)
 
         XI_EPS = 1e-8
 
         def integrand(Ep, xi):
-            return engine.sigma_E(E, Ep, xi, tau, 1.0).value
+            return engine.sigma_E(E, Ep, xi, T, 1.0).value
 
         val, err = dblquad(
             integrand,

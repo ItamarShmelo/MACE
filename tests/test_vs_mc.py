@@ -29,11 +29,11 @@ def angular_factor(mode: str) -> float:
     raise ValueError(f"Unknown angular normalization mode: {mode}")
 
 
-def integrate_bin(engine, E_in, E_lo, E_hi, tau, angular_norm_mode="moment0"):
+def integrate_bin(engine, E_in, E_lo, E_hi, T, angular_norm_mode="moment0"):
     C_omega = angular_factor(angular_norm_mode)
 
     def integrand(Ep, xi):
-        return engine.sigma_E(E_in, Ep, xi, tau, 1.0).value
+        return engine.sigma_E(E_in, Ep, xi, T, 1.0).value
 
     val, err = dblquad(
         integrand,
@@ -69,7 +69,7 @@ def get_quad_matrix(T_kev, eb_erg, angular_norm_mode="moment0"):
     """Generate S-matrix from quadrature."""
     engine = ComptonKernelQuadrature(NL=64, form=QuadratureForm.PostIBP)
 
-    tau = T_kev * KEV / ME_C2
+    T = T_kev * KEV_KELVIN
     num_groups = len(eb_erg) - 1
     ec = 0.5 * (eb_erg[:-1] + eb_erg[1:])
 
@@ -81,7 +81,7 @@ def get_quad_matrix(T_kev, eb_erg, angular_norm_mode="moment0"):
             val, err = integrate_bin(
                 engine, E_in,
                 eb_erg[gp], eb_erg[gp + 1],
-                tau, angular_norm_mode
+                T, angular_norm_mode
             )
             S_quad[g, gp] = val
 
