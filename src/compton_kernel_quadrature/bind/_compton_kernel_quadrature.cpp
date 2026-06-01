@@ -5,6 +5,7 @@
 #include "compton_kernel_quadrature/gauss_laguerre.hpp"
 
 namespace py = pybind11;
+using namespace pybind11::literals;
 using namespace compton;
 
 PYBIND11_MODULE(_compton_kernel_quadrature, m) {
@@ -18,11 +19,11 @@ PYBIND11_MODULE(_compton_kernel_quadrature, m) {
 
     py::class_<ComptonKernelQuadrature>(m, "ComptonKernelQuadrature")
         .def(py::init<int, QuadratureForm>(),
-             py::arg("NL") = 64,
-             py::arg("form") = QuadratureForm::PostIntegrationByParts)
+             "NL"_a = 64,
+             "form"_a = QuadratureForm::PostIntegrationByParts)
         .def("sigma_E", &ComptonKernelQuadrature::sigma_E,
-             py::arg("E"), py::arg("E_prime"), py::arg("xi"),
-             py::arg("T"), py::arg("Ne"))
+             "E"_a, "E_prime"_a, "xi"_a,
+             "T"_a, "Ne"_a)
         .def("sigma_E_vec", [](ComptonKernelQuadrature const& self,
                                double E,
                                py::array_t<double, py::array::c_style | py::array::forcecast> E_prime_arr,
@@ -41,11 +42,11 @@ PYBIND11_MODULE(_compton_kernel_quadrature, m) {
                 out_errors(i) = r.estimated_abs_error;
             }
             return py::make_tuple(values, errors);
-        }, py::arg("E"), py::arg("E_prime_arr"), py::arg("xi"),
-           py::arg("T"), py::arg("Ne"))
+        }, "E"_a, "E_prime_arr"_a, "xi"_a,
+           "T"_a, "Ne"_a)
         .def("dsigma_E_dT", &ComptonKernelQuadrature::dsigma_E_dT,
-             py::arg("E"), py::arg("E_prime"), py::arg("xi"),
-             py::arg("T"), py::arg("Ne"))
+             "E"_a, "E_prime"_a, "xi"_a,
+             "T"_a, "Ne"_a)
         .def("dsigma_E_dT_vec", [](ComptonKernelQuadrature const& self,
                                     double E,
                                     py::array_t<double, py::array::c_style | py::array::forcecast> E_prime_arr,
@@ -64,16 +65,16 @@ PYBIND11_MODULE(_compton_kernel_quadrature, m) {
                 out_errors(i) = r.estimated_abs_error;
             }
             return py::make_tuple(values, errors);
-        }, py::arg("E"), py::arg("E_prime_arr"), py::arg("xi"),
-           py::arg("T"), py::arg("Ne"));
+        }, "E"_a, "E_prime_arr"_a, "xi"_a,
+           "T"_a, "Ne"_a);
 
-    m.def("scaled_K2", &scaled_K2, py::arg("x"),
+    m.def("scaled_K2", &scaled_K2, "x"_a,
           "Returns kve(2, x) = exp(x) * K_2(x)");
 
-    m.def("scaled_K1", &scaled_K1, py::arg("x"),
+    m.def("scaled_K1", &scaled_K1, "x"_a,
           "Returns kve(1, x) = exp(x) * K_1(x)");
 
-    m.def("kappa_ratio", &kappa_ratio, py::arg("tau"),
+    m.def("kappa_ratio", &kappa_ratio, "tau"_a,
           "Returns K_1(1/tau) / K_2(1/tau)");
 
     m.def("gauss_laguerre_rule", [](int N) {
@@ -91,5 +92,5 @@ PYBIND11_MODULE(_compton_kernel_quadrature, m) {
         }
 
         return py::make_tuple(nodes, weights);
-    }, py::arg("N"), "Compute N-point Gauss-Laguerre nodes and weights");
+    }, "N"_a, "Compute N-point Gauss-Laguerre nodes and weights");
 }
