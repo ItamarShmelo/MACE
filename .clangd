@@ -2,3 +2,4 @@ CompileFlags:
   CompilationDatabase: build/
   Add:
     - -I./build/_deps/doubledouble-src/include
+    - -I./build/_deps/planck_integral-src

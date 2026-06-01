@@ -15,10 +15,26 @@ FetchContent_Declare(
 )
 FetchContent_Populate(doubledouble)
 
+FetchContent_Declare(
+  planck_integral
+  GIT_REPOSITORY git@github.com:menahemkrief/planck_integral.git
+  GIT_TAG main
+)
+FetchContent_Populate(planck_integral)
+
+# planck_integral.hpp includes "../units/units.hpp" via a relative path.
+# Create a symlink so that path resolves to our src/units/.
+file(CREATE_LINK
+  "${PROJECT_SOURCE_DIR}/src/units"
+  "${planck_integral_SOURCE_DIR}/../units"
+  SYMBOLIC
+)
+
 include_directories(src)
 include_directories(external/CMMC/src)
 include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${doubledouble_SOURCE_DIR}/include)
+include_directories(${planck_integral_SOURCE_DIR})
 
 pybind11_add_module(_compton_common
     src/compton_common/bind/_compton_common.cpp

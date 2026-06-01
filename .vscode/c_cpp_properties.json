@@ -6,6 +6,7 @@
                 "${workspaceFolder}/src",
                 "${workspaceFolder}/external/CMMC/src",
                 "${workspaceFolder}/build/_deps/doubledouble-src/include",
+                "${workspaceFolder}/build/_deps/planck_integral-src",
                 "/usr/include/python3.12",
                 "/usr/lib/python3/dist-packages/pybind11/include",
                 "/usr/include"
