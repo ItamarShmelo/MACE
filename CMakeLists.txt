@@ -78,3 +78,16 @@ target_compile_options(_units PRIVATE
 set_target_properties(_units PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
 )
+
+pybind11_add_module(_compton_multigroup
+    src/compton_multigroup/compton_multigroup.cpp
+    src/compton_multigroup/bind/_compton_multigroup.cpp
+    src/compton_kernel_quadrature/compton_kernel_quadrature.cpp
+    src/compton_kernel_series/compton_kernel_series.cpp
+)
+target_compile_options(_compton_multigroup PRIVATE
+    -O3 -Wall -Wextra -Wpedantic
+)
+set_target_properties(_compton_multigroup PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
+)

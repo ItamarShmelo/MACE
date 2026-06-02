@@ -33,13 +33,14 @@ cmake -S . -B build
 cmake --build build -j
 ```
 
-This produces four pybind11 extension modules in `cpp_modules/`:
+This produces five pybind11 extension modules in `cpp_modules/`:
 
 | Module | Contents |
 |--------|----------|
 | `_compton_common` | `SigmaResult` result type |
 | `_compton_kernel_quadrature` | Gauss-Laguerre quadrature evaluator |
 | `_compton_kernel_series` | Power / asymptotic / auto series evaluator |
+| `_compton_multigroup` | Planck-weighted multigroup-multiangle kernel |
 | `_units` | Physical constants in CGS (`kev`, `kev_kelvin`, `me_c2`, ...) |
 
 ## Example usage
@@ -66,6 +67,65 @@ print(f"series:     {r.value:.6e}  (rel_err ~ {r.estimated_rel_error:.1e})")
 Both return a `SigmaResult` with fields `value`, `estimated_abs_error`, and
 `estimated_rel_error`. Temperature derivatives `dsigma_E_dT` and vectorized
 `sigma_E_vec` / `dsigma_E_dT_vec` are also available.
+
+## Multigroup kernel
+
+The `_compton_multigroup` module computes the Planck-weighted multigroup-multiangle
+Compton scattering matrix by numerically integrating the point-wise kernel over
+energy groups and angle bins:
+
+$$
+\sigma(g \to g', [\mu_i, \mu_{i+1}]; T)
+= \frac{2\pi \int_{\Delta E_g} \int_{\Delta E_{g'}} \int_{\mu_i}^{\mu_{i+1}}
+        w(E,T)\, \Sigma_E(E, E', \mu)\; d\mu\, dE'\, dE}
+       {\int_{\Delta E_g} w(E,T)\, dE}
+$$
+
+The $2\pi$ factor accounts for azimuthal symmetry ($d\Omega = 2\pi\, d\mu$).
+
+**Capped Planck weight.** The weighting function is
+
+$$
+w(E, T) = \begin{cases}
+x^3 / (e^x - 1) & x = E/(kT) < 25 \\
+25^3 / (e^{25} - 1) & \text{otherwise}
+\end{cases}
+$$
+
+The cap prevents overflow in the tail while preserving continuity.
+The denominator is computed analytically via the Clark (1987) polylogarithm method,
+with stitching at $x = 25$ when a group straddles the threshold.
+
+**API summary.**
+
+- **Constructor**: `ComptonMultigroupKernel(energy_group_boundaries, quad_order_E=8, quad_order_Ep=8, quad_order_mu=8, planck_cap_x=25.0)` — boundaries are G+1 strictly increasing values in [erg], all > 0.
+- **`compute_sigma_matrix(kernel, num_angle_bins, T, Ne)`** — returns a `(G, G, N_angles)` NumPy array.
+- **`compute_sigma_matrix(kernel, T, Ne)`** — angle-integrated, returns a `(G, G)` NumPy array.
+- **`compute_dsigma_dT_matrix`** — same signatures, using the temperature-derivative kernel.
+
+The `kernel` argument is a `ComptonKernelQuadrature` or `ComptonKernelSeries` instance.
+
+**Example:**
+
+```python
+import sys
+sys.path.insert(0, "cpp_modules")
+
+import _compton_multigroup as cm
+import _compton_kernel_quadrature as cq
+from _units import kev, kev_kelvin
+
+kernel = cq.ComptonKernelQuadrature(64)
+mg = cm.ComptonMultigroupKernel(
+    energy_group_boundaries=[0.1*kev, 0.5*kev, 1*kev, 5*kev, 10*kev],
+    quad_order_E=8)
+
+# Angle-integrated G x G matrix
+S = mg.compute_sigma_matrix(kernel, T=10*kev_kelvin, Ne=1.0)
+
+# Multiangle G x G x N_angles tensor
+S_angle = mg.compute_sigma_matrix(kernel, num_angle_bins=8, T=10*kev_kelvin, Ne=1.0)
+```
 
 ## Equations
 
