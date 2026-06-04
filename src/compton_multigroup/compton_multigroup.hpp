@@ -56,6 +56,7 @@
  */
 
 #include "compton_multigroup/gauss_legendre.hpp"
+#include "compton_multigroup/weight_function.hpp"
 #include "compton_kernel_quadrature/compton_kernel_quadrature.hpp"
 #include "compton_kernel_series/compton_kernel_series.hpp"
 
@@ -135,19 +136,6 @@ public:
         int num_angle_bins,
         double T, double Ne) const;
 
-    /**
-     * @brief Analytic denominator ∫_{ΔEg} w(E,T) dE for group g.
-     *
-     * Uses the Clark polylogarithm series from planck_integral.hpp for the
-     * below-cap portion and a constant for the above-cap portion, stitching
-     * at E = cap_x · kT when the group straddles the threshold.
-     *
-     * @param g  Group index (0-based).
-     * @param T  Electron temperature [K].
-     * @return   Denominator integral value.
-     */
-    double compute_denominator(int g, double T) const;
-
 private:
     /**
      * @brief Core implementation: 3D tensor-product quadrature.
@@ -168,21 +156,9 @@ private:
         double T,
         double Ne) const;
 
-    /**
-     * @brief Capped Planck weight w(E, T).
-     *
-     * Returns x³/(eˣ−1) for x = E/(kT) < cap_x_, else cap constant w₀.
-     *
-     * @param E  Photon energy [erg].
-     * @param T  Electron temperature [K].
-     * @return   Weight value (dimensionless).
-     */
-    double planck_weight(double E, double T) const;
-
     std::vector<double> group_boundaries_;
     std::vector<double> group_centers_;
-    double cap_x_;
-    double w0_;
+    PlanckWeightFunction planck_weight_;
 
     GaussLegendreRule rule_E_;
     GaussLegendreRule rule_Ep_;

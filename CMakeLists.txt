@@ -81,6 +81,7 @@ set_target_properties(_units PROPERTIES
 
 pybind11_add_module(_compton_multigroup
     src/compton_multigroup/compton_multigroup.cpp
+    src/compton_multigroup/weight_function.cpp
     src/compton_multigroup/bind/_compton_multigroup.cpp
     src/compton_kernel_quadrature/compton_kernel_quadrature.cpp
     src/compton_kernel_series/compton_kernel_series.cpp

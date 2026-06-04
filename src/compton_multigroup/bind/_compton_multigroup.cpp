@@ -4,6 +4,7 @@
 
 #include "compton_multigroup/compton_multigroup.hpp"
 #include "compton_multigroup/gauss_legendre.hpp"
+#include "compton_multigroup/weight_function.hpp"
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -88,9 +89,6 @@ PYBIND11_MODULE(_compton_multigroup, m) {
             return arr;
         })
 
-        .def("compute_denominator", &ComptonMultigroupKernel::compute_denominator,
-             "g"_a, "T"_a)
-
         // ── Multiangle: quadrature kernel ────────────────────────────────
         .def("compute_sigma_matrix",
             [](ComptonMultigroupKernel const& self,
@@ -166,6 +164,12 @@ PYBIND11_MODULE(_compton_multigroup, m) {
                     &ComptonMultigroupKernel::compute_dsigma_dT_matrix<ComptonKernelSeries>);
             },
             "kernel"_a, "T"_a, "Ne"_a);
+
+    py::class_<PlanckWeightFunction>(m, "PlanckWeightFunction")
+        .def(py::init<double>(), "cap_x"_a)
+        .def("weight", &PlanckWeightFunction::weight, "E"_a, "T"_a)
+        .def("compute_denominator", &PlanckWeightFunction::compute_denominator,
+             "E_left"_a, "E_right"_a, "T"_a);
 
     m.def("gauss_legendre_rule", [](int N) {
         auto rule = compton::compute_gauss_legendre(N);

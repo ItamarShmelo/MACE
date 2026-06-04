@@ -115,11 +115,9 @@ def section_denominator():
             E_lo = x_lo * kT
             E_hi = x_hi * kT
 
-            mg = cm.ComptonMultigroupKernel(
-                energy_group_boundaries=[E_lo, E_hi],
-                quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
+            wf = cm.PlanckWeightFunction(cap_x)
 
-            computed = mg.compute_denominator(0, T)
+            computed = wf.compute_denominator(E_lo, E_hi, T)
 
             def weight_fn(x):
                 if x < cap_x:

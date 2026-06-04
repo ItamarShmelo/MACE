@@ -1,11 +1,8 @@
 #include "compton_multigroup/compton_multigroup.hpp"
-#include "planck_integral.hpp"
-#include "units/units.hpp"
 
 #include <cmath>
 #include <numbers>
 #include <stdexcept>
-#include <sstream>
 
 namespace compton {
 
@@ -16,8 +13,7 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
     int const quad_order_mu,
     double const planck_cap_x)
     : group_boundaries_(energy_group_boundaries)
-    , cap_x_(planck_cap_x)
-    , w0_(planck_cap_x * planck_cap_x * planck_cap_x / std::expm1(planck_cap_x))
+    , planck_weight_(planck_cap_x)
     , rule_E_(compute_gauss_legendre(quad_order_E))
     , rule_Ep_(compute_gauss_legendre(quad_order_Ep))
     , rule_mu_(compute_gauss_legendre(quad_order_mu))
@@ -39,42 +35,11 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
     if (quad_order_E < 1 || quad_order_Ep < 1 || quad_order_mu < 1)
         throw std::invalid_argument("quadrature orders must be >= 1");
 
-    if (!(planck_cap_x > 0.0))
-        throw std::invalid_argument("planck_cap_x must be > 0");
-
     int const G = static_cast<int>(energy_group_boundaries.size()) - 1;
     group_centers_.resize(G);
     for (int g = 0; g < G; ++g) {
         group_centers_[g] = std::sqrt(group_boundaries_[g] * group_boundaries_[g + 1]);
     }
-}
-
-double ComptonMultigroupKernel::planck_weight(double const E, double const T) const {
-    double const x = E / (units::k_boltz * T);
-    if (x < cap_x_)
-        return x * x * x / std::expm1(x);
-    return w0_;
-}
-
-double ComptonMultigroupKernel::compute_denominator(int const g, double const T) const {
-    double const kT = units::k_boltz * T;
-    double const x_lo = group_boundaries_[g] / kT;
-    double const x_hi = group_boundaries_[g + 1] / kT;
-
-    static double constexpr pi4_over_15 =
-        std::numbers::pi * std::numbers::pi * std::numbers::pi * std::numbers::pi / 15.0;
-
-    if (x_hi <= cap_x_) {
-        return kT * pi4_over_15 * planck_integral::planck_integral(x_lo, x_hi);
-    }
-
-    if (x_lo >= cap_x_) {
-        return kT * w0_ * (x_hi - x_lo);
-    }
-
-    double const planck_part = pi4_over_15 * planck_integral::planck_integral(x_lo, cap_x_);
-    double const const_part = w0_ * (x_hi - cap_x_);
-    return kT * (planck_part + const_part);
 }
 
 template<typename KernelT>
@@ -96,7 +61,8 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
 
     std::vector<double> denominators(G);
     for (int g = 0; g < G; ++g) {
-        denominators[g] = compute_denominator(g, T);
+        denominators[g] = planck_weight_.compute_denominator(
+            group_boundaries_[g], group_boundaries_[g + 1], T);
     }
 
     for (int g = 0; g < G; ++g) {
@@ -114,7 +80,7 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
 
                 double const numerator = legendre_integrate(
                     [&](double const E) {
-                        double const w = planck_weight(E, T);
+                        double const w = planck_weight_.weight(E, T);
                         double const inner = legendre_integrate(
                             [&](double const Ep) {
                                 return legendre_integrate(
