@@ -18,7 +18,7 @@ import pytest
 sys.path.insert(0, "cpp_modules")
 
 import _compton_multigroup as cm
-import _compton_kernel_quadrature as cq
+from _compton_kernel_solver import ComptonKernelSolver
 from _units import kev, kev_kelvin, k_boltz
 
 
@@ -29,7 +29,7 @@ from _units import kev, kev_kelvin, k_boltz
 BOUNDARIES_KEV = [0.1, 0.5, 1.0, 5.0, 10.0, 50.0]
 BOUNDARIES_ERG = [b * kev for b in BOUNDARIES_KEV]
 
-KERNEL_Q64 = cq.ComptonKernelQuadrature(64)
+KERNEL = ComptonKernelSolver()
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +52,7 @@ class TestDenominator:
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
             quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
 
-        S = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
+        S = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
 
         x_lo, x_hi = 0.1, 5.0
         from scipy.integrate import quad as scipy_quad
@@ -132,7 +132,7 @@ class TestQuadratureConvergence:
                 energy_group_boundaries=narrow_bounds,
                 weight_function=cm.PlanckWeightFunction(cap_x=25.0),
                 quad_order_E=n, quad_order_Ep=n, quad_order_mu=n)
-            results[n] = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
+            results[n] = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
 
         ref = results[64]
         mask = np.abs(ref) > 1e-35
@@ -172,8 +172,8 @@ class TestAngleBinSummation:
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
             quad_order_E=32, quad_order_Ep=32, quad_order_mu=32)
 
-        S_integrated = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
-        S_binned = mg.compute_sigma_matrix(KERNEL_Q64, num_angle_bins=num_bins, T=T, Ne=1.0)
+        S_integrated = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        S_binned = mg.compute_sigma_matrix(KERNEL, num_angle_bins=num_bins, T=T, Ne=1.0)
         S_summed = S_binned.sum(axis=2)
 
         mask = np.abs(S_integrated) > 1e-35
@@ -261,7 +261,7 @@ class TestMCComparison:
             energy_group_boundaries=boundaries,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
             quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
-        S_det = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
+        S_det = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
 
         row_sums_mc = S_mc.sum(axis=1)
         row_sums_det = S_det.sum(axis=1)
@@ -313,7 +313,7 @@ class TestAngleCDFComparison:
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
             quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
         S_det = mg.compute_sigma_matrix(
-            KERNEL_Q64, num_angle_bins=NUM_ANGLE_BINS, T=T, Ne=1.0)
+            KERNEL, num_angle_bins=NUM_ANGLE_BINS, T=T, Ne=1.0)
 
         max_cdf_diffs = []
         for g0 in range(G):

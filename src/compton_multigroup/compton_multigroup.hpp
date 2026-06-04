@@ -55,6 +55,7 @@
 #include "compton_multigroup/weight_function.hpp"
 #include "compton_kernel_quadrature/compton_kernel_quadrature.hpp"
 #include "compton_kernel_series/compton_kernel_series.hpp"
+#include "compton_kernel_solver/compton_kernel_solver.hpp"
 
 #include <memory>
 #include <vector>

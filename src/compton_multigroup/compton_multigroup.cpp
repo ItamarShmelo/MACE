@@ -131,15 +131,9 @@ std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
 // ── Explicit instantiations ─────────────────────────────────────────────
 
 template std::vector<double> ComptonMultigroupKernel::compute_sigma_matrix(
-    ComptonKernelQuadrature const&, int, double, double, KernelMultiplier const&) const;
-
-template std::vector<double> ComptonMultigroupKernel::compute_sigma_matrix(
-    ComptonKernelSeries const&, int, double, double, KernelMultiplier const&) const;
+    ComptonKernelSolver const&, int, double, double, KernelMultiplier const&) const;
 
 template std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
-    ComptonKernelQuadrature const&, int, double, double, KernelMultiplier const&) const;
-
-template std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
-    ComptonKernelSeries const&, int, double, double, KernelMultiplier const&) const;
+    ComptonKernelSolver const&, int, double, double, KernelMultiplier const&) const;
 
 } // namespace compton
