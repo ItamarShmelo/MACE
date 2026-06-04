@@ -483,11 +483,11 @@ def section_recommendation(sig_nz, dsig_nz):
     # Run a quick multigroup comparison
     import time
     import _compton_multigroup as cm
-    import _compton_kernel_series as cs
+    from _compton_kernel_solver import ComptonKernelSolver
     import _compton_kernel_quadrature as cq
     from _units import kev as _kev, kev_kelvin
 
-    kernel_s = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
+    kernel_solver = ComptonKernelSolver()
     kernel_q = cq.ComptonKernelQuadrature(64)
     wf = cm.PlanckWeightFunction(cap_x=25.0)
     bounds = [0.5 * _kev, 1.0 * _kev, 5.0 * _kev, 10.0 * _kev, 50.0 * _kev]
@@ -498,7 +498,7 @@ def section_recommendation(sig_nz, dsig_nz):
             energy_group_boundaries=bounds, weight_function=wf,
             quad_order_E=16, quad_order_Ep=16, quad_order_mu=16)
         t0 = time.perf_counter()
-        mg1.compute_sigma_matrix(kernel_s, num_angle_bins=16, T=T_val, Ne=1.0)
+        mg1.compute_sigma_matrix(kernel_solver, num_angle_bins=16, T=T_val, Ne=1.0)
         dt_s = time.perf_counter() - t0
 
         mg2 = cm.ComptonMultigroupKernel(

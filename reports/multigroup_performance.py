@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 
 import _compton_multigroup as cm
 import _compton_kernel_quadrature as cq
-import _compton_kernel_series as cs
+from _compton_kernel_solver import ComptonKernelSolver
 from _units import kev, kev_kelvin
 
 GEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'generated')
@@ -50,7 +50,7 @@ def save_fig(name):
 
 
 KERNEL_Q64 = cq.ComptonKernelQuadrature(64)
-KERNEL_AUTO = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
+KERNEL_SOLVER = ComptonKernelSolver()
 T = 10.0 * kev_kelvin
 
 
@@ -244,7 +244,7 @@ def section_kernel_comparison():
             quad_order_E=n, quad_order_Ep=n, quad_order_mu=n)
 
         dt_q = bench(lambda: mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0))
-        dt_s = bench(lambda: mg.compute_sigma_matrix(KERNEL_AUTO, T=T, Ne=1.0))
+        dt_s = bench(lambda: mg.compute_sigma_matrix(KERNEL_SOLVER, T=T, Ne=1.0))
         speedup = dt_q / dt_s if dt_s > 0 else float('inf')
 
         quad_times.append(dt_q)

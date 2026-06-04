@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'external', 'CMMC', 'cpp_modules'))
 
 import _compton_multigroup as cm
-import _compton_kernel_series as cs
+from _compton_kernel_solver import ComptonKernelSolver
 import _compton_matrix_mc as mc_mod
 import _units as units
 
@@ -35,7 +35,7 @@ S_mc = np.array(mc_obj.calculate_S_matrix(temperature=T_K))
 
 # Series
 print("Series (N_E=32)...")
-kernel = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
+kernel = ComptonKernelSolver()
 mg = cm.ComptonMultigroupKernel(
     energy_group_boundaries=eb.tolist(),
     weight_function=cm.PlanckWeightFunction(cap_x=25.0),

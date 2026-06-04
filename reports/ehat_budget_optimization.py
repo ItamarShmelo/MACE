@@ -25,7 +25,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 
 import _compton_multigroup as cm
-import _compton_kernel_series as cs
+from _compton_kernel_solver import ComptonKernelSolver
 import _compton_kernel_quadrature as cq
 from _units import kev, kev_kelvin, me_c2
 
@@ -106,7 +106,7 @@ def section_single_point_timing():
     emit('with the optimized `EhatAmpBudget<double> = 1e3` build.')
     emit()
 
-    kernel = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
+    kernel = ComptonKernelSolver()
 
     emit('| Point | Regime | E (keV) | E\' (keV) | T (keV) | xi | us/eval |')
     emit('|-------|--------|---------|----------|---------|----|---------|')
@@ -185,7 +185,7 @@ def section_multigroup_timing():
     with open(BEFORE_MG_FILE) as f:
         before = json.load(f)
 
-    kernel = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
+    kernel = ComptonKernelSolver()
     wf = cm.PlanckWeightFunction(cap_x=25.0)
     bounds = [0.5 * kev, 1.0 * kev, 5.0 * kev, 10.0 * kev, 50.0 * kev]
 
@@ -253,7 +253,7 @@ def section_accuracy_validation():
          '`ComptonKernelQuadrature(256)` (PostIBP) reference.')
     emit()
 
-    kernel_s = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
+    kernel_s = ComptonKernelSolver()
     kernel_q = cq.ComptonKernelQuadrature(256)
     THRESHOLD = 1e-3
 

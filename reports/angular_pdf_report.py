@@ -36,7 +36,7 @@ sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 sys.path.insert(0, os.path.join(ROOT, 'external', 'CMMC', 'cpp_modules'))
 
 import _compton_multigroup as cm
-import _compton_kernel_series as cs
+from _compton_kernel_solver import ComptonKernelSolver
 from _units import kev, kev_kelvin
 
 GEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'generated')
@@ -84,7 +84,7 @@ def group_label(g_1based):
 # ─── Computation ──────────────────────────────────────────────────────────
 
 def compute_angular_pdf(T):
-    kernel = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
+    kernel = ComptonKernelSolver()
 
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=BOUNDARIES_ERG,

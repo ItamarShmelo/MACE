@@ -1,37 +1,31 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 
-#include "compton_kernel_series/compton_kernel_series.hpp"
+#include "compton_power_series/compton_power_series.hpp"
 #include "compton_common/compton_common.hpp"
 
 namespace py = pybind11;
 using namespace pybind11::literals;
 using namespace compton;
 
-PYBIND11_MODULE(_compton_kernel_series, m) {
-    m.doc() = "Compton scattering kernel via Section 4 series expansions";
+PYBIND11_MODULE(_compton_power_series, m) {
+    m.doc() = "Compton scattering kernel via convergent power series";
 
     py::module_::import("_compton_common");
 
-    py::enum_<SeriesMethod>(m, "SeriesMethod")
-        .value("PowerSeries", SeriesMethod::PowerSeries)
-        .value("PowerSeriesHighPrecision", SeriesMethod::PowerSeriesHighPrecision)
-        .value("Asymptotic", SeriesMethod::Asymptotic)
-        .value("Auto", SeriesMethod::Auto);
-
-    py::class_<ComptonKernelSeries>(m, "ComptonKernelSeries")
-        .def(py::init<SeriesMethod, double, int, int>(),
-             "method"_a = SeriesMethod::Auto,
+    py::class_<ComptonPowerSeries>(m, "ComptonPowerSeries")
+        .def(py::init<bool, double, int, int>(),
+             "high_precision"_a = false,
              "eps_rel"_a = 1e-12,
              "n_min"_a = 4,
              "n_max"_a = 200)
-        .def("sigma_E", &ComptonKernelSeries::sigma_E,
+        .def("sigma_E", &ComptonPowerSeries::sigma_E,
              "E"_a, "E_prime"_a, "xi"_a,
              "T"_a, "Ne"_a)
-        .def("sigma_E_precision_check", &ComptonKernelSeries::sigma_E_precision_check,
+        .def("sigma_E_precision_check", &ComptonPowerSeries::sigma_E_precision_check,
              "E"_a, "E_prime"_a, "xi"_a,
              "T"_a, "Ne"_a)
-        .def("sigma_E_vec", [](ComptonKernelSeries const& self,
+        .def("sigma_E_vec", [](ComptonPowerSeries const& self,
                                double E,
                                py::array_t<double, py::array::c_style | py::array::forcecast> E_prime_arr,
                                double xi, double T, double Ne) {
@@ -51,10 +45,10 @@ PYBIND11_MODULE(_compton_kernel_series, m) {
             return py::make_tuple(values, errors);
         }, "E"_a, "E_prime_arr"_a, "xi"_a,
            "T"_a, "Ne"_a)
-        .def("dsigma_E_dT", &ComptonKernelSeries::dsigma_E_dT,
+        .def("dsigma_E_dT", &ComptonPowerSeries::dsigma_E_dT,
              "E"_a, "E_prime"_a, "xi"_a,
              "T"_a, "Ne"_a)
-        .def("dsigma_E_dT_vec", [](ComptonKernelSeries const& self,
+        .def("dsigma_E_dT_vec", [](ComptonPowerSeries const& self,
                                     double E,
                                     py::array_t<double, py::array::c_style | py::array::forcecast> E_prime_arr,
                                     double xi, double T, double Ne) {
@@ -74,7 +68,7 @@ PYBIND11_MODULE(_compton_kernel_series, m) {
             return py::make_tuple(values, errors);
         }, "E"_a, "E_prime_arr"_a, "xi"_a,
            "T"_a, "Ne"_a)
-        .def("dsigma_E_dT_precision_check", &ComptonKernelSeries::dsigma_E_dT_precision_check,
+        .def("dsigma_E_dT_precision_check", &ComptonPowerSeries::dsigma_E_dT_precision_check,
              "E"_a, "E_prime"_a, "xi"_a,
              "T"_a, "Ne"_a);
 

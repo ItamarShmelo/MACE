@@ -25,7 +25,7 @@ from matplotlib.ticker import LogFormatterSciNotation
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 
-from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
+from _compton_kernel_solver import ComptonKernelSolver
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
 
 from _units import kev, kev_kelvin
@@ -35,7 +35,7 @@ FIGS_DIR = os.path.join(GEN_DIR, 'figs')
 os.makedirs(GEN_DIR, exist_ok=True)
 os.makedirs(FIGS_DIR, exist_ok=True)
 
-solver = ComptonKernelSeries(SeriesMethod.Auto)
+solver = ComptonKernelSolver()
 quad256 = ComptonKernelQuadrature(256, QuadratureForm.PostIBP)
 
 E_REF_kev = 10.0

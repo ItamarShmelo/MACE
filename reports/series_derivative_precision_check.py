@@ -29,7 +29,7 @@ from matplotlib.colors import LogNorm
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 
-from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
+from _compton_power_series import ComptonPowerSeries
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
 
 from _units import kev, kev_kelvin
@@ -53,7 +53,7 @@ T_KEVS = [0.5, 1, 5, 10, 20, 50, 100, 200, 500]
 
 
 def run_sweep():
-    engine = ComptonKernelSeries()
+    engine = ComptonPowerSeries()
     results = []
     skipped = 0
 
@@ -117,7 +117,7 @@ HEATMAP_XIS = [-0.5, 0.0, 0.5]
 
 def evaluate_heatmap_grid():
     """Evaluate precision check on a 2D (E, T) grid for several (ratio, xi) combos."""
-    engine = ComptonKernelSeries()
+    engine = ComptonPowerSeries()
     n_E = len(HEATMAP_E_GRID)
     n_T = len(HEATMAP_T_GRID)
     grids = {}
@@ -187,7 +187,7 @@ def plot_precision_heatmap(grids):
 
 def evaluate_dd_vs_quad_grid():
     """Evaluate DD series derivative vs quadrature derivative on a 2D (E, T) grid."""
-    series_dd = ComptonKernelSeries(method=SeriesMethod.PowerSeriesHighPrecision)
+    series_dd = ComptonPowerSeries(high_precision=True)
     quad = ComptonKernelQuadrature(256, QuadratureForm.PreIBP)
     n_E = len(HEATMAP_E_GRID)
     n_T = len(HEATMAP_T_GRID)

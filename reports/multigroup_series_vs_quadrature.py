@@ -32,7 +32,7 @@ sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 
 import _compton_multigroup as cm
 import _compton_kernel_quadrature as cq
-import _compton_kernel_series as cs
+from _compton_kernel_solver import ComptonKernelSolver
 from _units import kev, kev_kelvin
 
 GEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'generated')
@@ -60,7 +60,7 @@ G = len(BOUNDS_ERG) - 1
 CENTERS_KEV = np.sqrt(BOUNDS_KEV[:-1] * BOUNDS_KEV[1:])
 
 KERNEL_Q64 = cq.ComptonKernelQuadrature(64)
-KERNEL_AUTO = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
+KERNEL_SOLVER = ComptonKernelSolver()
 
 TICK_POS = np.arange(0, G, max(1, G // 6))
 TICK_LABELS = [f'{CENTERS_KEV[i]:.1f}' for i in TICK_POS]
@@ -96,7 +96,7 @@ def section_elementwise():
     mg = make_mg(16)
 
     S_quad = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
-    S_series = mg.compute_sigma_matrix(KERNEL_AUTO, T=T, Ne=1.0)
+    S_series = mg.compute_sigma_matrix(KERNEL_SOLVER, T=T, Ne=1.0)
 
     mask = (np.abs(S_quad) > 1e-40) & (np.abs(S_series) > 1e-40)
     scale = np.maximum(np.abs(S_quad), 1e-300)
@@ -136,7 +136,7 @@ def section_heatmaps():
     mg = make_mg(16)
 
     S_quad = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
-    S_series = mg.compute_sigma_matrix(KERNEL_AUTO, T=T, Ne=1.0)
+    S_series = mg.compute_sigma_matrix(KERNEL_SOLVER, T=T, Ne=1.0)
 
     S_q_pos = np.maximum(np.abs(S_quad), 1e-50)
     S_s_pos = np.maximum(np.abs(S_series), 1e-50)
@@ -196,7 +196,7 @@ def section_temperature_sweep():
         T = T_kev * kev_kelvin
 
         S_quad = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
-        S_series = mg.compute_sigma_matrix(KERNEL_AUTO, T=T, Ne=1.0)
+        S_series = mg.compute_sigma_matrix(KERNEL_SOLVER, T=T, Ne=1.0)
 
         mask = (np.abs(S_quad) > 1e-40) & (np.abs(S_series) > 1e-40)
         scale = np.maximum(np.abs(S_quad), 1e-300)
@@ -250,7 +250,7 @@ def section_row_sums():
     mg = make_mg(16)
 
     S_quad = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
-    S_series = mg.compute_sigma_matrix(KERNEL_AUTO, T=T, Ne=1.0)
+    S_series = mg.compute_sigma_matrix(KERNEL_SOLVER, T=T, Ne=1.0)
 
     row_q = S_quad.sum(axis=1)
     row_s = S_series.sum(axis=1)
@@ -303,7 +303,7 @@ def section_derivative():
         T = T_kev * kev_kelvin
 
         dS_quad = mg.compute_dsigma_dT_matrix(KERNEL_Q64, T=T, Ne=1.0)
-        dS_series = mg.compute_dsigma_dT_matrix(KERNEL_AUTO, T=T, Ne=1.0)
+        dS_series = mg.compute_dsigma_dT_matrix(KERNEL_SOLVER, T=T, Ne=1.0)
 
         mask = (np.abs(dS_quad) > 1e-40) & (np.abs(dS_series) > 1e-40)
         scale = np.where(mask, np.abs(dS_quad), 1.0)

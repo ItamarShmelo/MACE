@@ -17,7 +17,8 @@
  * All dispatch thresholds are configurable at construction time.
  */
 
-#include "compton_kernel_series/compton_kernel_series.hpp"
+#include "compton_power_series/compton_power_series.hpp"
+#include "compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.hpp"
 #include "compton_kernel_quadrature/compton_kernel_quadrature.hpp"
 
 namespace compton {
@@ -56,10 +57,10 @@ private:
     double gamma_double_precision_safe_;
     double quadrature_self_tol_;
 
-    ComptonKernelSeries   series_asymp_;
-    ComptonKernelSeries   series_double_;
-    ComptonKernelSeries   series_dd_;
-    ComptonKernelQuadrature quadrature_;
+    ComptonKernelAsymptoticSeries asymp_series_;
+    ComptonPowerSeries            power_series_;
+    ComptonPowerSeries            power_series_dd_;
+    ComptonKernelQuadrature       quadrature_;
 };
 
 } // namespace compton

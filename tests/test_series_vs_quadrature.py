@@ -3,10 +3,10 @@ Consolidated validation: series methods vs Gauss-Laguerre quadrature (Q256).
 
 Tests each series evaluation method against the reference Q256 post-IBP
 quadrature in the regime where that method is convergent:
-  - PowerSeries (double)              at high T (hot plasma)
-  - PowerSeriesHighPrecision (DD)     at high T (hot plasma)
-  - Asymptotic                        at low T  (cold plasma)
-  - Auto                              across all T
+  - ComptonPowerSeries (double)           at high T (hot plasma)
+  - ComptonPowerSeries (DD)               at high T (hot plasma)
+  - ComptonKernelAsymptoticSeries         at low T  (cold plasma)
+  - ComptonKernelSolver (adaptive)        across all T
 
 Also validates the temperature derivative dsigma_E_dT for each method
 against the same quadrature reference.
@@ -19,7 +19,9 @@ import pytest
 sys.path.insert(0, "cpp_modules")
 
 import _compton_kernel_quadrature as cq
-import _compton_kernel_series as cs
+from _compton_power_series import ComptonPowerSeries
+from _compton_kernel_asymptotic_series import ComptonKernelAsymptoticSeries
+from _compton_kernel_solver import ComptonKernelSolver
 from _units import kev, kev_kelvin
 
 TEST_POINTS = [
@@ -57,7 +59,7 @@ class TestPowerSeriesVsQuadrature:
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
-        series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeries)
+        series = ComptonPowerSeries()
         sres = series.sigma_E(E, Ep, xi, T, 1.0)
 
         rd = _rel_diff(sres.value, qres.value)
@@ -74,7 +76,7 @@ class TestPowerSeriesHPVsQuadrature:
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
-        series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeriesHighPrecision)
+        series = ComptonPowerSeries(high_precision=True)
         sres = series.sigma_E(E, Ep, xi, T, 1.0)
 
         rd = _rel_diff(sres.value, qres.value)
@@ -91,25 +93,25 @@ class TestAsymptoticVsQuadrature:
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
-        series = cs.ComptonKernelSeries(cs.SeriesMethod.Asymptotic)
+        series = ComptonKernelAsymptoticSeries()
         sres = series.sigma_E(E, Ep, xi, T, 1.0)
 
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"
 
 
-class TestAutoVsQuadrature:
+class TestSolverVsQuadrature:
     @pytest.mark.parametrize("E_kev,Ep_kev,xi", TEST_POINTS)
     @pytest.mark.parametrize("T_kev", TEMPS_ALL_KEV)
-    def test_auto(self, E_kev, Ep_kev, xi, T_kev):
+    def test_solver(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
 
         qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
-        series = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
-        sres = series.sigma_E(E, Ep, xi, T, 1.0)
+        solver = ComptonKernelSolver()
+        sres = solver.sigma_E(E, Ep, xi, T, 1.0)
 
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"
@@ -130,7 +132,7 @@ class TestPowerSeriesDerivativeVsQuadrature:
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
-        series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeries)
+        series = ComptonPowerSeries()
         sres = series.dsigma_E_dT(E, Ep, xi, T, 1.0)
 
         rd = _rel_diff(sres.value, qres.value)
@@ -147,7 +149,7 @@ class TestPowerSeriesHPDerivativeVsQuadrature:
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
-        series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeriesHighPrecision)
+        series = ComptonPowerSeries(high_precision=True)
         sres = series.dsigma_E_dT(E, Ep, xi, T, 1.0)
 
         rd = _rel_diff(sres.value, qres.value)
@@ -164,25 +166,25 @@ class TestAsymptoticDerivativeVsQuadrature:
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
-        series = cs.ComptonKernelSeries(cs.SeriesMethod.Asymptotic)
+        series = ComptonKernelAsymptoticSeries()
         sres = series.dsigma_E_dT(E, Ep, xi, T, 1.0)
 
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"
 
 
-class TestAutoDerivativeVsQuadrature:
+class TestSolverDerivativeVsQuadrature:
     @pytest.mark.parametrize("E_kev,Ep_kev,xi", TEST_POINTS)
     @pytest.mark.parametrize("T_kev", TEMPS_ALL_KEV)
-    def test_auto(self, E_kev, Ep_kev, xi, T_kev):
+    def test_solver(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
 
         qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
-        series = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
-        sres = series.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        solver = ComptonKernelSolver()
+        sres = solver.dsigma_E_dT(E, Ep, xi, T, 1.0)
 
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"

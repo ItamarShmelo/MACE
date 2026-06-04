@@ -54,7 +54,6 @@
 #include "compton_multigroup/gauss_legendre.hpp"
 #include "compton_multigroup/weight_function.hpp"
 #include "compton_kernel_quadrature/compton_kernel_quadrature.hpp"
-#include "compton_kernel_series/compton_kernel_series.hpp"
 #include "compton_kernel_solver/compton_kernel_solver.hpp"
 
 #include <memory>
@@ -128,7 +127,7 @@ public:
     /**
      * @brief Compute the multigroup-multiangle σ matrix.
      *
-     * @tparam KernelT        Kernel type (ComptonKernelQuadrature or ComptonKernelSeries).
+     * @tparam KernelT        Kernel type (e.g. ComptonKernelSolver, ComptonKernelQuadrature).
      * @param kernel          Point-wise kernel evaluator.
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
      * @param T               Electron temperature [K].
@@ -146,7 +145,7 @@ public:
     /**
      * @brief Compute the multigroup-multiangle ∂σ/∂T matrix.
      *
-     * @tparam KernelT        Kernel type (ComptonKernelQuadrature or ComptonKernelSeries).
+     * @tparam KernelT        Kernel type (e.g. ComptonKernelSolver, ComptonKernelQuadrature).
      * @param kernel          Point-wise kernel evaluator.
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
      * @param T               Electron temperature [K].

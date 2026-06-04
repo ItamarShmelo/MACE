@@ -31,7 +31,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 sys.path.insert(0, os.path.join(ROOT, 'src', 'python'))
 
-from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
+from _compton_kernel_solver import ComptonKernelSolver
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
 
 from _units import kev, kev_kelvin
@@ -41,7 +41,7 @@ FIGS_DIR = os.path.join(GEN_DIR, 'figs')
 os.makedirs(GEN_DIR, exist_ok=True)
 os.makedirs(FIGS_DIR, exist_ok=True)
 
-solver = ComptonKernelSeries(SeriesMethod.Auto)
+solver = ComptonKernelSolver()
 quad256 = ComptonKernelQuadrature(256, QuadratureForm.PostIBP)
 
 lines = []
@@ -277,8 +277,7 @@ def section_timing():
             solver.sigma_E_vec(E, Ep_arr, xi, T_K, 1.0)
         t_solver = (time.perf_counter() - t0) / n_repeats
 
-        from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
-        series = ComptonKernelSeries(SeriesMethod.Auto)
+        series = ComptonKernelSolver()
         t0 = time.perf_counter()
         for _ in range(n_repeats):
             series.sigma_E_vec(E, Ep_arr, xi, T_K, 1.0)

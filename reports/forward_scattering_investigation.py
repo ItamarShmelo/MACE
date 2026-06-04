@@ -17,7 +17,9 @@ sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 sys.path.insert(0, os.path.join(ROOT, 'external', 'CMMC', 'cpp_modules'))
 
 import _compton_multigroup as cm
-import _compton_kernel_series as cs
+from _compton_power_series import ComptonPowerSeries
+from _compton_kernel_asymptotic_series import ComptonKernelAsymptoticSeries
+from _compton_kernel_solver import ComptonKernelSolver
 import _compton_kernel_quadrature as cq
 from _units import kev, kev_kelvin
 
@@ -63,10 +65,10 @@ def step1_diagnostic_dump():
     mid = 0.5 * (mu_lo + mu_hi)
     xi_nodes = half_w * nodes + mid
 
-    kernel_auto = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
-    kernel_asymp = cs.ComptonKernelSeries(cs.SeriesMethod.Asymptotic)
-    kernel_ps = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeries)
-    kernel_pshp = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeriesHighPrecision)
+    kernel_auto = ComptonKernelSolver()
+    kernel_asymp = ComptonKernelAsymptoticSeries()
+    kernel_ps = ComptonPowerSeries()
+    kernel_pshp = ComptonPowerSeries(high_precision=True)
     kernel_quad = cq.ComptonKernelQuadrature(128, cq.QuadratureForm.PostIBP)
 
     print(f"{'i':>3} {'xi':>18} {'1-xi':>12} {'Auto':>14} {'Asymp':>14} "
@@ -102,8 +104,8 @@ def step2_method_comparison():
     one_minus_xi = np.logspace(-1.3, -12, 200)  # from ~0.05 down to 1e-12
     xi_grid = 1.0 - one_minus_xi
 
-    kernel_auto = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
-    kernel_asymp = cs.ComptonKernelSeries(cs.SeriesMethod.Asymptotic)
+    kernel_auto = ComptonKernelSolver()
+    kernel_asymp = ComptonKernelAsymptoticSeries()
     kernel_quad128 = cq.ComptonKernelQuadrature(128, cq.QuadratureForm.PostIBP)
 
     # Test three (E, E') combinations within group 4
@@ -192,7 +194,7 @@ def step3_quadrature_check():
     one_minus_xi = np.logspace(-1.3, -10, 150)
     xi_grid = 1.0 - one_minus_xi
 
-    kernel_auto = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
+    kernel_auto = ComptonKernelSolver()
     kernel_q128 = cq.ComptonKernelQuadrature(128, cq.QuadratureForm.PostIBP)
 
     E_lo = BOUNDARIES_ERG[3]   # 2.0 keV
@@ -255,7 +257,7 @@ def step4_eps_sweep():
     print("=" * 80)
 
     sub_boundaries = BOUNDARIES_ERG[2:6]  # groups 3,4,5
-    kernel_auto = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
+    kernel_auto = ComptonKernelSolver()
     NUM_BINS = 32
 
     # CMMC reference
@@ -353,7 +355,7 @@ def step5_validation_plot():
     print("=" * 80)
 
     sub_boundaries = BOUNDARIES_ERG[2:6]
-    kernel = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
+    kernel = ComptonKernelSolver()
     NUM_BINS = 32
 
     configs = [

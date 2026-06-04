@@ -9,9 +9,9 @@ ComptonKernelSolver::ComptonKernelSolver(
     : asymp_tau_alpha_threshold_(asymp_tau_alpha_threshold)
     , gamma_double_precision_safe_(gamma_double_precision_safe)
     , quadrature_self_tol_(quadrature_self_tol)
-    , series_asymp_(SeriesMethod::Asymptotic)
-    , series_double_(SeriesMethod::PowerSeries)
-    , series_dd_(SeriesMethod::PowerSeriesHighPrecision)
+    , asymp_series_()
+    , power_series_(false)
+    , power_series_dd_(true)
     , quadrature_(64)
 {}
 
@@ -32,16 +32,16 @@ SigmaResult ComptonKernelSolver::sigma_E(
                                           tau * p.alpha_minus);
 
     if (tau_alpha_max < asymp_tau_alpha_threshold_)
-        return series_asymp_.sigma_E(E, E_prime, xi, T, Ne);
+        return asymp_series_.sigma_E(E, E_prime, xi, T, Ne);
 
     if (std::min(gamma, gamma_p) >= gamma_double_precision_safe_)
-        return series_double_.sigma_E(E, E_prime, xi, T, Ne);
+        return power_series_.sigma_E(E, E_prime, xi, T, Ne);
 
     auto const q_result = quadrature_.sigma_E(E, E_prime, xi, T, Ne);
     if (q_result.estimated_rel_error < quadrature_self_tol_)
         return q_result;
 
-    return series_dd_.sigma_E(E, E_prime, xi, T, Ne);
+    return power_series_dd_.sigma_E(E, E_prime, xi, T, Ne);
 }
 
 SigmaResult ComptonKernelSolver::dsigma_E_dT(
@@ -61,16 +61,16 @@ SigmaResult ComptonKernelSolver::dsigma_E_dT(
                                           tau * p.alpha_minus);
 
     if (tau_alpha_max < asymp_tau_alpha_threshold_)
-        return series_asymp_.dsigma_E_dT(E, E_prime, xi, T, Ne);
+        return asymp_series_.dsigma_E_dT(E, E_prime, xi, T, Ne);
 
     if (std::min(gamma, gamma_p) >= gamma_double_precision_safe_)
-        return series_double_.dsigma_E_dT(E, E_prime, xi, T, Ne);
+        return power_series_.dsigma_E_dT(E, E_prime, xi, T, Ne);
 
     auto const q_result = quadrature_.dsigma_E_dT(E, E_prime, xi, T, Ne);
     if (q_result.estimated_rel_error < quadrature_self_tol_)
         return q_result;
 
-    return series_dd_.dsigma_E_dT(E, E_prime, xi, T, Ne);
+    return power_series_dd_.dsigma_E_dT(E, E_prime, xi, T, Ne);
 }
 
 } // namespace compton

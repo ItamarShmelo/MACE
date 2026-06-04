@@ -57,17 +57,27 @@ set_target_properties(_compton_kernel_quadrature PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
 )
 
-pybind11_add_module(_compton_kernel_series
-    src/compton_kernel_series/compton_kernel_series.cpp
-    src/compton_kernel_series/bind/_compton_kernel_series.cpp
+pybind11_add_module(_compton_power_series
+    src/compton_power_series/compton_power_series.cpp
+    src/compton_power_series/bind/_compton_power_series.cpp
 )
-target_compile_options(_compton_kernel_series PRIVATE
+target_compile_options(_compton_power_series PRIVATE
     -O3 -Wall -Wextra -Wpedantic
 )
-set_target_properties(_compton_kernel_series PROPERTIES
+set_target_properties(_compton_power_series PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
 )
 
+pybind11_add_module(_compton_kernel_asymptotic_series
+    src/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.cpp
+    src/compton_kernel_asymptotic_series/bind/_compton_kernel_asymptotic_series.cpp
+)
+target_compile_options(_compton_kernel_asymptotic_series PRIVATE
+    -O3 -Wall -Wextra -Wpedantic
+)
+set_target_properties(_compton_kernel_asymptotic_series PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
+)
 
 pybind11_add_module(_units
     src/units/bind/_units.cpp
@@ -83,7 +93,8 @@ pybind11_add_module(_compton_kernel_solver
     src/compton_kernel_solver/compton_kernel_solver.cpp
     src/compton_kernel_solver/bind/_compton_kernel_solver.cpp
     src/compton_kernel_quadrature/compton_kernel_quadrature.cpp
-    src/compton_kernel_series/compton_kernel_series.cpp
+    src/compton_power_series/compton_power_series.cpp
+    src/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.cpp
 )
 target_compile_options(_compton_kernel_solver PRIVATE
     -O3 -Wall -Wextra -Wpedantic
@@ -98,7 +109,8 @@ pybind11_add_module(_compton_multigroup
     src/compton_multigroup/bind/_compton_multigroup.cpp
     src/compton_kernel_solver/compton_kernel_solver.cpp
     src/compton_kernel_quadrature/compton_kernel_quadrature.cpp
-    src/compton_kernel_series/compton_kernel_series.cpp
+    src/compton_power_series/compton_power_series.cpp
+    src/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.cpp
 )
 target_compile_options(_compton_multigroup PRIVATE
     -O3 -Wall -Wextra -Wpedantic

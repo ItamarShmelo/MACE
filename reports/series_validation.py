@@ -31,7 +31,9 @@ sys.path.insert(0, os.path.join(ROOT, 'src', 'python'))
 sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
-from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
+from _compton_power_series import ComptonPowerSeries
+from _compton_kernel_asymptotic_series import ComptonKernelAsymptoticSeries
+from _compton_kernel_solver import ComptonKernelSolver
 
 from _units import me_c2, kev, k_boltz, kev_kelvin, mbarn
 
@@ -64,10 +66,6 @@ METHOD_COLORS = {
 }
 
 
-def method_str(m):
-    return str(m).replace('SeriesMethod.', '')
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Section 1: Pointwise agreement + timing
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -77,7 +75,7 @@ def section_pointwise(report):
     report.append("Compares C++ series (Auto) against C++ quadrature (NL=256, PostIBP).\n")
 
     quad = ComptonKernelQuadrature(256, QuadratureForm.PostIBP)
-    series = ComptonKernelSeries(SeriesMethod.Auto)
+    series = ComptonKernelSolver()
 
     n_warmup = 5
     n_bench = 50
@@ -176,7 +174,7 @@ def section_spectra(report):
     report.append("Plots sigma(E') vs E' for representative cases.\n")
 
     quad = ComptonKernelQuadrature(128, QuadratureForm.PostIBP)
-    series = ComptonKernelSeries(SeriesMethod.Auto)
+    series = ComptonKernelSolver()
 
     for case in SPECTRA_CASES:
         E_kev = case["E_kev"]
@@ -312,7 +310,7 @@ def section_pomraning(report):
     report.append("- **Pomraning (book)** (black circles): digitized reference\n")
 
     quad = ComptonKernelQuadrature(64, QuadratureForm.PostIBP)
-    series = ComptonKernelSeries(SeriesMethod.Auto)
+    series = ComptonKernelSolver()
 
     all_times = []
 
@@ -430,7 +428,7 @@ def section_pomraning(report):
 def section_convergence(report):
     report.append("## 4. Convergence Diagnostics\n")
 
-    series = ComptonKernelSeries(SeriesMethod.Auto)
+    series = ComptonKernelSolver()
 
     E_kev = 1.0
     Ep_kev = 1.5
@@ -491,9 +489,9 @@ def section_timing_summary(report):
         ("Quad NL=64", ComptonKernelQuadrature(64, QuadratureForm.PostIBP), True),
         ("Quad NL=128", ComptonKernelQuadrature(128, QuadratureForm.PostIBP), True),
         ("Quad NL=256", ComptonKernelQuadrature(256, QuadratureForm.PostIBP), True),
-        ("Series Power", ComptonKernelSeries(SeriesMethod.PowerSeries), False),
-        ("Series Asymp", ComptonKernelSeries(SeriesMethod.Asymptotic), False),
-        ("Series Auto", ComptonKernelSeries(SeriesMethod.Auto), False),
+        ("Series Power", ComptonPowerSeries(), False),
+        ("Series Asymp", ComptonKernelAsymptoticSeries(), False),
+        ("Series Auto", ComptonKernelSolver(), False),
     ]
 
     results = {}
@@ -601,7 +599,7 @@ def section_auto_vs_quad_colorplot(report):
     report.append("the series Auto `sigma_E` and the 256-point Gauss-Laguerre quadrature")
     report.append("`sigma_E` (PostIBP) over the (E, T) plane.\n")
 
-    series = ComptonKernelSeries(SeriesMethod.Auto)
+    series = ComptonKernelSolver()
     quad = ComptonKernelQuadrature(256, QuadratureForm.PostIBP)
 
     n_E = len(HEATMAP_E_GRID)

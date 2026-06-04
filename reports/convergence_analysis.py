@@ -29,7 +29,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm, scaled_K2
-from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
+from _compton_power_series import ComptonPowerSeries
+from _compton_kernel_asymptotic_series import ComptonKernelAsymptoticSeries
 
 from _units import kev, kev_kelvin
 
@@ -511,7 +512,7 @@ def section_power_series_convergence(report):
         rel_errors = []
         values = []
         for nm in n_max_values:
-            eng = ComptonKernelSeries(method=SeriesMethod.PowerSeries, eps_rel=1e-15, n_min=nm+1, n_max=nm)
+            eng = ComptonPowerSeries(eps_rel=1e-15, n_min=nm+1, n_max=nm)
             try:
                 r = eng.sigma_E(E, Ep, xi, T_K, 1.0)
                 values.append(r.value)
@@ -523,7 +524,7 @@ def section_power_series_convergence(report):
                 values.append(float('nan'))
                 rel_errors.append(float('nan'))
 
-        conv_eng = ComptonKernelSeries(method=SeriesMethod.PowerSeries)
+        conv_eng = ComptonPowerSeries()
         try:
             conv_r = conv_eng.sigma_E(E, Ep, xi, T_K, 1.0)
             conv_val = conv_r.value
@@ -603,7 +604,7 @@ def section_asymptotic_series_convergence(report):
         rel_errors = []
         term_mags = []
         for nm in n_max_values:
-            eng = ComptonKernelSeries(method=SeriesMethod.Asymptotic, eps_rel=1e-15, n_min=nm+1, n_max=nm)
+            eng = ComptonKernelAsymptoticSeries(eps_rel=1e-15, n_min=nm+1, n_max=nm)
             try:
                 r = eng.sigma_E(E, Ep, xi, T_K, 1.0)
                 if abs(ref_val) > 1e-300:
@@ -615,7 +616,7 @@ def section_asymptotic_series_convergence(report):
                 rel_errors.append(float('nan'))
                 term_mags.append(float('nan'))
 
-        conv_eng = ComptonKernelSeries(method=SeriesMethod.Asymptotic)
+        conv_eng = ComptonKernelAsymptoticSeries()
         try:
             conv_r = conv_eng.sigma_E(E, Ep, xi, T_K, 1.0)
             conv_val = conv_r.value

@@ -11,8 +11,8 @@ Three evaluation methods are provided:
 - **Power series** -- fast convergent expansion for hot plasmas.
 - **Asymptotic series** -- divergent expansion truncated optimally for cold plasmas.
 
-An **Auto** dispatch mode selects the appropriate series method based on the
-scattering kinematics.
+The **ComptonKernelSolver** adaptively selects the fastest accurate method
+at each phase-space point based on the scattering kinematics.
 
 ## Dependencies
 
@@ -33,13 +33,15 @@ cmake -S . -B build
 cmake --build build -j
 ```
 
-This produces five pybind11 extension modules in `cpp_modules/`:
+This produces pybind11 extension modules in `cpp_modules/`:
 
 | Module | Contents |
 |--------|----------|
 | `_compton_common` | `SigmaResult` result type |
 | `_compton_kernel_quadrature` | Gauss-Laguerre quadrature evaluator |
-| `_compton_kernel_series` | Power / asymptotic / auto series evaluator |
+| `_compton_power_series` | Convergent power series evaluator (double / DD) |
+| `_compton_kernel_asymptotic_series` | Divergent asymptotic series evaluator |
+| `_compton_kernel_solver` | Adaptive dispatch kernel (asymptotic / power series / Q64) |
 | `_compton_multigroup` | Planck-weighted multigroup-multiangle kernel |
 | `_units` | Physical constants in CGS (`kev`, `kev_kelvin`, `me_c2`, ...) |
 
@@ -50,7 +52,7 @@ import sys
 sys.path.insert(0, "cpp_modules")
 
 import _compton_kernel_quadrature as cq
-import _compton_kernel_series as cs
+from _compton_kernel_solver import ComptonKernelSolver
 from _units import kev, kev_kelvin
 
 # Quadrature (256-point Gauss-Laguerre, post-IBP form)
@@ -58,10 +60,10 @@ quad = cq.ComptonKernelQuadrature(256, cq.QuadratureForm.PostIBP)
 r = quad.sigma_E(1*kev, 2*kev, 0.0, kev_kelvin, 1.0)
 print(f"quadrature: {r.value:.6e}  (rel_err ~ {r.estimated_rel_error:.1e})")
 
-# Series (auto dispatch)
-series = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
-r = series.sigma_E(1*kev, 2*kev, 0.0, 1*kev_kelvin, 1.0)
-print(f"series:     {r.value:.6e}  (rel_err ~ {r.estimated_rel_error:.1e})")
+# Solver (adaptive dispatch: asymptotic / power series / Q64)
+solver = ComptonKernelSolver()
+r = solver.sigma_E(1*kev, 2*kev, 0.0, 1*kev_kelvin, 1.0)
+print(f"solver:     {r.value:.6e}  (rel_err ~ {r.estimated_rel_error:.1e})")
 ```
 
 Both return a `SigmaResult` with fields `value`, `estimated_abs_error`, and
@@ -93,7 +95,7 @@ the `weight_function` constructor argument.
 - **`compute_sigma_matrix(kernel, T, Ne)`** — angle-integrated, returns a `(G, G)` NumPy array.
 - **`compute_dsigma_dT_matrix`** — same signatures, using the temperature-derivative kernel.
 
-The `kernel` argument is a `ComptonKernelQuadrature` or `ComptonKernelSeries` instance.
+The `kernel` argument is a `ComptonKernelSolver` or `ComptonKernelQuadrature` instance.
 
 **Example:**
 
@@ -427,25 +429,28 @@ The terms of this asymptotic series initially decrease and eventually grow.
 The implementation truncates at the smallest term after detecting consecutive
 term-magnitude increases.
 
-### Series Auto dispatch
+### Adaptive dispatch (ComptonKernelSolver)
 
 ```
 tau_alpha_max = tau * max(alpha_plus, alpha_minus)
 
 if tau_alpha_max < 0.025:
-    method = Asymptotic                # cold regime
+    method = AsymptoticSeries           # cold regime
 elif min(gamma, gamma_prime) >= 0.02:
-    method = PowerSeries               # double precision
+    method = PowerSeries (double)       # double precision
 else:
-    method = PowerSeriesHighPrecision   # double-double precision
+    try Q64 quadrature                  # fast quadrature attempt
+    fallback PowerSeries (DD)           # double-double precision
 ```
 
-The thresholds are defined in `compton_common.hpp`:
+The thresholds are configurable at construction time (defaults from `compton_common.hpp`):
 
-- `ASYMP_TAU_ALPHA_THRESHOLD = 0.025` -- below this, the asymptotic series
+- `asymp_tau_alpha_threshold = 0.025` -- below this, the asymptotic series
   reaches its optimal truncation with few terms.
-- `GAMMA_DOUBLE_PRECISION_SAFE = 0.02` -- above this, the $P_+-P_-$
+- `gamma_double_precision_safe = 0.02` -- above this, the $P_+-P_-$
   cancellation is mild enough for double precision.
+- `quadrature_self_tol = 1e-6` -- accept Q64 when its self-reported
+  relative error is below this tolerance.
 
 ## Tests
 
@@ -453,10 +458,11 @@ The thresholds are defined in `compton_common.hpp`:
 pytest tests/
 ```
 
-The test suite validates all series methods (PowerSeries, PowerSeriesHighPrecision,
-Asymptotic, Auto) against the Q256 Gauss-Laguerre quadrature reference across
-a grid of photon energies, scattering angles, and temperatures spanning both
-the hot-plasma (power series) and cold-plasma (asymptotic) regimes.
+The test suite validates `ComptonPowerSeries` (double and DD),
+`ComptonKernelAsymptoticSeries`, and `ComptonKernelSolver` against the Q256
+Gauss-Laguerre quadrature reference across a grid of photon energies,
+scattering angles, and temperatures spanning both the hot-plasma (power series)
+and cold-plasma (asymptotic) regimes.
 
 ## Reference
 

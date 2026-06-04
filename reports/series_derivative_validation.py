@@ -28,7 +28,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 
 from _compton_kernel_quadrature import ComptonKernelQuadrature, QuadratureForm
-from _compton_kernel_series import ComptonKernelSeries, SeriesMethod
+from _compton_power_series import ComptonPowerSeries
+from _compton_kernel_asymptotic_series import ComptonKernelAsymptoticSeries
+from _compton_kernel_solver import ComptonKernelSolver
 
 from _units import kev, kev_kelvin, me_c2, k_boltz
 
@@ -70,7 +72,7 @@ def section_fd_comparison():
     emit('Richardson-extrapolated centered FD of series `sigma_E` vs analytic series `dsigma_E_dT`.')
     emit()
 
-    engine = ComptonKernelSeries()
+    engine = ComptonKernelSolver()
 
     fig, ax = plt.subplots(1, 1, figsize=(8, 5))
     h_fracs = np.logspace(-6, -1, 30)
@@ -143,7 +145,7 @@ def section_series_vs_quadrature():
     emit('Error-aware comparison: agreement within C * (series_error + quad_error), C=10.')
     emit()
 
-    series = ComptonKernelSeries()
+    series = ComptonKernelSolver()
     quad = ComptonKernelQuadrature(256, QuadratureForm.PreIBP)
     safety = 10.0
 
@@ -179,10 +181,10 @@ def section_method_comparison():
     emit()
 
     methods = [
-        ('Auto', SeriesMethod.Auto),
-        ('PowerSeries', SeriesMethod.PowerSeries),
-        ('PowerSeriesHP', SeriesMethod.PowerSeriesHighPrecision),
-        ('Asymptotic', SeriesMethod.Asymptotic),
+        ('Auto', lambda: ComptonKernelSolver()),
+        ('PowerSeries', lambda: ComptonPowerSeries()),
+        ('PowerSeriesHP', lambda: ComptonPowerSeries(high_precision=True)),
+        ('Asymptotic', lambda: ComptonKernelAsymptoticSeries()),
     ]
 
     emit('| E (keV) | E\' (keV) | xi | T (keV) | ' +
@@ -196,8 +198,8 @@ def section_method_comparison():
         T_K = T_kev * kev_kelvin
 
         vals = []
-        for name, method in methods:
-            eng = ComptonKernelSeries(method=method)
+        for name, make_eng in methods:
+            eng = make_eng()
             try:
                 r = eng.dsigma_E_dT(E, Ep, xi, T_K, 1.0)
                 vals.append(f'{r.value:.6e}')
@@ -218,7 +220,7 @@ def section_small_T():
     emit('| T (keV) | dsigma/dT | rel_error | finite? |')
     emit('|---------|-----------|-----------|---------|')
 
-    engine = ComptonKernelSeries()
+    engine = ComptonKernelSolver()
     E = 1.0 * kev
     Ep = 1.0 * kev
 
@@ -250,7 +252,7 @@ def section_spectral_profiles():
          'several temperatures.')
     emit()
 
-    engine = ComptonKernelSeries()
+    engine = ComptonKernelSolver()
 
     for cfg in PROFILE_CONFIGS:
         E_kev = cfg['E_kev']
@@ -321,7 +323,7 @@ def section_angular_distribution():
             T_K = T_kev * kev_kelvin
             label = f'T = {T_kev} keV'
 
-            engine = ComptonKernelSeries()
+            engine = ComptonKernelSolver()
 
             sig_vals = []
             dsig_vals = []
@@ -411,7 +413,7 @@ def section_auto_vs_quad_colorplot():
          'derivative (pre-IBP) over the (E, T) plane.')
     emit()
 
-    series = ComptonKernelSeries(method=SeriesMethod.Auto)
+    series = ComptonKernelSolver()
     quad = ComptonKernelQuadrature(256, QuadratureForm.PreIBP)
 
     n_E = len(HEATMAP_E_GRID)

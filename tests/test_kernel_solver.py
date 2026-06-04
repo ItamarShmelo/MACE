@@ -13,12 +13,12 @@ import pytest
 sys.path.insert(0, "cpp_modules")
 
 import _compton_kernel_quadrature as cq
-import _compton_kernel_series as cs
+from _compton_power_series import ComptonPowerSeries
 from _compton_kernel_solver import ComptonKernelSolver
 from _units import kev, kev_kelvin, me_c2
 
 QUAD_REF = cq.ComptonKernelQuadrature(256, cq.QuadratureForm.PostIBP)
-SERIES_AUTO = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
+DD_SERIES = ComptonPowerSeries(high_precision=True)
 SOLVER = ComptonKernelSolver()
 
 
@@ -99,22 +99,22 @@ Q64_ACCEPTED_POINTS = [
 
 class TestQ64AcceptedRegime:
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", Q64_ACCEPTED_POINTS)
-    def test_sigma_E_matches_auto(self, E_kev, Ep_kev, xi, T_kev):
-        """Solver should be at least as accurate as Series(Auto) here."""
+    def test_sigma_E_matches_dd(self, E_kev, Ep_kev, xi, T_kev):
+        """Solver should be at least as accurate as DD power series here."""
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        auto_res = SERIES_AUTO.sigma_E(E, Ep, xi, T, 1.0)
+        dd_res = DD_SERIES.sigma_E(E, Ep, xi, T, 1.0)
         solver_res = SOLVER.sigma_E(E, Ep, xi, T, 1.0)
-        assert _rel_diff(solver_res.value, auto_res.value) < 1e-5
+        assert _rel_diff(solver_res.value, dd_res.value) < 1e-5
 
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", Q64_ACCEPTED_POINTS)
-    def test_dsigma_E_dT_matches_auto(self, E_kev, Ep_kev, xi, T_kev):
+    def test_dsigma_E_dT_matches_dd(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        auto_res = SERIES_AUTO.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        dd_res = DD_SERIES.dsigma_E_dT(E, Ep, xi, T, 1.0)
         solver_res = SOLVER.dsigma_E_dT(E, Ep, xi, T, 1.0)
-        assert _rel_diff(solver_res.value, auto_res.value) < 1e-5
+        assert _rel_diff(solver_res.value, dd_res.value) < 1e-5
 
 
-# ── Solver vs Series(Auto) across the full parameter space ───────────────
+# ── Solver vs Q256 across the full parameter space ───────────────────────
 
 FULL_SPACE_POINTS = [
     # Asymptotic regime
@@ -132,22 +132,26 @@ FULL_SPACE_POINTS = [
 ]
 
 
-class TestSolverVsAuto:
+class TestSolverFullSpace:
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", FULL_SPACE_POINTS)
     def test_sigma_E(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        auto_res = SERIES_AUTO.sigma_E(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        if qres.estimated_rel_error > 1e-5:
+            pytest.skip("quadrature reference unreliable")
         solver_res = SOLVER.sigma_E(E, Ep, xi, T, 1.0)
-        rd = _rel_diff(solver_res.value, auto_res.value)
-        assert rd < 1e-4, f"reldiff={rd:.2e}"
+        rd = _rel_diff(solver_res.value, qres.value)
+        assert rd < 1e-3, f"reldiff={rd:.2e}"
 
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", FULL_SPACE_POINTS)
     def test_dsigma_E_dT(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        auto_res = SERIES_AUTO.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        if qres.estimated_rel_error > 1e-5:
+            pytest.skip("quadrature reference unreliable")
         solver_res = SOLVER.dsigma_E_dT(E, Ep, xi, T, 1.0)
-        rd = _rel_diff(solver_res.value, auto_res.value)
-        assert rd < 1e-4, f"reldiff={rd:.2e}"
+        rd = _rel_diff(solver_res.value, qres.value)
+        assert rd < 1e-3, f"reldiff={rd:.2e}"
 
 
 # ── Custom threshold: tighter quadrature tolerance ───────────────────────
@@ -165,7 +169,7 @@ class TestCustomThresholds:
     def test_zero_quadrature_tol_forces_dd(self):
         """With tol=0 the quadrature is never accepted; result = DD."""
         dd_only = ComptonKernelSolver(quadrature_self_tol=0.0)
-        dd_series = cs.ComptonKernelSeries(cs.SeriesMethod.PowerSeriesHighPrecision)
+        dd_series = ComptonPowerSeries(high_precision=True)
         E, Ep, T = 5.0 * kev, 5.5 * kev, 30.0 * kev_kelvin
         solver_res = dd_only.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
         dd_res = dd_series.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)

@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'external', 'CMMC', 'cpp_modules'))
 
 import _compton_multigroup as cm
-import _compton_kernel_series as cs
+from _compton_kernel_solver import ComptonKernelSolver
 import _compton_matrix_mc as mc_mod
 import _units as units
 
@@ -44,7 +44,7 @@ print(f"\nIncoming group: g={g_in}, E={ec[g_in]/units.kev:.4f} keV")
 print()
 
 for NE in [16, 32, 64]:
-    kernel = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
+    kernel = ComptonKernelSolver()
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=eb.tolist(),
         weight_function=cm.PlanckWeightFunction(cap_x=25.0),

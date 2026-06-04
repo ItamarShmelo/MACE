@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.join(ROOT, 'cpp_modules'))
 
 import _compton_multigroup as cm
 import _compton_multigroup_misc as cm_misc
-import _compton_kernel_series as cs
+from _compton_kernel_solver import ComptonKernelSolver
 import _compton_kernel_quadrature as cq
 from _units import kev, kev_kelvin
 
@@ -113,7 +113,7 @@ def _upsample_angles(S, n_src, n_dst):
     return out
 
 
-KERNEL = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
+KERNEL_SOLVER = ComptonKernelSolver()
 KERNEL_Q64 = cq.ComptonKernelQuadrature(64)
 T = 10.0 * kev_kelvin
 WF = cm.PlanckWeightFunction(cap_x=25.0)
@@ -153,8 +153,8 @@ def section_angle_bins_overhead():
     emit('|--------|-------------|-------------------|----------------|')
 
     for nb in bin_counts:
-        dt_c = bench(lambda: mg.compute_sigma_matrix(KERNEL, num_angle_bins=nb, T=T, Ne=1.0))
-        dt_e = bench(lambda: mg.compute_sigma_matrix(KERNEL, num_angle_bins=nb, T=T, Ne=1.0,
+        dt_c = bench(lambda: mg.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=nb, T=T, Ne=1.0))
+        dt_e = bench(lambda: mg.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=nb, T=T, Ne=1.0,
                                                      multiplier=et_mult))
         times_const.append(dt_c)
         times_et.append(dt_e)
@@ -219,8 +219,8 @@ def section_quad_order_overhead():
             energy_group_boundaries=bounds,
             weight_function=WF,
             quad_order_E=n, quad_order_Ep=n, quad_order_mu=n)
-        dt_c = bench(lambda: mg.compute_sigma_matrix(KERNEL, num_angle_bins=16, T=T, Ne=1.0))
-        dt_e = bench(lambda: mg.compute_sigma_matrix(KERNEL, num_angle_bins=16, T=T, Ne=1.0,
+        dt_c = bench(lambda: mg.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=16, T=T, Ne=1.0))
+        dt_e = bench(lambda: mg.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=16, T=T, Ne=1.0,
                                                      multiplier=et_mult))
         times_const.append(dt_c)
         times_et.append(dt_e)
@@ -290,8 +290,8 @@ def section_group_scaling():
             energy_group_boundaries=bounds,
             weight_function=WF,
             quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
-        dt_c = bench(lambda: mg.compute_sigma_matrix(KERNEL, num_angle_bins=16, T=T, Ne=1.0))
-        dt_e = bench(lambda: mg.compute_sigma_matrix(KERNEL, num_angle_bins=16, T=T, Ne=1.0,
+        dt_c = bench(lambda: mg.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=16, T=T, Ne=1.0))
+        dt_e = bench(lambda: mg.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=16, T=T, Ne=1.0,
                                                      multiplier=et_mult))
         times_const.append(dt_c)
         times_et.append(dt_e)
@@ -381,8 +381,8 @@ def section_quad_convergence():
         weight_function=WF,
         quad_order_E=N_REF, quad_order_Ep=N_REF, quad_order_mu=N_REF)
     et_mult = make_et_multiplier(CONV_BOUNDS)
-    S_ref_c = np.array(mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=16, T=T, Ne=1.0))
-    S_ref_e = np.array(mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=16, T=T, Ne=1.0,
+    S_ref_c = np.array(mg_ref.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=16, T=T, Ne=1.0))
+    S_ref_e = np.array(mg_ref.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=16, T=T, Ne=1.0,
                                                    multiplier=et_mult))
 
     orders = [4, 8, 12, 16, 24, 32]
@@ -400,8 +400,8 @@ def section_quad_convergence():
             weight_function=WF,
             quad_order_E=n, quad_order_Ep=n, quad_order_mu=n)
         t0 = time.perf_counter()
-        S_c = np.array(mg.compute_sigma_matrix(KERNEL, num_angle_bins=16, T=T, Ne=1.0))
-        S_e = np.array(mg.compute_sigma_matrix(KERNEL, num_angle_bins=16, T=T, Ne=1.0,
+        S_c = np.array(mg.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=16, T=T, Ne=1.0))
+        S_e = np.array(mg.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=16, T=T, Ne=1.0,
                                                multiplier=et_mult))
         dt = time.perf_counter() - t0
         wall_times.append(dt)
@@ -470,13 +470,13 @@ def section_angle_convergence():
         quad_order_E=N_QUAD, quad_order_Ep=N_QUAD, quad_order_mu=N_QUAD)
 
     log("  Computing angle-integrated baselines...")
-    S_int_c = np.array(mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0))
-    S_int_e = np.array(mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0, multiplier=et_mult))
+    S_int_c = np.array(mg.compute_sigma_matrix(KERNEL_SOLVER, T=T, Ne=1.0))
+    S_int_e = np.array(mg.compute_sigma_matrix(KERNEL_SOLVER, T=T, Ne=1.0, multiplier=et_mult))
 
     N_BINS_REF = 64
     log(f"  Computing reference ({N_BINS_REF} bins)...")
-    S_ref_c = np.array(mg.compute_sigma_matrix(KERNEL, num_angle_bins=N_BINS_REF, T=T, Ne=1.0))
-    S_ref_e = np.array(mg.compute_sigma_matrix(KERNEL, num_angle_bins=N_BINS_REF, T=T, Ne=1.0,
+    S_ref_c = np.array(mg.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=N_BINS_REF, T=T, Ne=1.0))
+    S_ref_e = np.array(mg.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=N_BINS_REF, T=T, Ne=1.0,
                                                multiplier=et_mult))
 
     bin_counts = [2, 4, 8, 16, 32]
@@ -487,9 +487,9 @@ def section_angle_convergence():
     for nb in bin_counts:
         log(f"  Computing {nb} bins...")
         cached_c[nb] = np.array(mg.compute_sigma_matrix(
-            KERNEL, num_angle_bins=nb, T=T, Ne=1.0))
+            KERNEL_SOLVER, num_angle_bins=nb, T=T, Ne=1.0))
         cached_e[nb] = np.array(mg.compute_sigma_matrix(
-            KERNEL, num_angle_bins=nb, T=T, Ne=1.0, multiplier=et_mult))
+            KERNEL_SOLVER, num_angle_bins=nb, T=T, Ne=1.0, multiplier=et_mult))
 
     emit('### 5a. Angle-Summed Consistency')
     emit()
@@ -564,9 +564,9 @@ def section_angle_convergence():
             S_e = S_ref_e
         else:
             S_c = np.array(mg.compute_sigma_matrix(
-                KERNEL, num_angle_bins=nb, T=T, Ne=1.0))
+                KERNEL_SOLVER, num_angle_bins=nb, T=T, Ne=1.0))
             S_e = np.array(mg.compute_sigma_matrix(
-                KERNEL, num_angle_bins=nb, T=T, Ne=1.0, multiplier=et_mult))
+                KERNEL_SOLVER, num_angle_bins=nb, T=T, Ne=1.0, multiplier=et_mult))
 
         dmu = 2.0 / nb
         mu_edges = np.linspace(-1.0, 1.0, nb + 1)
