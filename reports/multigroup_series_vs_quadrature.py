@@ -69,6 +69,7 @@ TICK_LABELS = [f'{CENTERS_KEV[i]:.1f}' for i in TICK_POS]
 def make_mg(n=16):
     return cm.ComptonMultigroupKernel(
         energy_group_boundaries=BOUNDS_ERG,
+        weight_function=cm.PlanckWeightFunction(cap_x=25.0),
         quad_order_E=n, quad_order_Ep=n, quad_order_mu=n)
 
 

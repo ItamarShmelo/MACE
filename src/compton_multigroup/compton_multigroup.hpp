@@ -16,10 +16,7 @@
  *         ─────────────────────────────────────────────────────────────
  *                        ∫_{ΔEg} w(E,T) dE
  *
- * where the weight function is a capped Planck spectrum:
- *
- *     w(E,T) = x³/(eˣ−1)   for x = E/(kT) < N
- *            = N³/(eᴺ−1)    for x ≥ N          (default N = 25)
+ * where the weight function w(E, T),
  *
  * The 2π factor accounts for azimuthal symmetry (dΩ = 2π dμ), ensuring
  * that summing over all angle bins gives the total group-to-group cross
@@ -30,9 +27,8 @@
  * Angle bins divide [−1, 1] into N equal segments of width 2/N.
  *
  * The numerator is evaluated by tensor-product Gauss-Legendre quadrature
- * over the three finite intervals (E, E', μ).  The denominator uses the
- * analytic Clark (1987) polylogarithm method from planck_integral.hpp,
- * stitching at x = N when a group straddles the cap threshold.
+ * over the three finite intervals (E, E', μ).  The denominator is computed
+ * by the weight function.
  *
  * ─────────────────────────────────────────────────────────────────────────
  * UNITS AND API
@@ -60,38 +56,38 @@
 #include "compton_kernel_quadrature/compton_kernel_quadrature.hpp"
 #include "compton_kernel_series/compton_kernel_series.hpp"
 
+#include <memory>
 #include <vector>
 #include <numbers>
 
 namespace compton {
 
 /**
- * @brief Computes the Planck-weighted multigroup-multiangle Compton
- *        scattering matrix by tensor-product Gauss-Legendre quadrature.
+ * @brief Computes the weighted multigroup-multiangle Compton scattering
+ *        matrix by tensor-product Gauss-Legendre quadrature.
  *
- * Construct once with the energy group structure and quadrature orders;
- * then call compute_sigma_matrix / compute_dsigma_dT_matrix at any
- * temperature and angular resolution.
+ * Construct once with the energy group structure, weight function, and
+ * quadrature orders; then call compute_sigma_matrix /
+ * compute_dsigma_dT_matrix at any temperature and angular resolution.
  */
 class ComptonMultigroupKernel {
 public:
     /**
-     * @brief Construct from energy group boundaries.
+     * @brief Construct from energy group boundaries and a weight function.
      *
      * @param energy_group_boundaries  G+1 strictly increasing values [erg], all > 0.
+     * @param weight_function          Shared pointer to a WeightFunction subclass.
      * @param quad_order_E             Gauss-Legendre order for incident energy.
      * @param quad_order_Ep            Gauss-Legendre order for scattered energy.
      * @param quad_order_mu            Gauss-Legendre order for scattering angle.
-     * @param planck_cap_x             Dimensionless cutoff x = E/(kT) for the
-     *                                 Planck weight (default 25).
      * @throws std::invalid_argument on invalid boundaries or orders.
      */
     ComptonMultigroupKernel(
         std::vector<double> const& energy_group_boundaries,
+        std::shared_ptr<WeightFunction const> weight_function,
         int quad_order_E  = 8,
         int quad_order_Ep = 8,
-        int quad_order_mu = 8,
-        double planck_cap_x = 25.0);
+        int quad_order_mu = 8);
 
     /** @brief Number of energy groups G. */
     int num_groups() const { return static_cast<int>(group_centers_.size()); }
@@ -158,7 +154,7 @@ private:
 
     std::vector<double> group_boundaries_;
     std::vector<double> group_centers_;
-    PlanckWeightFunction planck_weight_;
+    std::shared_ptr<WeightFunction const> weight_func_;
 
     GaussLegendreRule rule_E_;
     GaussLegendreRule rule_Ep_;

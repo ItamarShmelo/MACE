@@ -47,6 +47,7 @@ for NE in [16, 32, 64]:
     kernel = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=eb.tolist(),
+        weight_function=cm.PlanckWeightFunction(cap_x=25.0),
         quad_order_E=NE,
         quad_order_Ep=NE,
         quad_order_mu=32)

@@ -8,12 +8,12 @@ namespace compton {
 
 ComptonMultigroupKernel::ComptonMultigroupKernel(
     std::vector<double> const& energy_group_boundaries,
+    std::shared_ptr<WeightFunction const> weight_function,
     int const quad_order_E,
     int const quad_order_Ep,
-    int const quad_order_mu,
-    double const planck_cap_x)
+    int const quad_order_mu)
     : group_boundaries_(energy_group_boundaries)
-    , planck_weight_(planck_cap_x)
+    , weight_func_(std::move(weight_function))
     , rule_E_(compute_gauss_legendre(quad_order_E))
     , rule_Ep_(compute_gauss_legendre(quad_order_Ep))
     , rule_mu_(compute_gauss_legendre(quad_order_mu))
@@ -61,7 +61,7 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
 
     std::vector<double> denominators(G);
     for (int g = 0; g < G; ++g) {
-        denominators[g] = planck_weight_.compute_denominator(
+        denominators[g] = weight_func_->compute_denominator(
             group_boundaries_[g], group_boundaries_[g + 1], T);
     }
 
@@ -80,7 +80,7 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
 
                 double const numerator = legendre_integrate(
                     [&](double const E) {
-                        double const w = planck_weight_.weight(E, T);
+                        double const w = weight_func_->weight(E, T);
                         double const inner = legendre_integrate(
                             [&](double const Ep) {
                                 return legendre_integrate(

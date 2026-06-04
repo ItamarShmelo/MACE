@@ -57,17 +57,19 @@ py::array_t<double> wrap_2d(
 } // anonymous namespace
 
 PYBIND11_MODULE(_compton_multigroup, m) {
-    m.doc() = "Planck-weighted multigroup-multiangle Compton scattering matrix";
+    m.doc() = "Weighted multigroup-multiangle Compton scattering matrix";
 
     py::module_::import("_compton_common");
 
     py::class_<ComptonMultigroupKernel>(m, "ComptonMultigroupKernel")
-        .def(py::init<std::vector<double> const&, int, int, int, double>(),
+        .def(py::init<std::vector<double> const&,
+                       std::shared_ptr<WeightFunction const>,
+                       int, int, int>(),
              "energy_group_boundaries"_a,
+             "weight_function"_a,
              "quad_order_E"_a  = 8,
              "quad_order_Ep"_a = 8,
-             "quad_order_mu"_a = 8,
-             "planck_cap_x"_a  = 25.0)
+             "quad_order_mu"_a = 8)
 
         .def_property_readonly("num_groups", &ComptonMultigroupKernel::num_groups)
 
@@ -165,10 +167,27 @@ PYBIND11_MODULE(_compton_multigroup, m) {
             },
             "kernel"_a, "T"_a, "Ne"_a);
 
-    py::class_<PlanckWeightFunction>(m, "PlanckWeightFunction")
-        .def(py::init<double>(), "cap_x"_a)
+    py::class_<WeightFunction, std::shared_ptr<WeightFunction>>(m, "WeightFunction");
+
+    py::class_<PlanckWeightFunction, WeightFunction,
+                std::shared_ptr<PlanckWeightFunction>>(m, "PlanckWeightFunction")
+        .def(py::init<double>(), py::kw_only(), "cap_x"_a)
         .def("weight", &PlanckWeightFunction::weight, "E"_a, "T"_a)
         .def("compute_denominator", &PlanckWeightFunction::compute_denominator,
+             "E_left"_a, "E_right"_a, "T"_a);
+
+    py::class_<UniformWeightFunction, WeightFunction,
+                std::shared_ptr<UniformWeightFunction>>(m, "UniformWeightFunction")
+        .def(py::init<>())
+        .def("weight", &UniformWeightFunction::weight, "E"_a, "T"_a)
+        .def("compute_denominator", &UniformWeightFunction::compute_denominator,
+             "E_left"_a, "E_right"_a, "T"_a);
+
+    py::class_<WienWeightFunction, WeightFunction,
+                std::shared_ptr<WienWeightFunction>>(m, "WienWeightFunction")
+        .def(py::init<double>(), py::kw_only(), "cap_x"_a)
+        .def("weight", &WienWeightFunction::weight, "E"_a, "T"_a)
+        .def("compute_denominator", &WienWeightFunction::compute_denominator,
              "E_left"_a, "E_right"_a, "T"_a);
 
     m.def("gauss_legendre_rule", [](int N) {

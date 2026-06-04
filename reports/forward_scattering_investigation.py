@@ -289,6 +289,7 @@ def step4_eps_sweep():
     for qE in quad_orders:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=sub_boundaries,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
             quad_order_E=qE,
             quad_order_Ep=qE,
             quad_order_mu=32,
@@ -363,6 +364,7 @@ def step5_validation_plot():
     for qE, qmu, label in configs:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=sub_boundaries,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
             quad_order_E=qE,
             quad_order_Ep=qE,
             quad_order_mu=qmu,

@@ -49,6 +49,7 @@ class TestDenominator:
         E_hi = 5.0 * kT
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=[E_lo, E_hi],
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
             quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
 
         S = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
@@ -72,6 +73,7 @@ class TestDenominator:
         E_hi = 30.0 * kT
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=[E_lo, E_hi],
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
             quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
 
         cap_x = 25.0
@@ -128,6 +130,7 @@ class TestQuadratureConvergence:
         for n in [8, 16, 32, 64]:
             mg = cm.ComptonMultigroupKernel(
                 energy_group_boundaries=narrow_bounds,
+                weight_function=cm.PlanckWeightFunction(cap_x=25.0),
                 quad_order_E=n, quad_order_Ep=n, quad_order_mu=n)
             results[n] = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
 
@@ -166,6 +169,7 @@ class TestAngleBinSummation:
 
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=narrow_bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
             quad_order_E=32, quad_order_Ep=32, quad_order_mu=32)
 
         S_integrated = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
@@ -255,6 +259,7 @@ class TestMCComparison:
 
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=boundaries,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
             quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
         S_det = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
 
@@ -305,6 +310,7 @@ class TestAngleCDFComparison:
 
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=boundaries,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
             quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
         S_det = mg.compute_sigma_matrix(
             KERNEL_Q64, num_angle_bins=NUM_ANGLE_BINS, T=T, Ne=1.0)

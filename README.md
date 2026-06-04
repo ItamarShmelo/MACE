@@ -98,7 +98,7 @@ with stitching at $x = 25$ when a group straddles the threshold.
 
 **API summary.**
 
-- **Constructor**: `ComptonMultigroupKernel(energy_group_boundaries, quad_order_E=8, quad_order_Ep=8, quad_order_mu=8, planck_cap_x=25.0)` — boundaries are G+1 strictly increasing values in [erg], all > 0.
+- **Constructor**: `ComptonMultigroupKernel(energy_group_boundaries, weight_function, quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)` — boundaries are G+1 strictly increasing values in [erg], all > 0. `weight_function` is a `WeightFunction` subclass (e.g. `PlanckWeightFunction`, `UniformWeightFunction`, `WienWeightFunction`).
 - **`compute_sigma_matrix(kernel, num_angle_bins, T, Ne)`** — returns a `(G, G, N_angles)` NumPy array.
 - **`compute_sigma_matrix(kernel, T, Ne)`** — angle-integrated, returns a `(G, G)` NumPy array.
 - **`compute_dsigma_dT_matrix`** — same signatures, using the temperature-derivative kernel.
@@ -118,6 +118,7 @@ from _units import kev, kev_kelvin
 kernel = cq.ComptonKernelQuadrature(64)
 mg = cm.ComptonMultigroupKernel(
     energy_group_boundaries=[0.1*kev, 0.5*kev, 1*kev, 5*kev, 10*kev],
+    weight_function=cm.PlanckWeightFunction(cap_x=25.0),
     quad_order_E=8)
 
 # Angle-integrated G x G matrix

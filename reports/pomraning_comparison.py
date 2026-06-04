@@ -49,6 +49,7 @@ print("Computing Series kernel (angle-integrated)...")
 kernel = cs.ComptonKernelSeries(cs.SeriesMethod.Auto)
 mg = cm.ComptonMultigroupKernel(
     energy_group_boundaries=eb.tolist(),
+    weight_function=cm.PlanckWeightFunction(cap_x=25.0),
     quad_order_E=32,
     quad_order_Ep=32,
     quad_order_mu=32)

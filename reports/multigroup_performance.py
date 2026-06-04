@@ -86,6 +86,7 @@ def section_quad_order():
     for n in orders:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
             quad_order_E=n, quad_order_Ep=n, quad_order_mu=n)
         dt = bench(lambda: mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0))
         times.append(dt)
@@ -139,6 +140,7 @@ def section_num_groups():
         bounds = make_bounds(g).tolist()
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
             quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
         dt = bench(lambda: mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0))
         times.append(dt)
@@ -175,6 +177,7 @@ def section_angle_bins():
     bounds = make_bounds(20).tolist()
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds,
+        weight_function=cm.PlanckWeightFunction(cap_x=25.0),
         quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
 
     bin_counts = [1, 2, 4, 8, 16, 32, 64]
@@ -237,6 +240,7 @@ def section_kernel_comparison():
         bounds = make_bounds(g).tolist()
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
             quad_order_E=n, quad_order_Ep=n, quad_order_mu=n)
 
         dt_q = bench(lambda: mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0))

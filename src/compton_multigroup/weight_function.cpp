@@ -46,4 +46,51 @@ double PlanckWeightFunction::compute_denominator(
     return kT * (planck_part + const_part);
 }
 
+double UniformWeightFunction::weight(double const /*E*/, double const /*T*/) const {
+    return 1.0;
+}
+
+double UniformWeightFunction::compute_denominator(
+    double const E_left, double const E_right, double const /*T*/) const
+{
+    return E_right - E_left;
+}
+
+WienWeightFunction::WienWeightFunction(double const cap_x)
+    : cap_x_(cap_x)
+    , w0_(cap_x * cap_x * cap_x * std::exp(-cap_x))
+{
+    if (!(cap_x > 0.0))
+        throw std::invalid_argument("cap_x must be > 0");
+}
+
+double WienWeightFunction::weight(double const E, double const T) const {
+    double const x = E / (units::k_boltz * T);
+    if (x < cap_x_)
+        return x * x * x * std::exp(-x);
+    return w0_;
+}
+
+double WienWeightFunction::compute_denominator(
+    double const E_left, double const E_right, double const T) const
+{
+    double const kT = units::k_boltz * T;
+    double const x_lo = E_left / kT;
+    double const x_hi = E_right / kT;
+
+    auto const wien_integral = [](double const x) {
+        return -std::exp(-x) * (x * x * x + 3.0 * x * x + 6.0 * x + 6.0);
+    };
+
+    if (x_hi <= cap_x_)
+        return kT * (wien_integral(x_hi) - wien_integral(x_lo));
+
+    if (x_lo >= cap_x_)
+        return kT * w0_ * (x_hi - x_lo);
+
+    double const wien_part = wien_integral(cap_x_) - wien_integral(x_lo);
+    double const const_part = w0_ * (x_hi - cap_x_);
+    return kT * (wien_part + const_part);
+}
+
 } // namespace compton

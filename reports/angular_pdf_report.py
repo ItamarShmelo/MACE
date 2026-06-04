@@ -88,6 +88,7 @@ def compute_angular_pdf(T):
 
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=BOUNDARIES_ERG,
+        weight_function=cm.PlanckWeightFunction(cap_x=25.0),
         quad_order_E=QUAD_ORDER,
         quad_order_Ep=QUAD_ORDER,
         quad_order_mu=QUAD_ORDER,
