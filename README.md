@@ -83,18 +83,8 @@ $$
 
 The $2\pi$ factor accounts for azimuthal symmetry ($d\Omega = 2\pi\, d\mu$).
 
-**Capped Planck weight.** The weighting function is
-
-$$
-w(E, T) = \begin{cases}
-x^3 / (e^x - 1) & x = E/(kT) < 25 \\
-25^3 / (e^{25} - 1) & \text{otherwise}
-\end{cases}
-$$
-
-The cap prevents overflow in the tail while preserving continuity.
-The denominator is computed analytically via the Clark (1987) polylogarithm method,
-with stitching at $x = 25$ when a group straddles the threshold.
+**Weight function.** The weighting function $w(E,T)$ is user-selectable via
+the `weight_function` constructor argument.
 
 **API summary.**
 
@@ -175,9 +165,7 @@ The minimum electron Lorentz factor allowed by the scattering kinematics is
 
 $$
 \lambda_+
-= \frac{\Delta}{2}
-  + \sqrt{\left(1+\frac{\gamma\gamma'a}{2}\right)
-           \left(1+\frac{\Delta^2}{2\gamma\gamma'a}\right)}
+= \frac{\Delta}{2} + \sqrt{\left(1+\frac{\gamma\gamma'a}{2}\right)\left(1+\frac{\Delta^2}{2\gamma\gamma'a}\right)}
 = \frac{\Delta+q\sqrt{1+2/(\gamma\gamma'a)}}{2}.
 $$
 
@@ -208,10 +196,7 @@ $$
 The common coefficient used in all representations is
 
 $$
-G
-= -\gamma\gamma'
-  + \frac{2}{a}
-  + \frac{2}{\gamma\gamma'a^2}.
+G = -\gamma\gamma' + \frac{2}{a} + \frac{2}{\gamma\gamma'a^2}.
 $$
 
 The post-integration-by-parts coefficients are
@@ -225,10 +210,7 @@ $$
 The boundary term is
 
 $$
-\Psi
-= \frac{2\tau\gamma\gamma'}{q}
-  + \frac{s}{a^2}\left(\alpha_+ + \alpha_-\right)
-  + \frac{\rho_+\alpha_+ - \rho_-\alpha_-}{a}.
+\Psi = \frac{2\tau\gamma\gamma'}{q} + \frac{s}{a^2}\left(\alpha_+ + \alpha_-\right) + \frac{\rho_+\alpha_+ - \rho_-\alpha_-}{a}.
 $$
 
 ### Common prefactor
@@ -287,16 +269,14 @@ Two algebraically equivalent integrand forms are implemented.
 
 $$
 \Sigma_E
-= \Sigma_0\left[\Psi
-  + \tau\int_0^\infty H(\tau x)e^{-x}\,dx\right],
+= \Sigma_0\left[\Psi + \tau\int_0^\infty H(\tau x)e^{-x}\,dx\right],
 $$
 
 with
 
 $$
 H(\rho)
-= \frac{\Lambda_+ - r_+(\rho)/(\tau a)}{\sqrt{R_+(\rho)}}
-  + \frac{r_-(\rho)/(\tau a)-\Lambda_-}{\sqrt{R_-(\rho)}}.
+= \frac{\Lambda_+ - r_+(\rho)/(\tau a)}{\sqrt{R_+(\rho)}} + \frac{r_-(\rho)/(\tau a)-\Lambda_-}{\sqrt{R_-(\rho)}}.
 $$
 
 **Pre-IBP form:**
@@ -310,14 +290,10 @@ with
 
 $$
 F(\rho)
-= \frac{2\gamma\gamma'}{q}
-  + \frac{1}{a^2}
+= \frac{2\gamma\gamma'}{q} + \frac{1}{a^2}
     \left[
-      \frac{s r_-(\rho)+1+\xi}{R_-(\rho)^{3/2}}
-      + \frac{s r_+(\rho)-1-\xi}{R_+(\rho)^{3/2}}
-    \right]
-  + G\left[\frac{1}{\sqrt{R_+(\rho)}}
-           -\frac{1}{\sqrt{R_-(\rho)}}\right].
+      \frac{s r_-(\rho)+1+\xi}{R_-(\rho)^{3/2}} + \frac{s r_+(\rho)-1-\xi}{R_+(\rho)^{3/2}}
+    \right] + G\left[\frac{1}{\sqrt{R_+(\rho)}} -\frac{1}{\sqrt{R_-(\rho)}}\right].
 $$
 
 The two forms satisfy
@@ -414,8 +390,7 @@ Then
 $$
 \frac{\Sigma_E}{\Sigma_0}
 \sim
-\frac{2\tau\gamma\gamma'}{q}
-+ S_+ + S_-,
+\frac{2\tau\gamma\gamma'}{q} + S_+ + S_-,
 $$
 
 with
