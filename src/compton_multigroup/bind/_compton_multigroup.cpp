@@ -13,16 +13,20 @@ using namespace compton;
 namespace {
 
 template<typename KernelT>
+using MatrixMethod = std::vector<double> (ComptonMultigroupKernel::*)(
+    KernelT const&, int, double, double, KernelMultiplier const&) const;
+
+template<typename KernelT>
 py::array_t<double> wrap_3d(
     ComptonMultigroupKernel const& self,
     KernelT const& kernel,
     int const num_angle_bins,
     double const T,
     double const Ne,
-    std::vector<double> (ComptonMultigroupKernel::*method)(
-        KernelT const&, int, double, double) const)
+    KernelMultiplier const& multiplier,
+    MatrixMethod<KernelT> method)
 {
-    std::vector<double> flat = (self.*method)(kernel, num_angle_bins, T, Ne);
+    std::vector<double> flat = (self.*method)(kernel, num_angle_bins, T, Ne, multiplier);
     int const G = self.num_groups();
     py::array_t<double> arr({G, G, num_angle_bins});
     auto buf = arr.mutable_unchecked<3>();
@@ -40,10 +44,10 @@ py::array_t<double> wrap_2d(
     KernelT const& kernel,
     double const T,
     double const Ne,
-    std::vector<double> (ComptonMultigroupKernel::*method)(
-        KernelT const&, int, double, double) const)
+    KernelMultiplier const& multiplier,
+    MatrixMethod<KernelT> method)
 {
-    std::vector<double> flat = (self.*method)(kernel, 1, T, Ne);
+    std::vector<double> flat = (self.*method)(kernel, 1, T, Ne, multiplier);
     int const G = self.num_groups();
     py::array_t<double> arr({G, G});
     auto buf = arr.mutable_unchecked<2>();
@@ -60,6 +64,11 @@ PYBIND11_MODULE(_compton_multigroup, m) {
     m.doc() = "Weighted multigroup-multiangle Compton scattering matrix";
 
     py::module_::import("_compton_common");
+
+    py::class_<KernelMultiplier>(m, "KernelMultiplier");
+
+    py::class_<ConstantMultiplier, KernelMultiplier>(m, "ConstantMultiplier")
+        .def(py::init<>());
 
     py::class_<ComptonMultigroupKernel>(m, "ComptonMultigroupKernel")
         .def(py::init<std::vector<double> const&,
@@ -95,77 +104,93 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .def("compute_sigma_matrix",
             [](ComptonMultigroupKernel const& self,
                ComptonKernelQuadrature const& kernel,
-               int num_angle_bins, double T, double Ne) {
-                return wrap_3d(self, kernel, num_angle_bins, T, Ne,
+               int num_angle_bins, double T, double Ne,
+               KernelMultiplier const& multiplier) {
+                return wrap_3d(self, kernel, num_angle_bins, T, Ne, multiplier,
                     &ComptonMultigroupKernel::compute_sigma_matrix<ComptonKernelQuadrature>);
             },
-            "kernel"_a, "num_angle_bins"_a, "T"_a, "Ne"_a)
+            "kernel"_a, "num_angle_bins"_a, "T"_a, "Ne"_a,
+            "multiplier"_a = ConstantMultiplier())
 
         .def("compute_dsigma_dT_matrix",
             [](ComptonMultigroupKernel const& self,
                ComptonKernelQuadrature const& kernel,
-               int num_angle_bins, double T, double Ne) {
-                return wrap_3d(self, kernel, num_angle_bins, T, Ne,
+               int num_angle_bins, double T, double Ne,
+               KernelMultiplier const& multiplier) {
+                return wrap_3d(self, kernel, num_angle_bins, T, Ne, multiplier,
                     &ComptonMultigroupKernel::compute_dsigma_dT_matrix<ComptonKernelQuadrature>);
             },
-            "kernel"_a, "num_angle_bins"_a, "T"_a, "Ne"_a)
+            "kernel"_a, "num_angle_bins"_a, "T"_a, "Ne"_a,
+            "multiplier"_a = ConstantMultiplier())
 
         // ── Multiangle: series kernel ────────────────────────────────────
         .def("compute_sigma_matrix",
             [](ComptonMultigroupKernel const& self,
                ComptonKernelSeries const& kernel,
-               int num_angle_bins, double T, double Ne) {
-                return wrap_3d(self, kernel, num_angle_bins, T, Ne,
+               int num_angle_bins, double T, double Ne,
+               KernelMultiplier const& multiplier) {
+                return wrap_3d(self, kernel, num_angle_bins, T, Ne, multiplier,
                     &ComptonMultigroupKernel::compute_sigma_matrix<ComptonKernelSeries>);
             },
-            "kernel"_a, "num_angle_bins"_a, "T"_a, "Ne"_a)
+            "kernel"_a, "num_angle_bins"_a, "T"_a, "Ne"_a,
+            "multiplier"_a = ConstantMultiplier())
 
         .def("compute_dsigma_dT_matrix",
             [](ComptonMultigroupKernel const& self,
                ComptonKernelSeries const& kernel,
-               int num_angle_bins, double T, double Ne) {
-                return wrap_3d(self, kernel, num_angle_bins, T, Ne,
+               int num_angle_bins, double T, double Ne,
+               KernelMultiplier const& multiplier) {
+                return wrap_3d(self, kernel, num_angle_bins, T, Ne, multiplier,
                     &ComptonMultigroupKernel::compute_dsigma_dT_matrix<ComptonKernelSeries>);
             },
-            "kernel"_a, "num_angle_bins"_a, "T"_a, "Ne"_a)
+            "kernel"_a, "num_angle_bins"_a, "T"_a, "Ne"_a,
+            "multiplier"_a = ConstantMultiplier())
 
         // ── Angle-integrated: quadrature kernel ──────────────────────────
         .def("compute_sigma_matrix",
             [](ComptonMultigroupKernel const& self,
                ComptonKernelQuadrature const& kernel,
-               double T, double Ne) {
-                return wrap_2d(self, kernel, T, Ne,
+               double T, double Ne,
+               KernelMultiplier const& multiplier) {
+                return wrap_2d(self, kernel, T, Ne, multiplier,
                     &ComptonMultigroupKernel::compute_sigma_matrix<ComptonKernelQuadrature>);
             },
-            "kernel"_a, "T"_a, "Ne"_a)
+            "kernel"_a, "T"_a, "Ne"_a,
+            "multiplier"_a = ConstantMultiplier())
 
         .def("compute_dsigma_dT_matrix",
             [](ComptonMultigroupKernel const& self,
                ComptonKernelQuadrature const& kernel,
-               double T, double Ne) {
-                return wrap_2d(self, kernel, T, Ne,
+               double T, double Ne,
+               KernelMultiplier const& multiplier) {
+                return wrap_2d(self, kernel, T, Ne, multiplier,
                     &ComptonMultigroupKernel::compute_dsigma_dT_matrix<ComptonKernelQuadrature>);
             },
-            "kernel"_a, "T"_a, "Ne"_a)
+            "kernel"_a, "T"_a, "Ne"_a,
+            "multiplier"_a = ConstantMultiplier())
 
         // ── Angle-integrated: series kernel ──────────────────────────────
         .def("compute_sigma_matrix",
             [](ComptonMultigroupKernel const& self,
                ComptonKernelSeries const& kernel,
-               double T, double Ne) {
-                return wrap_2d(self, kernel, T, Ne,
+               double T, double Ne,
+               KernelMultiplier const& multiplier) {
+                return wrap_2d(self, kernel, T, Ne, multiplier,
                     &ComptonMultigroupKernel::compute_sigma_matrix<ComptonKernelSeries>);
             },
-            "kernel"_a, "T"_a, "Ne"_a)
+            "kernel"_a, "T"_a, "Ne"_a,
+            "multiplier"_a = ConstantMultiplier())
 
         .def("compute_dsigma_dT_matrix",
             [](ComptonMultigroupKernel const& self,
                ComptonKernelSeries const& kernel,
-               double T, double Ne) {
-                return wrap_2d(self, kernel, T, Ne,
+               double T, double Ne,
+               KernelMultiplier const& multiplier) {
+                return wrap_2d(self, kernel, T, Ne, multiplier,
                     &ComptonMultigroupKernel::compute_dsigma_dT_matrix<ComptonKernelSeries>);
             },
-            "kernel"_a, "T"_a, "Ne"_a);
+            "kernel"_a, "T"_a, "Ne"_a,
+            "multiplier"_a = ConstantMultiplier());
 
     py::class_<WeightFunction, std::shared_ptr<WeightFunction>>(m, "WeightFunction");
 

@@ -63,6 +63,30 @@
 namespace compton {
 
 /**
+ * @brief Abstract base for kernel multipliers.
+ *
+ * A kernel multiplier f(E, E', mu, T, Ne) is an extra factor that multiplies
+ * the differential scattering kernel pointwise inside the multigroup integral.
+ * The result is *not* normalised by the integral of f itself, so it behaves
+ * like an observable averaged against the scattering distribution.
+ */
+class KernelMultiplier {
+public:
+    virtual ~KernelMultiplier() = default;
+    virtual double operator()(double E, double Ep, double mu, double T, double Ne) const = 0;
+};
+
+/**
+ * @brief Identity multiplier: always returns 1.
+ */
+class ConstantMultiplier : public KernelMultiplier {
+public:
+    double operator()(double, double, double, double, double) const override {
+        return 1.0;
+    }
+};
+
+/**
  * @brief Computes the weighted multigroup-multiangle Compton scattering
  *        matrix by tensor-product Gauss-Legendre quadrature.
  *
@@ -108,13 +132,15 @@ public:
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
      * @param T               Electron temperature [K].
      * @param Ne              Electron density [cm⁻³].
+     * @param multiplier      Pointwise kernel multiplier applied before integration.
      * @return Flat vector of size G×G×N_angles, row-major [g][g'][angle].
      */
     template<typename KernelT>
     std::vector<double> compute_sigma_matrix(
         KernelT const& kernel,
         int num_angle_bins,
-        double T, double Ne) const;
+        double T, double Ne,
+        KernelMultiplier const& multiplier) const;
 
     /**
      * @brief Compute the multigroup-multiangle ∂σ/∂T matrix.
@@ -124,13 +150,15 @@ public:
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
      * @param T               Electron temperature [K].
      * @param Ne              Electron density [cm⁻³].
+     * @param multiplier      Pointwise kernel multiplier applied before integration.
      * @return Flat vector of size G×G×N_angles, row-major [g][g'][angle].
      */
     template<typename KernelT>
     std::vector<double> compute_dsigma_dT_matrix(
         KernelT const& kernel,
         int num_angle_bins,
-        double T, double Ne) const;
+        double T, double Ne,
+        KernelMultiplier const& multiplier) const;
 
 private:
     /**
@@ -142,6 +170,7 @@ private:
      * @param num_angle_bins Number of equal-width bins on [−1, 1].
      * @param T              Electron temperature [K].
      * @param Ne             Electron density [cm⁻³].
+     * @param multiplier     Pointwise kernel multiplier applied before integration.
      * @return Flat vector of size G×G×num_angle_bins.
      */
     template<typename KernelT>
@@ -150,7 +179,8 @@ private:
         SigmaResult (KernelT::*eval)(double, double, double, double, double) const,
         int num_angle_bins,
         double T,
-        double Ne) const;
+        double Ne,
+        KernelMultiplier const& multiplier) const;
 
     std::vector<double> group_boundaries_;
     std::vector<double> group_centers_;

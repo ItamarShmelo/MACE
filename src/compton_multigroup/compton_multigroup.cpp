@@ -48,7 +48,8 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     SigmaResult (KernelT::*eval)(double, double, double, double, double) const,
     int const num_angle_bins,
     double const T,
-    double const Ne) const
+    double const Ne,
+    KernelMultiplier const& multiplier) const
 {
     if (num_angle_bins < 1)
         throw std::invalid_argument("num_angle_bins must be >= 1");
@@ -85,7 +86,8 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
                             [&](double const Ep) {
                                 return legendre_integrate(
                                     [&](double const mu) {
-                                        return (kernel.*eval)(E, Ep, mu, T, Ne).value;
+                                        return multiplier(E, Ep, mu, T, Ne) *
+                                               (kernel.*eval)(E, Ep, mu, T, Ne).value;
                                     },
                                     rule_mu_, mu_lo, mu_hi);
                             },
@@ -110,29 +112,34 @@ template<typename KernelT>
 std::vector<double> ComptonMultigroupKernel::compute_sigma_matrix(
     KernelT const& kernel,
     int const num_angle_bins,
-    double const T, double const Ne) const
+    double const T, double const Ne,
+    KernelMultiplier const& multiplier) const
 {
-    return compute_matrix_impl(kernel, &KernelT::sigma_E, num_angle_bins, T, Ne);
+    return compute_matrix_impl(kernel, &KernelT::sigma_E, num_angle_bins, T, Ne, multiplier);
 }
 
 template<typename KernelT>
 std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
     KernelT const& kernel,
     int const num_angle_bins,
-    double const T, double const Ne) const
+    double const T, double const Ne,
+    KernelMultiplier const& multiplier) const
 {
-    return compute_matrix_impl(kernel, &KernelT::dsigma_E_dT, num_angle_bins, T, Ne);
+    return compute_matrix_impl(kernel, &KernelT::dsigma_E_dT, num_angle_bins, T, Ne, multiplier);
 }
 
 // ── Explicit instantiations ─────────────────────────────────────────────
 
 template std::vector<double> ComptonMultigroupKernel::compute_sigma_matrix(
-    ComptonKernelQuadrature const&, int, double, double) const;
+    ComptonKernelQuadrature const&, int, double, double, KernelMultiplier const&) const;
+
 template std::vector<double> ComptonMultigroupKernel::compute_sigma_matrix(
-    ComptonKernelSeries const&, int, double, double) const;
+    ComptonKernelSeries const&, int, double, double, KernelMultiplier const&) const;
+
 template std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
-    ComptonKernelQuadrature const&, int, double, double) const;
+    ComptonKernelQuadrature const&, int, double, double, KernelMultiplier const&) const;
+
 template std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
-    ComptonKernelSeries const&, int, double, double) const;
+    ComptonKernelSeries const&, int, double, double, KernelMultiplier const&) const;
 
 } // namespace compton

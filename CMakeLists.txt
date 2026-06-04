@@ -92,3 +92,13 @@ target_compile_options(_compton_multigroup PRIVATE
 set_target_properties(_compton_multigroup PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
 )
+
+pybind11_add_module(_compton_multigroup_misc
+    src/compton_multigroup/bind/_compton_multigroup_misc.cpp
+)
+target_compile_options(_compton_multigroup_misc PRIVATE
+    -O3 -Wall -Wextra -Wpedantic
+)
+set_target_properties(_compton_multigroup_misc PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
+)
