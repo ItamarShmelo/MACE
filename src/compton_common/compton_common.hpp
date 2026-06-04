@@ -115,8 +115,20 @@ struct EhatCfConfig<double> {
 
 template<>
 struct EhatCfConfig<DD> {
-    static constexpr double cf_tol = 1e-31;
+    static constexpr double cf_tol = 1e-25;
     static constexpr int max_iter = 2000;
+};
+
+template<typename T> struct EhatAmpBudget;
+
+template<>
+struct EhatAmpBudget<double> {
+    static constexpr double value = 1e3;
+};
+
+template<>
+struct EhatAmpBudget<DD> {
+    static constexpr double value = 1e10;
 };
 
 } // namespace details
@@ -283,9 +295,6 @@ constexpr double REL_ERROR_TINY_SCALE = 1e-300;
 constexpr double XI_DIRECT_QUADRATURE_GUARD = 1e-14;
 
 constexpr double POISSON_Y_MAX = 500.0;
-
-// rel_tol / eps_machine / safety_factor = 1e-13 / 1e-16 / 10
-constexpr double EHAT_AMPLIFICATION_BUDGET = 1e2;
 
 /// Minimum dimensionless photon energy (gamma = E / m_e c^2) at which the
 /// double-precision power series agrees with the DD power series to better

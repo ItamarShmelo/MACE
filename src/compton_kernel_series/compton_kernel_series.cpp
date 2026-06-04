@@ -38,13 +38,16 @@ SigmaResult ComptonKernelSeries::power_series(
     T const tau_t(tau);
     T const b = omega / (tau_t * 2.0);
 
-    T const theta_plus  = param_asinh(p.rho_plus / omega);
-    T const theta_minus = param_asinh(p.rho_minus / omega);
-
-    T const x_plus  = b * param_exp(theta_plus);
-    T const y_plus  = b * param_exp(-theta_plus);
-    T const x_minus = b * param_exp(theta_minus);
-    T const y_minus = b * param_exp(-theta_minus);
+    // exp(asinh(z)) = z + sqrt(z^2+1);  since (z+r)(r-z) = 1, use y = b/(z+r)
+    // to avoid cancellation in the subtraction r - z.
+    T const z_plus  = p.rho_plus / omega;
+    T const z_minus = p.rho_minus / omega;
+    T const r_plus  = param_sqrt(z_plus * z_plus + T(1.0));
+    T const r_minus = param_sqrt(z_minus * z_minus + T(1.0));
+    T const x_plus  = b * (z_plus + r_plus);
+    T const y_plus  = b / (z_plus + r_plus);
+    T const x_minus = b * (z_minus + r_minus);
+    T const y_minus = b / (z_minus + r_minus);
 
     // Poisson weight exp(-y) underflows when y exceeds this threshold.
     if (y_plus > POISSON_Y_MAX || y_minus > POISSON_Y_MAX) {
@@ -98,7 +101,7 @@ SigmaResult ComptonKernelSeries::power_series(
             // budget, in which case restart from the continued fraction to curb
             // round-off error growth.
             amp_plus = amp_plus * (x_plus / (n + 1.0));
-            if (amp_plus < EHAT_AMPLIFICATION_BUDGET) {
+            if (amp_plus < EhatAmpBudget<T>::value) {
                 ehat_plus = (T(1.0) - x_plus * ehat_plus) / (n + 1.0);
             } else {
                 ehat_plus = ehat(n + 2, x_plus);
@@ -106,7 +109,7 @@ SigmaResult ComptonKernelSeries::power_series(
             }
 
             amp_minus = amp_minus * (x_minus / (n + 1.0));
-            if (amp_minus < EHAT_AMPLIFICATION_BUDGET) {
+            if (amp_minus < EhatAmpBudget<T>::value) {
                 ehat_minus = (T(1.0) - x_minus * ehat_minus) / (n + 1.0);
             } else {
                 ehat_minus = ehat(n + 2, x_minus);
@@ -162,13 +165,16 @@ SigmaResult ComptonKernelSeries::power_series_derivative(
     T const tau_t(tau);
     T const b = omega / (tau_t * 2.0);
 
-    T const theta_plus  = param_asinh(p.rho_plus / omega);
-    T const theta_minus = param_asinh(p.rho_minus / omega);
-
-    T const x_plus  = b * param_exp(theta_plus);
-    T const y_plus  = b * param_exp(-theta_plus);
-    T const x_minus = b * param_exp(theta_minus);
-    T const y_minus = b * param_exp(-theta_minus);
+    // exp(asinh(z)) = z + sqrt(z^2+1);  since (z+r)(r-z) = 1, use y = b/(z+r)
+    // to avoid cancellation in the subtraction r - z.
+    T const z_plus  = p.rho_plus / omega;
+    T const z_minus = p.rho_minus / omega;
+    T const r_plus  = param_sqrt(z_plus * z_plus + T(1.0));
+    T const r_minus = param_sqrt(z_minus * z_minus + T(1.0));
+    T const x_plus  = b * (z_plus + r_plus);
+    T const y_plus  = b / (z_plus + r_plus);
+    T const x_minus = b * (z_minus + r_minus);
+    T const y_minus = b / (z_minus + r_minus);
 
     if (y_plus > POISSON_Y_MAX || y_minus > POISSON_Y_MAX) {
         throw std::runtime_error("power series derivative: Poisson weight underflow");
@@ -249,7 +255,7 @@ SigmaResult ComptonKernelSeries::power_series_derivative(
             ehat_prev_minus = ehat_minus;
 
             amp_plus = amp_plus * (x_plus / (n + 1.0));
-            if (amp_plus < EHAT_AMPLIFICATION_BUDGET) {
+            if (amp_plus < EhatAmpBudget<T>::value) {
                 ehat_plus = (T(1.0) - x_plus * ehat_plus) / (n + 1.0);
             } else {
                 ehat_plus = ehat(n + 2, x_plus);
@@ -257,7 +263,7 @@ SigmaResult ComptonKernelSeries::power_series_derivative(
             }
 
             amp_minus = amp_minus * (x_minus / (n + 1.0));
-            if (amp_minus < EHAT_AMPLIFICATION_BUDGET) {
+            if (amp_minus < EhatAmpBudget<T>::value) {
                 ehat_minus = (T(1.0) - x_minus * ehat_minus) / (n + 1.0);
             } else {
                 ehat_minus = ehat(n + 2, x_minus);

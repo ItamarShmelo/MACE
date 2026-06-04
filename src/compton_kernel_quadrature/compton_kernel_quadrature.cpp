@@ -6,8 +6,8 @@ namespace compton {
 ComptonKernelQuadrature::ComptonKernelQuadrature(int NL, QuadratureForm form)
     : NL_(NL), form_(form)
 {
-    if (NL != 64 && NL != 128 && NL != 256)
-        throw std::invalid_argument("NL must be one of: 64, 128, 256");
+    if (NL != 32 && NL != 64 && NL != 128 && NL != 256)
+        throw std::invalid_argument("NL must be one of: 32, 64, 128, 256");
 }
 
 double ComptonKernelQuadrature::compute_IQ_post_ibp(
