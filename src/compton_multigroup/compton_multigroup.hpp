@@ -88,11 +88,15 @@ public:
 
 /**
  * @brief Computes the weighted multigroup-multiangle Compton scattering
- *        matrix by tensor-product Gauss-Legendre quadrature.
+ *        matrix by adaptive recursive Gauss-Legendre quadrature.
  *
- * Construct once with the energy group structure, weight function, and
- * quadrature orders; then call compute_sigma_matrix /
+ * Construct once with the energy group structure, weight function,
+ * tolerance, and base quadrature order; then call compute_sigma_matrix /
  * compute_dsigma_dT_matrix at any temperature and angular resolution.
+ *
+ * The 3D integral is evaluated adaptively: each axis recursively bisects
+ * until the relative error estimate is below its tolerance.  Inner axes
+ * use progressively tighter tolerances (E: tol, E': tol*0.1, mu: tol*0.01).
  */
 class ComptonMultigroupKernel {
 public:
@@ -101,17 +105,15 @@ public:
      *
      * @param energy_group_boundaries  G+1 strictly increasing values [erg], all > 0.
      * @param weight_function          Shared pointer to a WeightFunction subclass.
-     * @param quad_order_E             Gauss-Legendre order for incident energy.
-     * @param quad_order_Ep            Gauss-Legendre order for scattered energy.
-     * @param quad_order_mu            Gauss-Legendre order for scattering angle.
-     * @throws std::invalid_argument on invalid boundaries or orders.
+     * @param tol                      Overall relative tolerance for the outer integral.
+     * @param base_order               GL panel order used by the adaptive integrator.
+     * @throws std::invalid_argument on invalid boundaries or base_order.
      */
     ComptonMultigroupKernel(
         std::vector<double> const& energy_group_boundaries,
         std::shared_ptr<WeightFunction const> weight_function,
-        int quad_order_E  = 8,
-        int quad_order_Ep = 8,
-        int quad_order_mu = 8);
+        double tol = 1e-3,
+        int base_order = 16);
 
     /** @brief Number of energy groups G. */
     int num_groups() const { return static_cast<int>(group_centers_.size()); }
@@ -186,9 +188,8 @@ private:
     std::vector<double> group_centers_;
     std::shared_ptr<WeightFunction const> weight_func_;
 
-    GaussLegendreRule rule_E_;
-    GaussLegendreRule rule_Ep_;
-    GaussLegendreRule rule_mu_;
+    GaussLegendreRule base_rule_;
+    double tol_;
 };
 
 } // namespace compton

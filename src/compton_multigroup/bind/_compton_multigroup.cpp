@@ -74,12 +74,11 @@ PYBIND11_MODULE(_compton_multigroup, m) {
     py::class_<ComptonMultigroupKernel>(m, "ComptonMultigroupKernel")
         .def(py::init<std::vector<double> const&,
                        std::shared_ptr<WeightFunction const>,
-                       int, int, int>(),
+                       double, int>(),
              "energy_group_boundaries"_a,
              "weight_function"_a,
-             "quad_order_E"_a  = 8,
-             "quad_order_Ep"_a = 8,
-             "quad_order_mu"_a = 8)
+             "tol"_a = 1e-3,
+             "base_order"_a = 16)
 
         .def_property_readonly("num_groups", &ComptonMultigroupKernel::num_groups)
 
@@ -182,4 +181,16 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         }
         return py::make_tuple(nodes, weights);
     }, "N"_a, "Compute N-point Gauss-Legendre nodes and weights on [-1, 1]");
+
+    m.def("adaptive_legendre_integrate", [](py::function integrand,
+                                            int base_order,
+                                            double a, double b,
+                                            double tol, int max_depth) {
+        auto rule = compton::compute_gauss_legendre(base_order);
+        return compton::adaptive_legendre_integrate(
+            [&](double x) { return integrand(x).cast<double>(); },
+            rule, a, b, tol, max_depth);
+    }, "integrand"_a, "base_order"_a, "a"_a, "b"_a,
+       "tol"_a = 1e-8, "max_depth"_a = 15,
+       "Adaptive Gauss-Legendre integration of f over [a, b]");
 }

@@ -194,16 +194,36 @@ error.
 
 ## Multigroup Integration
 
-### Tensor-Product Quadrature
+### Adaptive Recursive Gauss–Legendre Quadrature
 
 The multigroup cross section
 
 $$\sigma(g \to g') = \frac{2\pi \int_{\Delta E_g} \int_{\Delta E_{g'}} \int_{\mu_i}^{\mu_{i+1}} w(E,T)\,\Sigma_E\, d\mu\, dE'\, dE}{\int_{\Delta E_g} w(E,T)\, dE}$$
 
-is evaluated by a **three-axis tensor-product Gauss–Legendre** rule on the
-finite intervals $(E, E', \mu)$.  Each axis has an independently configurable
-order (default 8).  The GL nodes and weights are computed at construction via
-the same Golub–Welsch QL algorithm used for the Laguerre rules.
+is evaluated by **adaptive recursive Gauss–Legendre** quadrature on all three
+finite intervals $(E, E', \mu)$.  Each axis uses the same base GL rule (default
+order 16, configurable via `base_order`) and recursively bisects panels until
+the error estimate drops below a per-axis tolerance.
+
+**Error estimation:** For each panel $[a, b]$, compute $I_\text{whole}$ using the
+base rule, then compute $I_\text{halves} = I_\text{left} + I_\text{right}$ by
+splitting at the midpoint.  The error estimate is $|I_\text{halves} - I_\text{whole}|$.
+If this exceeds `tol * |I_halves|`, recurse independently on each half.  A maximum
+recursion depth of 15 prevents runaway subdivision.
+
+**Tolerance hierarchy:** Inner integrals use progressively tighter tolerances to
+keep the total error within the user-specified budget:
+
+| Axis | Tolerance |
+|------|-----------|
+| E (outer) | `tol` |
+| E' (middle) | `tol * 0.1` |
+| μ (inner) | `tol * 0.01` |
+
+This ensures inner-axis quadrature noise, when propagated through outer-axis
+summations, stays below the overall target.  The default `tol = 1e-3` was chosen
+as a practical balance between accuracy and speed for the full 3-axis adaptive
+approach.
 
 Group centers are placed at the geometric mean $\sqrt{E_\text{lo} \cdot E_\text{hi}}$.
 Angle bins partition $[-1, 1]$ into $N$ equal segments of width $2/N$.  The $2\pi$

@@ -9,14 +9,12 @@ namespace compton {
 ComptonMultigroupKernel::ComptonMultigroupKernel(
     std::vector<double> const& energy_group_boundaries,
     std::shared_ptr<WeightFunction const> weight_function,
-    int const quad_order_E,
-    int const quad_order_Ep,
-    int const quad_order_mu)
+    double const tol,
+    int const base_order)
     : group_boundaries_(energy_group_boundaries)
     , weight_func_(std::move(weight_function))
-    , rule_E_(compute_gauss_legendre(quad_order_E))
-    , rule_Ep_(compute_gauss_legendre(quad_order_Ep))
-    , rule_mu_(compute_gauss_legendre(quad_order_mu))
+    , base_rule_(compute_gauss_legendre(base_order))
+    , tol_(tol)
 {
     if (energy_group_boundaries.size() < 2)
         throw std::invalid_argument("need at least 2 boundaries (1 group)");
@@ -32,8 +30,10 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
             throw std::invalid_argument("boundaries must be strictly increasing");
     }
 
-    if (quad_order_E < 1 || quad_order_Ep < 1 || quad_order_mu < 1)
-        throw std::invalid_argument("quadrature orders must be >= 1");
+    if (base_order < 1)
+        throw std::invalid_argument("base_order must be >= 1");
+    if (!(tol > 0.0))
+        throw std::invalid_argument("tol must be > 0");
 
     int const G = static_cast<int>(energy_group_boundaries.size()) - 1;
     group_centers_.resize(G);
@@ -66,6 +66,10 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
             group_boundaries_[g], group_boundaries_[g + 1], T);
     }
 
+    double const tol_E  = tol_;
+    double const tol_Ep = tol_ * 0.1;
+    double const tol_mu = tol_ * 0.01;
+
     for (int g = 0; g < G; ++g) {
         double const E_lo = group_boundaries_[g];
         double const E_hi = group_boundaries_[g + 1];
@@ -79,22 +83,22 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
                 double const mu_lo = -1.0 + a * dmu;
                 double const mu_hi = -1.0 + (a + 1) * dmu;
 
-                double const numerator = legendre_integrate(
+                double const numerator = adaptive_legendre_integrate(
                     [&](double const E) {
                         double const w = weight_func_->weight(E, T);
-                        double const inner = legendre_integrate(
+                        double const inner = adaptive_legendre_integrate(
                             [&](double const Ep) {
-                                return legendre_integrate(
+                                return adaptive_legendre_integrate(
                                     [&](double const mu) {
                                         return multiplier(E, Ep, mu, T, Ne) *
                                                (kernel.*eval)(E, Ep, mu, T, Ne).value;
                                     },
-                                    rule_mu_, mu_lo, mu_hi);
+                                    base_rule_, mu_lo, mu_hi, tol_mu);
                             },
-                            rule_Ep_, Ep_lo, Ep_hi);
+                            base_rule_, Ep_lo, Ep_hi, tol_Ep);
                         return w * inner;
                     },
-                    rule_E_, E_lo, E_hi);
+                    base_rule_, E_lo, E_hi, tol_E);
 
                 std::size_t const idx =
                     static_cast<std::size_t>(g) * G * num_angle_bins +

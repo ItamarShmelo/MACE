@@ -131,6 +131,52 @@ inline double legendre_integrate(F&& integrand,
     return half_width * sum;
 }
 
+/**
+ * @brief Adaptive Gauss-Legendre integration via recursive bisection.
+ *
+ * Estimates the integral over [a, b] by comparing the single-panel GL
+ * result against the sum of two half-panel results.  If the difference
+ * exceeds the relative tolerance, each half is refined independently.
+ *
+ * @param integrand   Callable f(x) -> double.
+ * @param rule        Precomputed GL rule (base panel order).
+ * @param a           Lower integration limit.
+ * @param b           Upper integration limit.
+ * @param tol         Relative tolerance for convergence.
+ * @param max_depth   Maximum recursion depth (prevents runaway subdivision).
+ * @return            Approximate value of integral_a^b f(x) dx.
+ */
+template<typename F>
+double adaptive_legendre_integrate(F&& integrand,
+                                   GaussLegendreRule const& rule,
+                                   double const a,
+                                   double const b,
+                                   double const tol,
+                                   int const max_depth = 15)
+{
+    constexpr double abs_floor = 1e-300;
+
+    double const I_whole = legendre_integrate(integrand, rule, a, b);
+
+    double const mid = 0.5 * (a + b);
+    double const I_left  = legendre_integrate(integrand, rule, a, mid);
+    double const I_right = legendre_integrate(integrand, rule, mid, b);
+    double const I_halves = I_left + I_right;
+
+    double const error = std::abs(I_halves - I_whole);
+    double const scale = std::max(std::abs(I_halves), abs_floor);
+
+    if (error <= tol * scale || max_depth <= 0) {
+        return I_halves;
+    }
+
+    double const refined_left = adaptive_legendre_integrate(
+        integrand, rule, a, mid, tol, max_depth - 1);
+    double const refined_right = adaptive_legendre_integrate(
+        integrand, rule, mid, b, tol, max_depth - 1);
+    return refined_left + refined_right;
+}
+
 } // namespace compton
 
 #endif

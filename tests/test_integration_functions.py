@@ -123,3 +123,59 @@ class TestGaussLegendre:
         err_4 = abs(float(np.dot(w4, np.exp(n4))) - exact)
         err_32 = abs(float(np.dot(w32, np.exp(n32))) - exact)
         assert err_32 < err_4, "N=32 should beat N=4"
+
+
+class TestAdaptiveLegendre:
+    """Tests for adaptive_legendre_integrate via cm.adaptive_legendre_integrate."""
+
+    def test_smooth_function(self):
+        """Adaptive integration of exp(x) on [0, 1] meets tolerance."""
+        exact = math.e - 1.0
+        for tol in [1e-3, 1e-6, 1e-10]:
+            result = cm.adaptive_legendre_integrate(
+                math.exp, base_order=4, a=0.0, b=1.0, tol=tol)
+            rel_err = abs(result - exact) / exact
+            assert rel_err < tol, (
+                f"tol={tol:.0e}: rel_err={rel_err:.2e}")
+
+    def test_peaked_function(self):
+        """Adaptive integration of a peaked function requiring subdivision."""
+        exact = math.atan(100.0)  # integral of 1/(1+100*x^2) from 0 to inf... no
+        # ∫₀¹ 1/(1 + (10*(x-0.5))^2) dx  -- peaked at x=0.5
+        from scipy.integrate import quad as scipy_quad
+        f = lambda x: 1.0 / (1.0 + (10.0 * (x - 0.5))**2)
+        exact, _ = scipy_quad(f, 0.0, 1.0)
+
+        for tol in [1e-3, 1e-6]:
+            result = cm.adaptive_legendre_integrate(
+                f, base_order=4, a=0.0, b=1.0, tol=tol)
+            rel_err = abs(result - exact) / exact
+            assert rel_err < 10 * tol, (
+                f"peaked tol={tol:.0e}: rel_err={rel_err:.2e}")
+
+    def test_oscillatory_function(self):
+        """Adaptive integration of sin(20x) on [0, 1] -- needs many panels."""
+        exact = (1.0 - math.cos(20.0)) / 20.0  # ~0.0979
+        f = lambda x: math.sin(20.0 * x)
+
+        result = cm.adaptive_legendre_integrate(
+            f, base_order=8, a=0.0, b=1.0, tol=1e-6)
+        rel_err = abs(result - exact) / abs(exact)
+        assert rel_err < 1e-5, f"oscillatory: rel_err={rel_err:.2e}"
+
+    @pytest.mark.parametrize("base_order", [4, 8, 16])
+    def test_base_order_all_converge(self, base_order):
+        """All base orders converge to the correct answer for a smooth integral."""
+        exact = 2.0  # ∫₀^π sin(x) dx
+        result = cm.adaptive_legendre_integrate(
+            math.sin, base_order=base_order, a=0.0, b=math.pi, tol=1e-8)
+        rel_err = abs(result - exact) / exact
+        assert rel_err < 1e-7, (
+            f"base_order={base_order}: rel_err={rel_err:.2e}")
+
+    def test_near_zero_integral(self):
+        """Adaptive integration handles near-zero integrals without division issues."""
+        f = lambda x: math.sin(2.0 * math.pi * x)  # ∫₀¹ sin(2πx) dx = 0
+        result = cm.adaptive_legendre_integrate(
+            f, base_order=4, a=0.0, b=1.0, tol=1e-8)
+        assert abs(result) < 1e-12, f"expected ~0, got {result:.2e}"

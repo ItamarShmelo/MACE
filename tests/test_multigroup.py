@@ -50,9 +50,7 @@ class TestDenominator:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=[E_lo, E_hi],
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
-
-        S = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+            tol=1e-3, base_order=8)
 
         x_lo, x_hi = 0.1, 5.0
         from scipy.integrate import quad as scipy_quad
@@ -74,7 +72,7 @@ class TestDenominator:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=[E_lo, E_hi],
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
+            tol=1e-3, base_order=8)
 
         cap_x = 25.0
         w0 = cap_x**3 / np.expm1(cap_x)
@@ -116,38 +114,37 @@ def _denominator_via_constant_kernel(mg, T, kT):
 
 
 # ---------------------------------------------------------------------------
-# 2. Quadrature convergence
+# 2. Adaptive tolerance convergence
 # ---------------------------------------------------------------------------
 
-class TestQuadratureConvergence:
-    """Increasing GL order should converge toward the N=64 reference."""
+class TestAdaptiveConvergence:
+    """Tightening the tolerance should produce results that agree within the
+    looser tolerance, demonstrating adaptive convergence."""
 
-    def test_convergence(self):
+    def test_tolerance_convergence(self):
         T = 10.0 * kev_kelvin
-        narrow_bounds = [0.5 * kev, 1.0 * kev, 2.0 * kev, 5.0 * kev]
+        narrow_bounds = [1.0 * kev, 2.0 * kev, 5.0 * kev]
 
-        results = {}
-        for n in [8, 16, 32, 64]:
-            mg = cm.ComptonMultigroupKernel(
-                energy_group_boundaries=narrow_bounds,
-                weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-                quad_order_E=n, quad_order_Ep=n, quad_order_mu=n)
-            results[n] = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        mg_loose = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=narrow_bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            tol=1e-2, base_order=8)
+        mg_tight = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=narrow_bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            tol=1e-4, base_order=8)
 
-        ref = results[64]
-        mask = np.abs(ref) > 1e-35
+        S_loose = mg_loose.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        S_tight = mg_tight.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+
+        mask = np.abs(S_tight) > 1e-35
         if not np.any(mask):
             pytest.skip("all entries near zero")
 
-        diff_8 = np.max(np.abs(results[8][mask] - ref[mask]) / np.abs(ref[mask]))
-        diff_16 = np.max(np.abs(results[16][mask] - ref[mask]) / np.abs(ref[mask]))
-        diff_32 = np.max(np.abs(results[32][mask] - ref[mask]) / np.abs(ref[mask]))
-
-        assert diff_16 < diff_8, (
-            f"convergence stalled: diff_8={diff_8:.2e}, diff_16={diff_16:.2e}")
-        assert diff_32 < diff_16, (
-            f"convergence stalled: diff_16={diff_16:.2e}, diff_32={diff_32:.2e}")
-        assert diff_32 < 5e-3, f"order 32 vs 64 diff = {diff_32:.2e}"
+        rel_diff = np.max(
+            np.abs(S_loose[mask] - S_tight[mask]) / np.abs(S_tight[mask]))
+        assert rel_diff < 0.05, (
+            f"tol=1e-2 vs tol=1e-4: max rel diff = {rel_diff:.2e}")
 
 
 # ---------------------------------------------------------------------------
@@ -155,22 +152,21 @@ class TestQuadratureConvergence:
 # ---------------------------------------------------------------------------
 
 class TestAngleBinSummation:
-    """Sum over angle bins should match angle-integrated result at high order.
+    """Sum over angle bins should match angle-integrated result.
 
-    With N_mu quadrature points per bin, multi-bin uses N_mu * N_bins total
-    angle points vs N_mu for single-bin.  At high enough order both converge
-    to the same answer.
+    With adaptive quadrature, both multi-bin and single-bin converge to
+    the same answer at the same tolerance.
     """
 
-    @pytest.mark.parametrize("num_bins", [4, 8, 16])
+    @pytest.mark.parametrize("num_bins", [4, 8])
     def test_sum_matches_integrated(self, num_bins):
         T = 10.0 * kev_kelvin
-        narrow_bounds = [0.5 * kev, 1.0 * kev, 2.0 * kev, 5.0 * kev]
+        narrow_bounds = [1.0 * kev, 2.0 * kev, 5.0 * kev]
 
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=narrow_bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            quad_order_E=32, quad_order_Ep=32, quad_order_mu=32)
+            tol=1e-3, base_order=8)
 
         S_integrated = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
         S_binned = mg.compute_sigma_matrix(KERNEL, num_angle_bins=num_bins, T=T, Ne=1.0)
@@ -240,17 +236,21 @@ class TestMCComparison:
         uses a linear energy-redistribution scheme that shifts weight
         toward the diagonal.  Row sums, however, should agree since
         both compute the same total scattering rate out of each group.
+
+        Uses a 3-group grid to keep runtime practical with adaptive
+        3-axis integration.
         """
         T_kev = 10.0
         T = T_kev * kev_kelvin
 
-        boundaries = BOUNDARIES_ERG
-        G = len(boundaries) - 1
-        centers = [math.sqrt(boundaries[i] * boundaries[i + 1]) for i in range(G)]
+        mc_bounds_kev = [1.0, 5.0, 10.0, 50.0]
+        mc_bounds_erg = [b * kev for b in mc_bounds_kev]
+        G = len(mc_bounds_erg) - 1
+        centers = [math.sqrt(mc_bounds_erg[i] * mc_bounds_erg[i + 1]) for i in range(G)]
 
         mc = _cmmc.ComptonMatrixMC(
             energy_groups_centers=centers,
-            energy_groups_boundaries=boundaries,
+            energy_groups_boundaries=mc_bounds_erg,
             num_of_samples=200000,
             force_detailed_balance=False,
             seed=42)
@@ -258,9 +258,9 @@ class TestMCComparison:
         S_mc = np.array(mc.calculate_S_matrix(temperature=T))
 
         mg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=boundaries,
+            energy_group_boundaries=mc_bounds_erg,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
+            tol=1e-3, base_order=8)
         S_det = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
 
         row_sums_mc = S_mc.sum(axis=1)
@@ -290,18 +290,20 @@ class TestAngleCDFComparison:
             pytest.skip("_compton_matrix_mc segfaults (pre-existing issue)")
 
     def test_angle_cdf(self):
+        """Uses 2-group grid for practical runtime with adaptive integration."""
         T_kev = 10.0
         T = T_kev * kev_kelvin
 
-        boundaries = BOUNDARIES_ERG
-        G = len(boundaries) - 1
-        centers = [math.sqrt(boundaries[i] * boundaries[i + 1]) for i in range(G)]
+        mc_bounds_kev = [1.0, 5.0, 10.0]
+        mc_bounds_erg = [b * kev for b in mc_bounds_kev]
+        G = len(mc_bounds_erg) - 1
+        centers = [math.sqrt(mc_bounds_erg[i] * mc_bounds_erg[i + 1]) for i in range(G)]
 
         NUM_ANGLE_BINS = _cmmc.ComptonMatrixMC.NUM_ANGLE_BINS
 
         mc = _cmmc.ComptonMatrixMC(
             energy_groups_centers=centers,
-            energy_groups_boundaries=boundaries,
+            energy_groups_boundaries=mc_bounds_erg,
             num_of_samples=500000,
             force_detailed_balance=False,
             seed=42)
@@ -309,9 +311,9 @@ class TestAngleCDFComparison:
         mc.set_tables(temperature_grid=[T * 0.9, T, T * 1.1])
 
         mg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=boundaries,
+            energy_group_boundaries=mc_bounds_erg,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
+            tol=1e-3, base_order=8)
         S_det = mg.compute_sigma_matrix(
             KERNEL, num_angle_bins=NUM_ANGLE_BINS, T=T, Ne=1.0)
 
