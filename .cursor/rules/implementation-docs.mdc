@@ -1,0 +1,14 @@
+---
+description: Keep IMPLEMENTATION.md up to date when numerical decisions change
+globs: src/**,IMPLEMENTATION.md
+alwaysApply: false
+---
+
+# Keep IMPLEMENTATION.md Current
+
+When making changes that affect numerical implementation decisions (quadrature methods, precision strategy, dispatch thresholds, series convergence criteria, error estimation, multigroup integration design, etc.), update `IMPLEMENTATION.md` to reflect the new state.
+
+- Every decision recorded in `IMPLEMENTATION.md` must include the **reason why** it was made.
+- If a threshold, algorithm, or strategy is changed, update the corresponding section with the new value/approach and the rationale for the change.
+- If a new numerical technique or fallback is introduced, add a section or subsection describing it and why it was chosen over alternatives.
+- Do not remove old decisions without replacing them; if something is superseded, briefly note what it replaced and why.
