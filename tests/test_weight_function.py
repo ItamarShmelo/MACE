@@ -221,3 +221,22 @@ class TestWienDenominator:
         expected = kT * (ref_below + WIEN_W0 * (x_hi - WIEN_CAP_X))
 
         assert computed == pytest.approx(expected, rel=1e-10)
+
+    @pytest.mark.parametrize("T_kev", [1.0, 10.0, 100.0])
+    @pytest.mark.parametrize(
+        "x_range", [(1e-6, 1e-5), (0.001, 0.01), (0.01, 0.1)]
+    )
+    def test_small_x(self, T_kev, x_range):
+        """Small-x regime where the closed-form antiderivative loses digits."""
+        T = T_kev * kev_kelvin
+        kT = k_boltz * T
+        x_lo, x_hi = x_range
+        E_lo, E_hi = x_lo * kT, x_hi * kT
+
+        wf = cm.WienWeightFunction(cap_x=WIEN_CAP_X)
+        computed = wf.compute_denominator(E_lo, E_hi, T)
+
+        ref, _ = scipy_quad(lambda x: x**3 * np.exp(-x), x_lo, x_hi)
+        expected = kT * ref
+
+        assert computed == pytest.approx(expected, rel=1e-9, abs=0)

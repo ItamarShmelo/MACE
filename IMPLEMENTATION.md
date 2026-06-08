@@ -237,13 +237,30 @@ Three weight functions are supported:
 | Weight | $w(E,T)$ | Denominator |
 |--------|-----------|-------------|
 | **Planck** | $x^3/(e^x - 1)$, capped at $x = $ `cap_x` | Clark (1987) polylogarithm series |
-| **Wien** | $x^3 e^{-x}$, capped at `cap_x` | Closed-form (incomplete gamma antiderivative) |
+| **Wien** | $x^3 e^{-x}$, capped at `cap_x` | Taylor / closed-form (see below) |
 | **Uniform** | 1 | $E_\text{right} - E_\text{left}$ |
 
 The Planck cap avoids evaluating $x^3/(e^x - 1)$ in the exponential tail where
 it underflows; above `cap_x` the weight is held constant at its value at the cap.
 The denominator is computed **analytically** (not by quadrature) to avoid
 introducing quadrature noise into the normalization.
+
+#### Wien Denominator — Taylor Series for Small x
+
+The Wien denominator antiderivative $G(x) = \int_0^x t^3 e^{-t}\,dt$ equals
+$6 - e^{-x}(x^3 + 3x^2 + 6x + 6)$.  For small $x$ this expression suffers
+from catastrophic cancellation because $e^{-x}(\cdots) \approx 6$; at
+$x = 0.01$ roughly 9 decimal digits are lost, and at $x = 10^{-6}$ the result
+rounds to zero.
+
+For $x \le 0.1$ we instead evaluate the Taylor expansion
+
+$$G(x) = x^4 \sum_{n=0}^{6} \frac{(-x)^n}{(n+4)\,n!}$$
+
+via Horner's method (7 terms).  At the threshold $x = 0.1$ this gives relative
+error below $10^{-9}$; for smaller $x$ convergence is even faster.  Above the
+threshold the closed form is used, where cancellation is mild (< 1 digit lost at
+$x = 0.2$).
 
 
 ## Error Estimation

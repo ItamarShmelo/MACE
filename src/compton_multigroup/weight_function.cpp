@@ -78,17 +78,26 @@ double WienWeightFunction::compute_denominator(
     double const x_lo = E_left / kT;
     double const x_hi = E_right / kT;
 
-    auto const wien_integral = [](double const x) {
-        return -std::exp(-x) * (x * x * x + 3.0 * x * x + 6.0 * x + 6.0);
+    // G(x) = int_0^x t^3 e^{-t} dt.  Taylor branch for x <= 0.1 avoids
+    // catastrophic cancellation in 6 - e^{-x}(x^3+3x^2+6x+6).
+    // 7-term Horner gives relative error < 1e-9 at x = 0.1.
+    auto const wien_antideriv = [](double const x) {
+        if (x <= 0.1) {
+            double const x4 = x * x * x * x;
+            return x4 * (1.0/4.0 + x * (-1.0/5.0 + x * (1.0/12.0
+                         + x * (-1.0/42.0 + x * (1.0/192.0
+                         + x * (-1.0/1080.0 + x / 7200.0))))));
+        }
+        return 6.0 - std::exp(-x) * (x * x * x + 3.0 * x * x + 6.0 * x + 6.0);
     };
 
     if (x_hi <= cap_x_)
-        return kT * (wien_integral(x_hi) - wien_integral(x_lo));
+        return kT * (wien_antideriv(x_hi) - wien_antideriv(x_lo));
 
     if (x_lo >= cap_x_)
         return kT * w0_ * (x_hi - x_lo);
 
-    double const wien_part = wien_integral(cap_x_) - wien_integral(x_lo);
+    double const wien_part = wien_antideriv(cap_x_) - wien_antideriv(x_lo);
     double const const_part = w0_ * (x_hi - cap_x_);
     return kT * (wien_part + const_part);
 }
