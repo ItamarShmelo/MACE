@@ -100,6 +100,41 @@ class TestAsymptoticVsQuadrature:
         assert rd < 1e-3, f"reldiff={rd:.2e}"
 
 
+class TestAsymptoticHPVsQuadrature:
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi", TEST_POINTS)
+    @pytest.mark.parametrize("T_kev", TEMPS_COLD_KEV)
+    def test_low_temp(self, E_kev, Ep_kev, xi, T_kev):
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
+            pytest.skip("quadrature reference unreliable")
+
+        series = ComptonKernelAsymptoticSeries(high_precision=True)
+        sres = series.sigma_E(E, Ep, xi, T, 1.0)
+
+        rd = _rel_diff(sres.value, qres.value)
+        assert rd < 1e-3, f"reldiff={rd:.2e}"
+
+
+class TestAsymptoticHPDDvsDouble:
+    """Verify DD gives equal or better results than double at cold temps."""
+
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi", TEST_POINTS)
+    @pytest.mark.parametrize("T_kev", TEMPS_COLD_KEV)
+    def test_dd_close_to_double(self, E_kev, Ep_kev, xi, T_kev):
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+
+        series_dbl = ComptonKernelAsymptoticSeries(high_precision=False)
+        series_dd = ComptonKernelAsymptoticSeries(high_precision=True)
+
+        res_dbl = series_dbl.sigma_E(E, Ep, xi, T, 1.0)
+        res_dd = series_dd.sigma_E(E, Ep, xi, T, 1.0)
+
+        rd = _rel_diff(res_dd.value, res_dbl.value)
+        assert rd < 1e-3, f"double vs DD reldiff={rd:.2e}"
+
+
 class TestSolverVsQuadrature:
     @pytest.mark.parametrize("E_kev,Ep_kev,xi", TEST_POINTS)
     @pytest.mark.parametrize("T_kev", TEMPS_ALL_KEV)
@@ -167,6 +202,23 @@ class TestAsymptoticDerivativeVsQuadrature:
             pytest.skip("quadrature reference unreliable")
 
         series = ComptonKernelAsymptoticSeries()
+        sres = series.dsigma_E_dT(E, Ep, xi, T, 1.0)
+
+        rd = _rel_diff(sres.value, qres.value)
+        assert rd < 1e-3, f"reldiff={rd:.2e}"
+
+
+class TestAsymptoticHPDerivativeVsQuadrature:
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi", TEST_POINTS)
+    @pytest.mark.parametrize("T_kev", TEMPS_COLD_KEV)
+    def test_low_temp(self, E_kev, Ep_kev, xi, T_kev):
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
+            pytest.skip("quadrature reference unreliable")
+
+        series = ComptonKernelAsymptoticSeries(high_precision=True)
         sres = series.dsigma_E_dT(E, Ep, xi, T, 1.0)
 
         rd = _rel_diff(sres.value, qres.value)

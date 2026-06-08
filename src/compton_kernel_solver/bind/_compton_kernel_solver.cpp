@@ -13,10 +13,11 @@ PYBIND11_MODULE(_compton_kernel_solver, m) {
     py::module_::import("_compton_common");
 
     py::class_<ComptonKernelSolver>(m, "ComptonKernelSolver")
-        .def(py::init<double, double, double>(),
+        .def(py::init<double, double, double, double>(),
              "asymp_tau_alpha_threshold"_a   = 0.025,
              "gamma_double_precision_safe"_a = 0.02,
-             "quadrature_self_tol"_a         = 1e-6)
+             "quadrature_self_tol"_a         = 1e-6,
+             "asymp_gamma_dd_threshold"_a    = 0.002)
         .def("sigma_E", &ComptonKernelSolver::sigma_E,
              "E"_a, "E_prime"_a, "xi"_a, "T"_a, "Ne"_a)
         .def("dsigma_E_dT", &ComptonKernelSolver::dsigma_E_dT,

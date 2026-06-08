@@ -81,6 +81,26 @@ $\zeta_\pm = \text{clamp}(\rho_\pm \alpha_\pm,\, -1,\, 1)$ is a floating-point
 precaution that prevents the Legendre three-term recurrence from exciting the
 exponentially growing solution.
 
+**Double-double arithmetic:** Like the power series, the asymptotic series
+supports double-double (~31 digits) arithmetic via the `high_precision`
+constructor flag.  The internal summation is templatized on type `T` (double or
+DD); the prefactor $\Sigma_0$ remains in double since it passes through
+`exp`/`K_2` which are double-only.
+
+At ultra-low $\gamma$ ($E \lesssim 0.05$ keV), the kinematic parameters $q$,
+$\rho_\pm$, and $\alpha_\pm$ involve differences of nearly-equal quantities
+(e.g.\ $q = \sqrt{(\gamma'-\gamma)^2 + 2\gamma\gamma'a}$ with tiny $\gamma$),
+and the alternating factorial/power accumulation suffers catastrophic
+cancellation.  Empirical measurement shows double vs DD relative error rising to
+$\sim 10^{-4}$ at $\gamma = 10^{-4}$ across all cold temperatures tested
+(0.01--5 keV), whereas at $\gamma > 0.01$ the two agree to $< 10^{-9}$.
+
+The solver dispatch (see below) now includes a DD asymptotic path: when the
+asymptotic regime is active *and* $\min(\gamma, \gamma') < 0.002$ (~1 keV),
+the solver automatically switches to DD arithmetic.  The threshold of 0.002 is
+chosen so double-vs-DD error stays below $10^{-6}$ with margin (empirically
+$7 \times 10^{-7}$ at $\gamma = 10^{-3}$, $10^{-9}$ at $\gamma = 10^{-2}$).
+
 ### Solver Dispatch
 
 `ComptonKernelSolver` selects the fastest accurate method at each phase-space
@@ -88,12 +108,16 @@ point:
 
 ```
 tau_alpha_max = tau * max(alpha_+, alpha_-)
+gamma_min     = min(gamma, gamma')
 
-1. if tau_alpha_max < 0.025        --> Asymptotic series
-2. elif min(gamma, gamma') >= 0.02 --> Power series (double)
-3. else try Q64 Gauss-Laguerre:
-       if self-error < 1e-6        --> Accept Q64
-       else                        --> Power series (double-double)
+1a. if tau_alpha_max < 0.025 AND gamma_min >= 0.002
+                                   --> Asymptotic series (double)
+1b. if tau_alpha_max < 0.025 AND gamma_min <  0.002
+                                   --> Asymptotic series (double-double)
+2.  elif gamma_min >= 0.02         --> Power series (double)
+3.  else try Q64 Gauss-Laguerre:
+        if self-error < 1e-6       --> Accept Q64
+        else                       --> Power series (double-double)
 ```
 
 The thresholds are empirically validated:
@@ -101,7 +125,8 @@ The thresholds are empirically validated:
 | Constant | Value | Rationale |
 |----------|-------|-----------|
 | `ASYMP_TAU_ALPHA_THRESHOLD` | 0.025 | Asymptotic series achieves < 1e-3 relative error vs Q256 |
-| `GAMMA_DOUBLE_PRECISION_SAFE` | 0.02 (~10 keV) | Worst-case double vs DD error is 3.15e-7 at this boundary |
+| `ASYMP_GAMMA_DD_THRESHOLD` | 0.002 (~1 keV) | Worst-case double vs DD asymptotic error is 7e-7 at this boundary |
+| `GAMMA_DOUBLE_PRECISION_SAFE` | 0.02 (~10 keV) | Worst-case double vs DD power-series error is 3.15e-7 at this boundary |
 | `quadrature_self_tol` | 1e-6 | Accepts Q64 only when its Richardson error estimate is tight |
 
 
@@ -109,14 +134,25 @@ The thresholds are empirically validated:
 
 ### Double vs Double-Double Arithmetic
 
-The power series computes $P_+ - P_-$, a difference of two nearly equal
+Both the power series and asymptotic series support double-double (~31 digits)
+arithmetic, implemented via the `doubledouble` library and controlled by a
+`high_precision` constructor flag on each class.  Internally, the series
+summation loops are templatized on type `T` (double or DD); inputs and outputs
+remain `double` in all cases.
+
+**Power series:** computes $P_+ - P_-$, a difference of two nearly equal
 quantities at low photon energies.  When $\gamma \ll 1$ (say E < 10 keV), up to
 15 significant digits cancel, making double precision (~15 digits) inadequate.
+The solver uses Q64 as a fast first attempt in the DD regime; only when the
+quadrature's self-reported error exceeds $10^{-6}$ does it fall through to the
+expensive DD power series.
 
-The remedy is double-double arithmetic (~31 digits), implemented via the
-`doubledouble` library.  The solver uses Q64 as a fast first attempt in the DD
-regime; only when the quadrature's self-reported error exceeds $10^{-6}$ does it
-fall through to the expensive DD power series.
+**Asymptotic series:** the factorial/power accumulation $\sum_n (-\tau\alpha_\pm)^{n+1}$
+is similarly susceptible to cancellation at ultra-low $\gamma$ (< 1e-3), where
+$q$, $\rho_\pm$, $\alpha_\pm$ become differences of nearly-equal numbers.  DD
+reduces relative error from $\sim 10^{-4}$ to machine precision at
+$\gamma = 10^{-4}$.  See `reports/asymptotic_dd_precision_report.py` for the
+empirical sweep.
 
 Guard: `POISSON_Y_MAX = 500` rejects evaluations where the Poisson weight
 $y_\pm$ is so large that `exp(-y)` would underflow even in double-double.

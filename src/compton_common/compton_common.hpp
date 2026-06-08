@@ -91,6 +91,24 @@ inline DD param_asinh(DD const& value) {
     return dd_asinh(value);
 }
 
+inline double param_clamp(double const value, double const lo, double const hi) {
+    return std::clamp(value, lo, hi);
+}
+
+inline DD param_clamp(DD const& value, DD const& lo, DD const& hi) {
+    if (value < lo) return lo;
+    if (value > hi) return hi;
+    return value;
+}
+
+inline bool param_isfinite(double const value) {
+    return std::isfinite(value);
+}
+
+inline bool param_isfinite(DD const& value) {
+    return std::isfinite(value.upper);
+}
+
 template<typename T> struct MachineEps;
 
 template<>
@@ -305,6 +323,12 @@ constexpr double GAMMA_DOUBLE_PRECISION_SAFE = 0.02;
 /// Dispatch threshold for asymptotic vs power series: use asymptotic series
 /// when tau * max(alpha_plus, alpha_minus) is below this value.
 constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.025;
+
+/// Within the asymptotic regime, use DD arithmetic when min(gamma, gamma')
+/// falls below this value.  Empirically validated: worst-case double-vs-DD
+/// relative error is ~7e-7 at gamma = 1e-3 and ~1e-9 at gamma = 1e-2
+/// across all tested cold temperatures (0.01--5 keV).
+constexpr double ASYMP_GAMMA_DD_THRESHOLD = 0.002;
 
 } // namespace constants
 

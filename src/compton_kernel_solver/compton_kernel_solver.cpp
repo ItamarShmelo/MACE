@@ -5,11 +5,14 @@ namespace compton {
 ComptonKernelSolver::ComptonKernelSolver(
     double const asymp_tau_alpha_threshold,
     double const gamma_double_precision_safe,
-    double const quadrature_self_tol)
+    double const quadrature_self_tol,
+    double const asymp_gamma_dd_threshold)
     : asymp_tau_alpha_threshold_(asymp_tau_alpha_threshold)
     , gamma_double_precision_safe_(gamma_double_precision_safe)
     , quadrature_self_tol_(quadrature_self_tol)
-    , asymp_series_()
+    , asymp_gamma_dd_threshold_(asymp_gamma_dd_threshold)
+    , asymp_series_(false)
+    , asymp_series_dd_(true)
     , power_series_(false)
     , power_series_dd_(true)
     , quadrature_(64)
@@ -31,8 +34,11 @@ SigmaResult ComptonKernelSolver::sigma_E(
     double const tau_alpha_max = std::max(tau * p.alpha_plus,
                                           tau * p.alpha_minus);
 
-    if (tau_alpha_max < asymp_tau_alpha_threshold_)
+    if (tau_alpha_max < asymp_tau_alpha_threshold_) {
+        if (std::min(gamma, gamma_p) < asymp_gamma_dd_threshold_)
+            return asymp_series_dd_.sigma_E(E, E_prime, xi, T, Ne);
         return asymp_series_.sigma_E(E, E_prime, xi, T, Ne);
+    }
 
     if (std::min(gamma, gamma_p) >= gamma_double_precision_safe_)
         return power_series_.sigma_E(E, E_prime, xi, T, Ne);
@@ -60,8 +66,11 @@ SigmaResult ComptonKernelSolver::dsigma_E_dT(
     double const tau_alpha_max = std::max(tau * p.alpha_plus,
                                           tau * p.alpha_minus);
 
-    if (tau_alpha_max < asymp_tau_alpha_threshold_)
+    if (tau_alpha_max < asymp_tau_alpha_threshold_) {
+        if (std::min(gamma, gamma_p) < asymp_gamma_dd_threshold_)
+            return asymp_series_dd_.dsigma_E_dT(E, E_prime, xi, T, Ne);
         return asymp_series_.dsigma_E_dT(E, E_prime, xi, T, Ne);
+    }
 
     if (std::min(gamma, gamma_p) >= gamma_double_precision_safe_)
         return power_series_.dsigma_E_dT(E, E_prime, xi, T, Ne);

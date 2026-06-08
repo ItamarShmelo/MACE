@@ -14,6 +14,9 @@
  * with terms built from powers (−τα±)^{n+1}, factorials, and Legendre
  * polynomials P_n(ζ±).  This is a divergent asymptotic series truncated at
  * the smallest term; best suited for τ·max(α₊, α₋) < 0.05.
+ *
+ * The constructor flag `high_precision` selects double (~15 digits) or
+ * double-double (~31 digits) arithmetic for the internal summation.
  */
 
 #include "compton_common/compton_common.hpp"
@@ -23,12 +26,15 @@ namespace compton {
 class ComptonKernelAsymptoticSeries {
 public:
     /**
+     * @param high_precision  When true, use double-double (~31 digits)
+     *                        arithmetic; when false, use double (~15 digits).
      * @param eps_rel  Relative convergence tolerance.
      * @param n_min    Minimum number of terms before convergence is tested.
      * @param n_max    Maximum number of terms; if reached without convergence
      *                 a std::runtime_error is thrown.
      */
     ComptonKernelAsymptoticSeries(
+        bool high_precision = false,
         double eps_rel = 1e-12,
         int n_min = 4,
         int n_max = 200);
@@ -71,6 +77,35 @@ public:
         double T,
         double Ne) const;
 
+    /**
+     * @brief Run both double and DD asymptotic series, return the relative error.
+     *
+     * Computes |dd_value - dbl_value| / (|dd_value| + 1e-300).
+     * Independent of the high_precision flag.  Useful for checking
+     * whether double precision is sufficient for a given set of parameters.
+     */
+    double sigma_E_precision_check(
+        double E,
+        double E_prime,
+        double xi,
+        double T,
+        double Ne) const;
+
+    /**
+     * @brief Run both double and DD asymptotic series derivatives, return the
+     *        relative error.
+     *
+     * Computes |dd_value - dbl_value| / (|dd_value| + 1e-300) on the
+     * derivative.  Useful for checking whether double precision is
+     * sufficient for the temperature derivative at a given parameter point.
+     */
+    double dsigma_E_dT_precision_check(
+        double E,
+        double E_prime,
+        double xi,
+        double T,
+        double Ne) const;
+
 private:
     /**
      * @brief Low-temperature asymptotic expansion using Legendre polynomials.
@@ -92,7 +127,11 @@ private:
      * This is a divergent asymptotic series; truncation at the smallest
      * term gives accuracy ~ exp(−1/(τα)).  Best suited for
      * τ · max(α₊, α₋) < 0.05.
+     *
+     * Template parameter T selects double (~15 digits) or
+     * double-double (~31 digits) arithmetic.
      */
+    template<typename T>
     SigmaResult asymptotic_series(
         double gamma,
         double gamma_p,
@@ -114,7 +153,11 @@ private:
      *
      * Same smallest-term truncation as the value series.
      * Result returned as d/dτ (without dτ/dT factor).
+     *
+     * Template parameter T selects double (~15 digits) or
+     * double-double (~31 digits) arithmetic.
      */
+    template<typename T>
     SigmaResult asymptotic_series_derivative(
         double gamma,
         double gamma_p,
@@ -123,6 +166,7 @@ private:
         double E,
         double Ne) const;
 
+    bool high_precision_;
     double eps_rel_;
     int n_min_, n_max_;
 };

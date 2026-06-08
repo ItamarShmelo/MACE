@@ -14,6 +14,7 @@ sys.path.insert(0, "cpp_modules")
 
 import _compton_kernel_quadrature as cq
 from _compton_power_series import ComptonPowerSeries
+from _compton_kernel_asymptotic_series import ComptonKernelAsymptoticSeries
 from _compton_kernel_solver import ComptonKernelSolver
 from _units import kev, kev_kelvin, me_c2
 
@@ -183,3 +184,52 @@ class TestCustomThresholds:
         solver_res = q_always.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
         q_res = q64.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
         assert _rel_diff(solver_res.value, q_res.value) < 1e-12
+
+
+# ── DD asymptotic regime: ultra-low gamma, cold plasma ───────────────────
+
+ASYMP_DD_POINTS = [
+    (0.1, 0.11, 0.0, 0.1),
+    (0.5, 0.52, 0.0, 0.5),
+    (0.1, 0.09, 0.3, 0.05),
+    (0.3, 0.35, -0.3, 0.1),
+]
+
+
+class TestAsymptoticDDRegime:
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", ASYMP_DD_POINTS)
+    def test_sigma_E_matches_dd_asymptotic(self, E_kev, Ep_kev, xi, T_kev):
+        """Solver should route to DD asymptotic at ultra-low gamma."""
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+        dd_asymp = ComptonKernelAsymptoticSeries(high_precision=True)
+        solver_res = SOLVER.sigma_E(E, Ep, xi, T, 1.0)
+        dd_res = dd_asymp.sigma_E(E, Ep, xi, T, 1.0)
+        assert _rel_diff(solver_res.value, dd_res.value) < 1e-12
+
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", ASYMP_DD_POINTS)
+    def test_dsigma_E_dT_matches_dd_asymptotic(self, E_kev, Ep_kev, xi, T_kev):
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+        dd_asymp = ComptonKernelAsymptoticSeries(high_precision=True)
+        solver_res = SOLVER.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        dd_res = dd_asymp.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        assert _rel_diff(solver_res.value, dd_res.value) < 1e-12
+
+
+class TestAsymptoticDDThreshold:
+    def test_zero_threshold_disables_dd(self):
+        """With asymp_gamma_dd_threshold=0 the DD path is never taken."""
+        no_dd = ComptonKernelSolver(asymp_gamma_dd_threshold=0.0)
+        dbl_asymp = ComptonKernelAsymptoticSeries(high_precision=False)
+        E, Ep, T = 0.1 * kev, 0.11 * kev, 0.1 * kev_kelvin
+        solver_res = no_dd.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
+        dbl_res = dbl_asymp.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
+        assert _rel_diff(solver_res.value, dbl_res.value) < 1e-12
+
+    def test_large_threshold_forces_dd(self):
+        """With a large threshold, all asymptotic evaluations use DD."""
+        dd_forced = ComptonKernelSolver(asymp_gamma_dd_threshold=1.0)
+        dd_asymp = ComptonKernelAsymptoticSeries(high_precision=True)
+        E, Ep, T = 10.0 * kev, 10.5 * kev, 0.5 * kev_kelvin
+        solver_res = dd_forced.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
+        dd_res = dd_asymp.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
+        assert _rel_diff(solver_res.value, dd_res.value) < 1e-12

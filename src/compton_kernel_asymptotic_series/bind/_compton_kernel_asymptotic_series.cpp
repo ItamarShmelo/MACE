@@ -14,11 +14,15 @@ PYBIND11_MODULE(_compton_kernel_asymptotic_series, m) {
     py::module_::import("_compton_common");
 
     py::class_<ComptonKernelAsymptoticSeries>(m, "ComptonKernelAsymptoticSeries")
-        .def(py::init<double, int, int>(),
+        .def(py::init<bool, double, int, int>(),
+             "high_precision"_a = false,
              "eps_rel"_a = 1e-12,
              "n_min"_a = 4,
              "n_max"_a = 200)
         .def("sigma_E", &ComptonKernelAsymptoticSeries::sigma_E,
+             "E"_a, "E_prime"_a, "xi"_a,
+             "T"_a, "Ne"_a)
+        .def("sigma_E_precision_check", &ComptonKernelAsymptoticSeries::sigma_E_precision_check,
              "E"_a, "E_prime"_a, "xi"_a,
              "T"_a, "Ne"_a)
         .def("sigma_E_vec", [](ComptonKernelAsymptoticSeries const& self,
@@ -63,5 +67,8 @@ PYBIND11_MODULE(_compton_kernel_asymptotic_series, m) {
             }
             return py::make_tuple(values, errors);
         }, "E"_a, "E_prime_arr"_a, "xi"_a,
-           "T"_a, "Ne"_a);
+           "T"_a, "Ne"_a)
+        .def("dsigma_E_dT_precision_check", &ComptonKernelAsymptoticSeries::dsigma_E_dT_precision_check,
+             "E"_a, "E_prime"_a, "xi"_a,
+             "T"_a, "Ne"_a);
 }
