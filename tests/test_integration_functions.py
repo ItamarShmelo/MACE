@@ -179,3 +179,116 @@ class TestAdaptiveLegendre:
         result = cm.adaptive_legendre_integrate(
             f, base_order=4, a=0.0, b=1.0, tol=1e-8)
         assert abs(result) < 1e-12, f"expected ~0, got {result:.2e}"
+
+
+class TestAdaptiveLogLegendre:
+    """Tests for adaptive_log_legendre_integrate (clusters nodes near lower end)."""
+
+    def test_smooth_function(self):
+        """Log-space integration of exp(x) on [1, 10] meets tolerance."""
+        from scipy.integrate import quad as scipy_quad
+        exact, _ = scipy_quad(math.exp, 1.0, 10.0)
+        for tol in [1e-3, 1e-6, 1e-10]:
+            result = cm.adaptive_log_legendre_integrate(
+                math.exp, base_order=8, a=1.0, b=10.0, tol=tol)
+            rel_err = abs(result - exact) / exact
+            assert rel_err < 10 * tol, (
+                f"tol={tol:.0e}: rel_err={rel_err:.2e}")
+
+    def test_exp_decay(self):
+        """Log-space integration handles exponential decay well (clusters near a)."""
+        from scipy.integrate import quad as scipy_quad
+        f = lambda x: math.exp(-x)
+        exact, _ = scipy_quad(f, 1.0, 100.0)
+        result = cm.adaptive_log_legendre_integrate(
+            f, base_order=8, a=1.0, b=100.0, tol=1e-6)
+        rel_err = abs(result - exact) / exact
+        assert rel_err < 1e-4, f"exp-decay: rel_err={rel_err:.2e}"
+
+    def test_power_law(self):
+        """∫₁^e x^(-2) dx = 1 - 1/e."""
+        exact = 1.0 - 1.0 / math.e
+        result = cm.adaptive_log_legendre_integrate(
+            lambda x: x**(-2), base_order=4, a=1.0, b=math.e, tol=1e-8)
+        rel_err = abs(result - exact) / exact
+        assert rel_err < 1e-6, f"power-law: rel_err={rel_err:.2e}"
+
+    def test_narrow_interval(self):
+        """Integration over a very narrow interval [1.0, 1.001]."""
+        from scipy.integrate import quad as scipy_quad
+        f = lambda x: math.sin(x)
+        exact, _ = scipy_quad(f, 1.0, 1.001)
+        result = cm.adaptive_log_legendre_integrate(
+            f, base_order=4, a=1.0, b=1.001, tol=1e-8)
+        rel_err = abs(result - exact) / abs(exact) if exact != 0 else abs(result)
+        assert rel_err < 1e-6, f"narrow: rel_err={rel_err:.2e}"
+
+    def test_polynomial_exactness(self):
+        """Polynomial x^3 on [1, 5]: should match to high precision."""
+        exact = (5**4 - 1**4) / 4.0
+        result = cm.adaptive_log_legendre_integrate(
+            lambda x: x**3, base_order=16, a=1.0, b=5.0, tol=1e-10)
+        rel_err = abs(result - exact) / exact
+        assert rel_err < 1e-8, f"poly: rel_err={rel_err:.2e}"
+
+
+class TestAdaptiveRlogLegendre:
+    """Tests for adaptive_rlog_legendre_integrate (clusters nodes near upper end)."""
+
+    def test_smooth_function(self):
+        """Rlog-space integration of exp(x) on [1, 10] meets tolerance."""
+        from scipy.integrate import quad as scipy_quad
+        exact, _ = scipy_quad(math.exp, 1.0, 10.0)
+        for tol in [1e-3, 1e-6, 1e-10]:
+            result = cm.adaptive_rlog_legendre_integrate(
+                math.exp, base_order=8, a=1.0, b=10.0, tol=tol)
+            rel_err = abs(result - exact) / exact
+            assert rel_err < 10 * tol, (
+                f"tol={tol:.0e}: rel_err={rel_err:.2e}")
+
+    def test_exp_growth_near_upper(self):
+        """Rlog-space should handle integrands peaked near upper end well.
+
+        f(x) = exp(-(b-x)) peaks at x=b; rlog clusters nodes there.
+        """
+        from scipy.integrate import quad as scipy_quad
+        b = 10.0
+        f = lambda x: math.exp(-(b - x))
+        exact, _ = scipy_quad(f, 1.0, b)
+        result = cm.adaptive_rlog_legendre_integrate(
+            f, base_order=8, a=1.0, b=b, tol=1e-6)
+        rel_err = abs(result - exact) / exact
+        assert rel_err < 1e-4, f"exp-growth: rel_err={rel_err:.2e}"
+
+    def test_power_law(self):
+        """∫₁^e x^(-2) dx = 1 - 1/e (same integral, different node clustering)."""
+        exact = 1.0 - 1.0 / math.e
+        result = cm.adaptive_rlog_legendre_integrate(
+            lambda x: x**(-2), base_order=4, a=1.0, b=math.e, tol=1e-8)
+        rel_err = abs(result - exact) / exact
+        assert rel_err < 1e-6, f"power-law: rel_err={rel_err:.2e}"
+
+    def test_matches_log_on_smooth(self):
+        """Both log and rlog should give the same answer for a smooth integrand."""
+        from scipy.integrate import quad as scipy_quad
+        f = lambda x: math.sin(x)
+        exact, _ = scipy_quad(f, 1.0, 5.0)
+
+        r_log = cm.adaptive_log_legendre_integrate(
+            f, base_order=8, a=1.0, b=5.0, tol=1e-8)
+        r_rlog = cm.adaptive_rlog_legendre_integrate(
+            f, base_order=8, a=1.0, b=5.0, tol=1e-8)
+
+        assert abs(r_log - exact) / abs(exact) < 1e-6
+        assert abs(r_rlog - exact) / abs(exact) < 1e-6
+        assert abs(r_log - r_rlog) / abs(exact) < 1e-6
+
+    def test_narrow_interval(self):
+        """Integration over a very narrow interval [5.0, 5.001]."""
+        from scipy.integrate import quad as scipy_quad
+        f = lambda x: math.cos(x)
+        exact, _ = scipy_quad(f, 5.0, 5.001)
+        result = cm.adaptive_rlog_legendre_integrate(
+            f, base_order=4, a=5.0, b=5.001, tol=1e-8)
+        rel_err = abs(result - exact) / abs(exact) if exact != 0 else abs(result)
+        assert rel_err < 1e-6, f"narrow: rel_err={rel_err:.2e}"

@@ -263,6 +263,112 @@ threshold the closed form is used, where cancellation is mild (< 1 digit lost at
 $x = 0.2$).
 
 
+### Peak-Aware E' Integration
+
+The E' (middle) axis uses a peak-aware quadrature scheme that exploits Compton
+kinematics to concentrate quadrature effort where the integrand is large.
+
+#### Cold Compton Recoil Band
+
+For an angle bin $[\mu_\text{lo}, \mu_\text{hi}]$ and incoming energy $E$, the
+cold-electron recoil band in $E'$ is
+
+$$a = \frac{E}{1 + \gamma(1 - \mu_\text{lo})}, \quad
+  b = \frac{E}{1 + \gamma(1 - \mu_\text{hi})}$$
+
+where $\gamma = E / m_e c^2$.  Inside this band there exists a scattering angle
+for which a cold (rest-frame) electron can produce the observed $E'$; outside,
+the kernel is exponentially suppressed by the Boltzmann factor
+$\sim\exp(-(\lambda_\min - 1)/\tau)$.  This kinematic band depends only on $E$
+and the $\mu$-bin endpoints, not on temperature.
+
+#### Direction-Aware Log-Space Integrators
+
+Two log-space GL quadrature variants handle the exponentially decaying tails:
+
+- **`adaptive_log_legendre_integrate`** (right tail): substitution $u = \log(x)$
+  clusters nodes near the lower end $a$ (the peak boundary).
+- **`adaptive_rlog_legendre_integrate`** (left tail): reflected substitution
+  $u = \log(a + b - x)$ applied to $y = a + b - x$ clusters nodes near the
+  upper end $b$ (the peak boundary).
+
+Both accept the integrand in the original $E'$ space and handle the change of
+variable internally.
+
+#### `integrate_Ep_group` Splitting Logic
+
+Each target group $[E'_\text{lo}, E'_\text{hi}]$ is classified by its overlap
+with the recoil band $[a, b]$ using `std::clamp`:
+
+```
+overlap_lo = clamp(a, Ep_lo, Ep_hi)
+overlap_hi = clamp(b, Ep_lo, Ep_hi)
+```
+
+- If `overlap_lo >= overlap_hi`: the group is **far** (no overlap with peak).
+  Uses standard adaptive GL with loose tolerance, low order, shallow depth.
+- Otherwise the group is split into up to three sub-intervals:
+  - `[Ep_lo, overlap_lo]` **left tail**: reflected-log GL (nodes near peak boundary).
+  - `[overlap_lo, overlap_hi]` **peak**: standard adaptive GL with tight tolerance.
+  - `[overlap_hi, Ep_hi]` **right tail**: log GL (nodes near peak boundary).
+
+The peak can span any number of groups: one group (both boundaries inside),
+two groups (boundary in each), or three+ groups (interior groups entirely within
+the peak).  All cases are handled uniformly by the clamp logic.
+
+#### `EpQuadratureConfig`
+
+The `EpQuadratureConfig` struct controls per-region GL order, tolerance factor,
+and maximum recursion depth.  Default settings are conservative to avoid
+degrading accuracy while the recoil band validation confirms coverage:
+
+| Region | Order | Tolerance | Max depth |
+|--------|-------|-----------|-----------|
+| Peak   | `base_order` | `tol_Ep * 1.0` | 15 |
+| Tail   | `base_order` | `tol_Ep * 1.0` | 3 |
+| Far    | `base_order/2` (min 4) | `tol_Ep * 10` | 1 |
+
+The tail integrand is smooth (exponentially decaying away from the peak
+boundary), so the log-space change of variable already concentrates nodes
+where the integrand is largest; 3 levels of adaptive refinement suffice.
+The far region carries negligible mass and needs no adaptive subdivision at
+all -- a single GL panel is enough.
+
+These can be tuned via the `EpQuadratureConfig` constructor overload.
+
+
+### Outward-from-Peak Group Cutoff
+
+For grids with many groups, most target groups $g'$ have negligible scattering
+from a given incoming group $g$ because Compton scattering peaks near the
+elastic energy $E' \approx E$ and is exponentially suppressed for large energy
+transfers.  The outward-from-peak cutoff exploits this sparsity.
+
+**Algorithm:** For each incoming group $g$:
+
+1. Identify the **peak target group** $g'_\text{peak}$ as the group containing
+   the geometric-mean center energy of group $g$.  This approximates the
+   elastic forward-scattering peak.
+2. Integrate $g'_\text{peak}$ first, summing the absolute values across all
+   angle bins to obtain `peak_sum`.
+3. Expand rightward ($g' = g'_\text{peak}+1, g'_\text{peak}+2, \ldots$): for
+   each group, compute all angle bins and sum absolute values.  Stop when the
+   sum drops below `cutoff_ratio * peak_sum`.  Remaining groups stay at zero.
+4. Expand leftward ($g' = g'_\text{peak}-1, g'_\text{peak}-2, \ldots$):
+   same stopping criterion.
+
+**Why this is valid:** Compton scattering conserves total rate per incoming
+group (row sums $\sum_{g'} \sigma(g \to g') \approx \sigma_T$).  The kernel
+is exponentially suppressed by the Boltzmann factor $\sim\exp(-\Delta E / kT)$
+for large energy transfers, so the omitted groups contribute a fraction below
+`cutoff_ratio` of the peak.  For `cutoff_ratio = 1e-8`, the row-sum error is
+negligible compared to quadrature tolerances.
+
+**Default:** `group_cutoff_ratio = 0` (disabled; all target groups are
+integrated).  Set via `set_group_cutoff_ratio(ratio)`.  A value of `1e-8` is
+recommended for production use.
+
+
 ## Error Estimation
 
 All kernel evaluations return a `SigmaResult` containing `value` and

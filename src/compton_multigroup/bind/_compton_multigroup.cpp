@@ -3,6 +3,7 @@
 #include <pybind11/stl.h>
 
 #include "compton_multigroup/compton_multigroup.hpp"
+#include "compton_common/compton_common.hpp"
 #include "compton_multigroup/gauss_legendre.hpp"
 #include "compton_multigroup/weight_function.hpp"
 
@@ -71,16 +72,45 @@ PYBIND11_MODULE(_compton_multigroup, m) {
     py::class_<ConstantMultiplier, KernelMultiplier>(m, "ConstantMultiplier")
         .def(py::init<>());
 
+    py::class_<EpQuadratureConfig>(m, "EpQuadratureConfig")
+        .def(py::init<>())
+        .def_readwrite("peak_base_order",  &EpQuadratureConfig::peak_base_order)
+        .def_readwrite("peak_tol_factor",  &EpQuadratureConfig::peak_tol_factor)
+        .def_readwrite("peak_max_depth",   &EpQuadratureConfig::peak_max_depth)
+        .def_readwrite("tail_base_order",  &EpQuadratureConfig::tail_base_order)
+        .def_readwrite("tail_tol_factor",  &EpQuadratureConfig::tail_tol_factor)
+        .def_readwrite("tail_max_depth",   &EpQuadratureConfig::tail_max_depth)
+        .def_readwrite("far_base_order",   &EpQuadratureConfig::far_base_order)
+        .def_readwrite("far_tol_factor",   &EpQuadratureConfig::far_tol_factor)
+        .def_readwrite("far_max_depth",    &EpQuadratureConfig::far_max_depth);
+
     py::class_<ComptonMultigroupKernel>(m, "ComptonMultigroupKernel")
         .def(py::init<std::vector<double> const&,
                        std::shared_ptr<WeightFunction const>,
-                       double, int>(),
+                       double, int, EpQuadratureConfig const&>(),
              "energy_group_boundaries"_a,
              "weight_function"_a,
              "tol"_a = 1e-3,
-             "base_order"_a = 16)
+             "base_order"_a = 16,
+             "ep_config"_a = EpQuadratureConfig{})
 
         .def_property_readonly("num_groups", &ComptonMultigroupKernel::num_groups)
+
+        .def_property("group_cutoff_ratio",
+            &ComptonMultigroupKernel::group_cutoff_ratio,
+            &ComptonMultigroupKernel::set_group_cutoff_ratio)
+
+        .def_property("max_depth_E",
+            &ComptonMultigroupKernel::max_depth_E,
+            &ComptonMultigroupKernel::set_max_depth_E)
+
+        .def_property("max_depth_mu",
+            &ComptonMultigroupKernel::max_depth_mu,
+            &ComptonMultigroupKernel::set_max_depth_mu)
+
+        .def_property("log_E_ratio_threshold",
+            &ComptonMultigroupKernel::log_E_ratio_threshold,
+            &ComptonMultigroupKernel::set_log_E_ratio_threshold)
 
         .def_property_readonly("group_centers", [](ComptonMultigroupKernel const& self) {
             auto const& c = self.group_centers();
@@ -193,4 +223,43 @@ PYBIND11_MODULE(_compton_multigroup, m) {
     }, "integrand"_a, "base_order"_a, "a"_a, "b"_a,
        "tol"_a = 1e-8, "max_depth"_a = 15,
        "Adaptive Gauss-Legendre integration of f over [a, b]");
+
+    m.def("adaptive_log_legendre_integrate", [](py::function integrand,
+                                                int base_order,
+                                                double a, double b,
+                                                double tol, int max_depth) {
+        auto rule = compton::compute_gauss_legendre(base_order);
+        return compton::adaptive_log_legendre_integrate(
+            [&](double x) { return integrand(x).cast<double>(); },
+            rule, a, b, tol, max_depth);
+    }, "integrand"_a, "base_order"_a, "a"_a, "b"_a,
+       "tol"_a = 1e-8, "max_depth"_a = 15,
+       "Adaptive log-space GL integration of f over [a, b] (clusters nodes near a)");
+
+    m.def("adaptive_rlog_legendre_integrate", [](py::function integrand,
+                                                 int base_order,
+                                                 double a, double b,
+                                                 double tol, int max_depth) {
+        auto rule = compton::compute_gauss_legendre(base_order);
+        return compton::adaptive_rlog_legendre_integrate(
+            [&](double x) { return integrand(x).cast<double>(); },
+            rule, a, b, tol, max_depth);
+    }, "integrand"_a, "base_order"_a, "a"_a, "b"_a,
+       "tol"_a = 1e-8, "max_depth"_a = 15,
+       "Adaptive reflected-log GL integration of f over [a, b] (clusters nodes near b)");
+
+    m.def("peak_limits", [](double E, double mu_lo, double mu_hi, double T) {
+        return compton::peak_limits(E, mu_lo, mu_hi, T);
+    }, "E"_a, "mu_lo"_a, "mu_hi"_a, "T"_a,
+       "Thermally broadened peak E' limits [erg]: returns (lo, hi)");
+
+    m.def("cold_recoil_lo", [](double E, double mu_lo) {
+        return compton::peak_limits(E, mu_lo, 1.0, 0.0).first;
+    }, "E"_a, "mu_lo"_a,
+       "Lower edge of the cold Compton recoil band [erg] (T=0 limit)");
+
+    m.def("cold_recoil_hi", [](double E, double mu_hi) {
+        return compton::peak_limits(E, -1.0, mu_hi, 0.0).second;
+    }, "E"_a, "mu_hi"_a,
+       "Upper edge of the cold Compton recoil band [erg] (T=0 limit)");
 }

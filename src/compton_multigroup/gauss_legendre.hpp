@@ -152,7 +152,7 @@ double adaptive_legendre_integrate(F&& integrand,
                                    double const a,
                                    double const b,
                                    double const tol,
-                                   int const max_depth = 15)
+                                   int const max_depth = 10)
 {
     constexpr double abs_floor = 1e-300;
 
@@ -175,6 +175,85 @@ double adaptive_legendre_integrate(F&& integrand,
     double const refined_right = adaptive_legendre_integrate(
         integrand, rule, mid, b, tol, max_depth - 1);
     return refined_left + refined_right;
+}
+
+/**
+ * @brief Adaptive GL integration in log-space (clusters nodes near lower end).
+ *
+ * Performs the change of variable u = log(x):
+ *     ∫_a^b f(x) dx = ∫_{log(a)}^{log(b)} f(exp(u)) · exp(u) du
+ *
+ * This concentrates quadrature nodes near `a`, making it suitable for
+ * right-tail intervals where the integrand decays away from the lower
+ * (peak-side) boundary.
+ *
+ * @param integrand   Callable f(x) -> double, in the original x space.
+ * @param rule        Precomputed GL rule (base panel order).
+ * @param a           Lower integration limit (must be > 0).
+ * @param b           Upper integration limit (must be > a).
+ * @param tol         Relative tolerance for convergence.
+ * @param max_depth   Maximum recursion depth.
+ * @return            Approximate value of ∫_a^b f(x) dx.
+ */
+template<typename F>
+double adaptive_log_legendre_integrate(F&& integrand,
+                                       GaussLegendreRule const& rule,
+                                       double const a,
+                                       double const b,
+                                       double const tol,
+                                       int const max_depth = 15)
+{
+    double const log_a = std::log(a);
+    double const log_b = std::log(b);
+
+    return adaptive_legendre_integrate(
+        [&](double const u) {
+            double const x = std::exp(u);
+            return integrand(x) * x;
+        },
+        rule, log_a, log_b, tol, max_depth);
+}
+
+/**
+ * @brief Adaptive GL integration with reflected-log mapping (clusters nodes
+ *        near upper end).
+ *
+ * Substitutes x = a + b - exp(v) with v running from log(a) to log(b),
+ * which is equivalent to applying the log mapping to the reflected variable
+ * (a + b - x).  This concentrates quadrature nodes near `b`, making it
+ * suitable for left-tail intervals where the integrand decays away from the
+ * upper (peak-side) boundary.
+ *
+ * Derivation:  let y = a + b - x  (so y ∈ [a, b] when x ∈ [a, b]),
+ * then apply u = log(y):
+ *     ∫_a^b f(x) dx = ∫_{log(a)}^{log(b)} f(a + b - exp(u)) · exp(u) du
+ *
+ * @param integrand   Callable f(x) -> double, in the original x space.
+ * @param rule        Precomputed GL rule (base panel order).
+ * @param a           Lower integration limit (must be > 0).
+ * @param b           Upper integration limit (must be > a).
+ * @param tol         Relative tolerance for convergence.
+ * @param max_depth   Maximum recursion depth.
+ * @return            Approximate value of ∫_a^b f(x) dx.
+ */
+template<typename F>
+double adaptive_rlog_legendre_integrate(F&& integrand,
+                                        GaussLegendreRule const& rule,
+                                        double const a,
+                                        double const b,
+                                        double const tol,
+                                        int const max_depth = 15)
+{
+    double const sum_ab = a + b;
+    double const log_a = std::log(a);
+    double const log_b = std::log(b);
+
+    return adaptive_legendre_integrate(
+        [&](double const u) {
+            double const y = std::exp(u);
+            return integrand(sum_ab - y) * y;
+        },
+        rule, log_a, log_b, tol, max_depth);
 }
 
 } // namespace compton

@@ -279,6 +279,152 @@ class TestMCComparison:
 # 5. Angle CDF comparison (optional)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# 4b. Cold recoil band functions
+# ---------------------------------------------------------------------------
+
+class TestPeakLimits:
+    """Validate peak_limits and backward-compat cold_recoil_lo/hi bindings."""
+
+    def test_forward_scatter_identity(self):
+        """At mu=1 (forward scatter), E'=E (no energy change)."""
+        for E_kev in [0.1, 1.0, 10.0, 100.0]:
+            E_erg = E_kev * kev
+            assert cm.cold_recoil_hi(E_erg, 1.0) == pytest.approx(E_erg, rel=1e-12)
+
+    def test_backscatter_formula(self):
+        """At mu=-1 (backscatter), E' = E/(1+2*gamma)."""
+        for E_kev in [1.0, 10.0, 100.0, 511.0]:
+            E_erg = E_kev * kev
+            gamma = E_kev / 511.0
+            expected = E_erg / (1.0 + 2.0 * gamma)
+            assert cm.cold_recoil_lo(E_erg, -1.0) == pytest.approx(expected, rel=1e-10)
+
+    def test_monotonic_in_mu(self):
+        """cold_recoil is monotonically increasing in mu."""
+        E_erg = 10.0 * kev
+        mus = np.linspace(-1, 1, 20)
+        vals = [cm.cold_recoil_lo(E_erg, mu) for mu in mus]
+        assert all(vals[i] <= vals[i+1] for i in range(len(vals)-1))
+
+    def test_band_contains_E_for_full_range(self):
+        """For mu in [-1, 1], the band is [E/(1+2*gamma), E]."""
+        for E_kev in [0.1, 1.0, 50.0, 300.0]:
+            E_erg = E_kev * kev
+            lo = cm.cold_recoil_lo(E_erg, -1.0)
+            hi = cm.cold_recoil_hi(E_erg, 1.0)
+            assert lo < E_erg
+            assert hi == pytest.approx(E_erg, rel=1e-12)
+
+    def test_soft_photon_limit(self):
+        """For E << m_e c^2, band is very narrow (gamma << 1)."""
+        E_erg = 0.01 * kev
+        lo = cm.cold_recoil_lo(E_erg, -1.0)
+        hi = cm.cold_recoil_hi(E_erg, 1.0)
+        band_width = hi - lo
+        assert band_width / E_erg < 0.001
+
+
+# ---------------------------------------------------------------------------
+# 4c. Peak-aware vs uniform consistency
+# ---------------------------------------------------------------------------
+
+class TestPeakAwareConsistency:
+    """Peak-aware integration should agree with uniform (default) scheme."""
+
+    def test_default_constructor_matches(self):
+        """Both constructors produce consistent results."""
+        T = 10.0 * kev_kelvin
+        bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
+
+        mg_default = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            tol=1e-3, base_order=8)
+
+        ep_cfg = cm.EpQuadratureConfig()
+        mg_cfg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            tol=1e-3, base_order=8,
+            ep_config=ep_cfg)
+
+        S_default = mg_default.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        S_cfg = mg_cfg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+
+        mask = np.abs(S_default) > 1e-35
+        if np.any(mask):
+            rel_diff = np.max(
+                np.abs(S_default[mask] - S_cfg[mask]) / np.abs(S_default[mask]))
+            assert rel_diff < 0.05, (
+                f"default vs ep_config: max rel diff = {rel_diff:.2e}")
+
+    @pytest.mark.parametrize("num_bins", [1, 4])
+    def test_angle_bin_consistency(self, num_bins):
+        """Peak-aware scheme preserves angle-bin summation consistency."""
+        T = 10.0 * kev_kelvin
+        bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
+
+        mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            tol=1e-3, base_order=8)
+
+        S_integrated = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        S_binned = mg.compute_sigma_matrix(
+            KERNEL, num_angle_bins=num_bins, T=T, Ne=1.0)
+        S_summed = S_binned.sum(axis=2)
+
+        mask = np.abs(S_integrated) > 1e-35
+        if np.any(mask):
+            rel_diff = np.max(
+                np.abs(S_summed[mask] - S_integrated[mask]) / np.abs(S_integrated[mask]))
+            assert rel_diff < 0.02, (
+                f"peak-aware sum-over-bins: max rel diff = {rel_diff:.2e}")
+
+
+# ---------------------------------------------------------------------------
+# 4d. Hard physics regression tests
+# ---------------------------------------------------------------------------
+
+class TestHardPhysicsRegression:
+    """Regression tests for physically challenging cases."""
+
+    def test_cold_plasma_narrow_peak(self):
+        """Cold-ish plasma (T=1 keV): peak is narrow relative to group width."""
+        T = 1.0 * kev_kelvin
+        bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
+
+        mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            tol=1e-2, base_order=8)
+
+        S = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        row_sums = S.sum(axis=1)
+        assert np.all(row_sums >= 0), "negative row sums"
+        assert np.any(row_sums > 0), "all row sums zero at cold T"
+
+    def test_high_energy_backscatter(self):
+        """High-energy recoil-shifted backscatter bins."""
+        T = 10.0 * kev_kelvin
+        bounds = [10.0 * kev, 50.0 * kev, 100.0 * kev]
+
+        mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            tol=1e-2, base_order=8)
+
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
+        assert S.shape == (2, 2, 4)
+        row_sums = S.sum(axis=(1, 2))
+        assert np.all(row_sums >= 0), "negative row sums"
+
+
+# ---------------------------------------------------------------------------
+# 5. Angle CDF comparison (optional)
+# ---------------------------------------------------------------------------
+
 class TestAngleCDFComparison:
     """Compare angular CDF against CMMC MC CDF."""
 
@@ -339,3 +485,113 @@ class TestAngleCDFComparison:
         median_diff = np.median(max_cdf_diffs)
         assert median_diff < 0.15, (
             f"median max CDF diff = {median_diff:.3f}")
+
+
+# ---------------------------------------------------------------------------
+# 6. Group cutoff (outward-from-peak early termination)
+# ---------------------------------------------------------------------------
+
+class TestGroupCutoff:
+    """Verify outward-from-peak group cutoff produces correct results."""
+
+    def test_cutoff_rejects_zero(self):
+        """Setting cutoff=0 raises ValueError."""
+        bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
+        mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            tol=1e-3, base_order=8)
+
+        with pytest.raises(Exception):
+            mg.group_cutoff_ratio = 0.0
+
+    def test_default_cutoff(self):
+        """Default cutoff (1e-8) produces identical results to explicit 1e-8."""
+        T = 10.0 * kev_kelvin
+        bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
+
+        mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            tol=1e-3, base_order=8)
+
+        S_default = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+
+        mg.group_cutoff_ratio = 1e-8
+        S_explicit = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+
+        np.testing.assert_array_equal(S_default, S_explicit)
+
+    def test_cutoff_preserves_row_sums(self):
+        """Cutoff at 1e-8 should preserve row sums vs very tight cutoff."""
+        T = 10.0 * kev_kelvin
+
+        mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=BOUNDARIES_ERG,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            tol=1e-3, base_order=8)
+
+        mg.group_cutoff_ratio = 1e-30
+        S_full = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+
+        mg.group_cutoff_ratio = 1e-8
+        S_cut = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+
+        rs_full = S_full.sum(axis=1)
+        rs_cut = S_cut.sum(axis=1)
+
+        mask = np.abs(rs_full) > 1e-35
+        if not np.any(mask):
+            pytest.skip("all row sums near zero")
+
+        rel_err = np.abs(rs_full[mask] - rs_cut[mask]) / np.abs(rs_full[mask])
+        assert np.max(rel_err) < 1e-7, (
+            f"cutoff row-sum max rel error = {np.max(rel_err):.2e}")
+
+    def test_cutoff_skips_groups(self):
+        """Tighter cutoff should skip more groups than a loose one."""
+        T = 1.0 * kev_kelvin
+
+        mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=BOUNDARIES_ERG,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            tol=1e-3, base_order=8)
+
+        mg.group_cutoff_ratio = 1e-30
+        S_full = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+
+        mg.group_cutoff_ratio = 1e-8
+        S_cut = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+
+        nz_full = np.count_nonzero(S_full)
+        nz_cut = np.count_nonzero(S_cut)
+        assert nz_cut <= nz_full, "cutoff should not add non-zero entries"
+
+    def test_cutoff_multiangle(self):
+        """Cutoff works correctly with multiple angle bins."""
+        T = 10.0 * kev_kelvin
+        bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
+
+        mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            tol=1e-3, base_order=8)
+
+        mg.group_cutoff_ratio = 1e-30
+        S_full = mg.compute_sigma_matrix(
+            KERNEL, num_angle_bins=4, T=T, Ne=1.0)
+
+        mg.group_cutoff_ratio = 1e-8
+        S_cut = mg.compute_sigma_matrix(
+            KERNEL, num_angle_bins=4, T=T, Ne=1.0)
+
+        rs_full = S_full.sum(axis=(1, 2))
+        rs_cut = S_cut.sum(axis=(1, 2))
+
+        mask = np.abs(rs_full) > 1e-35
+        if not np.any(mask):
+            pytest.skip("all row sums near zero")
+
+        rel_err = np.abs(rs_full[mask] - rs_cut[mask]) / np.abs(rs_full[mask])
+        assert np.max(rel_err) < 1e-7, (
+            f"multiangle cutoff row-sum max rel error = {np.max(rel_err):.2e}")

@@ -16,6 +16,7 @@
 #include <ostream>
 #include <sstream>
 #include <stdexcept>
+#include <utility>
 
 #include "doubledouble.h"
 #include "units/units.hpp"
@@ -474,6 +475,39 @@ inline void assert_parameters(
         throw std::invalid_argument("Ne must be finite");
     if (1.0 - xi < 1e-14)
         throw std::invalid_argument("xi too close to 1");
+}
+
+/**
+ * @brief E' limits for peak-aware quadrature in an angle bin [mu_lo, mu_hi].
+ *
+ * Starts from the cold-electron recoil band:
+ *
+ *     E'(mu) = E / (1 + gamma * (1 - mu)),    gamma = E / (m_e c^2)
+ *
+ * and extends each edge by the thermal Doppler width
+ *
+ *     dE = E * sqrt(2 k_B T / m_e c^2)
+ *
+ * so that the peak-aware E' quadrature captures the kernel peak even when
+ * E sits right at a group boundary.
+ *
+ * @param E     Incoming photon energy [erg].
+ * @param mu_lo Lower edge of the mu bin.
+ * @param mu_hi Upper edge of the mu bin.
+ * @param T     Electron temperature [K].
+ * @return      {lo, hi} in [erg], thermally broadened.
+ */
+inline std::pair<double, double> peak_limits(
+    double const E,
+    double const mu_lo,
+    double const mu_hi,
+    double const T)
+{
+    double const gamma = E / units::me_c2;
+    double const thermal_dE =
+        E * std::sqrt(2.0 * T * units::k_boltz / units::me_c2);
+    return {E / (1.0 + gamma * (1.0 - mu_lo)) - thermal_dE,
+            E / (1.0 + gamma * (1.0 - mu_hi)) + thermal_dE};
 }
 
 } // namespace compton
