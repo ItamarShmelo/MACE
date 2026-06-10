@@ -58,26 +58,52 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <vector>
 #include <numbers>
 
 namespace compton {
 
 /**
- * @brief Configuration for the peak-aware E' quadrature scheme.
+ * @brief Consolidated configuration for multigroup integration.
  *
- * Controls the GL order for each of the three E' sub-regions (peak, tail,
- * far).  Only the peak region uses adaptive refinement; tails use single-panel
- * log/rlog GL and the far region uses single-panel linear GL.
+ * Controls the GL order for each integration axis and E' sub-region,
+ * adaptive refinement depth, overall tolerance, and the outward-from-peak
+ * group cutoff ratio.  All parameter validation is performed by the
+ * constructor so that invalid configurations are rejected early.
  */
-struct EpQuadratureConfig {
-    int peak_base_order   = 0;
-    double peak_tol_factor = 1.0;
-    int peak_max_depth    = 5;
+struct MGIntegrationConfig {
+    int base_order;
+    int peak_max_depth;
+    std::optional<int> tail_order;
+    std::optional<int> far_order;
+    double integration_tolerance;
+    double cutoff_ratio;
 
-    int tail_base_order   = 0;
+    /**
+     * @brief Construct with validated defaults.
+     *
+     * @param base_order            GL panel order for E, mu, and E'-peak axes.
+     * @param integration_tolerance Overall relative tolerance for the outer integral.
+     * @param cutoff_ratio          Outward-from-peak early-termination ratio.
+     * @param peak_max_depth        Maximum recursion depth for adaptive E' peak.
+     * @param tail_order            GL order for E' tail regions (defaults to base_order).
+     * @param far_order             GL order for E' far-from-peak regions (defaults to base_order).
+     * @throws std::invalid_argument on invalid parameters.
+     */
+    MGIntegrationConfig(
+        int base_order = 24,
+        double integration_tolerance = 1e-3,
+        double cutoff_ratio = 1e-8,
+        int peak_max_depth = 5,
+        std::optional<int> tail_order = std::nullopt,
+        std::optional<int> far_order = std::nullopt);
 
-    int far_base_order    = 0;
+    /** @brief Effective tail GL order (tail_order if set, otherwise base_order). */
+    int effective_tail_order() const { return tail_order.value_or(base_order); }
+
+    /** @brief Effective far GL order (far_order if set, otherwise base_order). */
+    int effective_far_order() const { return far_order.value_or(base_order); }
 };
 
 /**
@@ -123,18 +149,13 @@ public:
      *
      * @param energy_group_boundaries  G+1 strictly increasing values [erg], all > 0.
      * @param weight_function          Shared pointer to a WeightFunction subclass.
-     * @param tol                      Overall relative tolerance for the outer integral.
-     * @param base_order               GL panel order used by the E and mu integrators.
-     * @param ep_config                Per-region E' quadrature settings.  Zero-valued
-     *                                 base_order fields inherit from @p base_order.
-     * @throws std::invalid_argument on invalid boundaries, base_order, or tol.
+     * @param config                   Integration configuration (tolerance, orders, cutoff).
+     * @throws std::invalid_argument on invalid boundaries.
      */
     ComptonMultigroupKernel(
         std::vector<double> const& energy_group_boundaries,
         std::shared_ptr<WeightFunction const> weight_function,
-        double tol = 1e-3,
-        int base_order = 16,
-        EpQuadratureConfig const& ep_config = EpQuadratureConfig{});
+        MGIntegrationConfig const& config = MGIntegrationConfig{});
 
     /** @brief Number of energy groups G. */
     int num_groups() const { return static_cast<int>(group_centers_.size()); }
@@ -144,43 +165,6 @@ public:
 
     /** @brief Energy group boundaries [erg], length G+1. */
     std::vector<double> const& group_boundaries() const { return group_boundaries_; }
-
-    /**
-     * @brief Set the group cutoff ratio for outward-from-peak early termination.
-     *
-     * The target-group loop starts at the peak group (the one containing the
-     * incoming group center energy) and expands outward.  Integration stops in
-     * each direction when the angle-integrated value for a target group drops
-     * below cutoff_ratio times the peak group value.  Remaining groups are
-     * left at zero.
-     *
-     * @param ratio  Strictly positive cutoff ratio (e.g. 1e-8).
-     * @throws std::invalid_argument if ratio <= 0.
-     */
-    void set_group_cutoff_ratio(double ratio) {
-        if (!(ratio > 0.0))
-            throw std::invalid_argument("group_cutoff_ratio must be > 0");
-        group_cutoff_ratio_ = ratio;
-    }
-
-    /** @brief Current group cutoff ratio (default 1e-8). */
-    double group_cutoff_ratio() const { return group_cutoff_ratio_; }
-
-    /**
-     * @brief Set the E_hi/E_lo ratio above which the outer E integral
-     *        switches from linear to log/rlog mapping.
-     *
-     * For groups wider than this threshold, the integrator checks whether
-     * the weight function is larger at E_lo or E_hi and uses log-mapping
-     * (clusters near E_lo) or reflected-log-mapping (clusters near E_hi)
-     * accordingly.  This resolves peaked integrands on very wide groups.
-     *
-     * Default is 10 (groups spanning more than one decade).
-     */
-    void set_log_E_ratio_threshold(double threshold) { log_E_ratio_threshold_ = threshold; }
-
-    /** @brief Current log E ratio threshold (default 10). */
-    double log_E_ratio_threshold() const { return log_E_ratio_threshold_; }
 
     // ── Multigroup-multiangle (3D: G × G × N_angles) ────────────────────
 
@@ -233,9 +217,9 @@ private:
      * Each (g, gp) pair is evaluated by compute_group_entry().
      *
      * **Tolerance hierarchy** (set once here and forwarded):
-     *   - E  axis:  tol_
-     *   - E' axis:  tol_ × 0.1 × per-region factor (peak / tail / far)
-     *   - μ  axis:  tol_ × 0.01
+     *   - E  axis:  integration_tolerance_
+     *   - E' axis:  integration_tolerance_ × 0.1
+     *   - μ  axis:  integration_tolerance_ × 0.01
      *
      * @tparam KernelT  Kernel class whose @p eval member returns SigmaResult.
      * @param kernel         Point-wise kernel evaluator.
@@ -280,7 +264,7 @@ private:
      *                             smooth across it,
      *                   • log     (clusters nodes near E_lo) when w(E_lo) ≫ w(E_hi),
      *                   • rlog    (clusters nodes near E_hi) when w(E_hi) ≫ w(E_lo).
-     *                 The switch is governed by log_E_ratio_threshold_.
+     *                 The switch is governed by constants::LOG_E_RATIO_THRESHOLD.
      *
      * @return Sum of |S(g, gp, a)| over angle bins -- used by the
      *         outward-from-peak cutoff in compute_matrix_impl().
@@ -316,21 +300,20 @@ private:
 
     std::vector<double> group_boundaries_;
     std::vector<double> group_centers_;
+
+    /// Shared weight function for the Planck/Wien/Uniform numerator and denominator.
     std::shared_ptr<WeightFunction const> weight_func_;
 
+    /// GL rule for E, mu, and E'-peak axes.
     GaussLegendreRule base_rule_;
-    double tol_;
-
-    GaussLegendreRule peak_rule_;
-    double peak_tol_factor_;
-    int peak_max_depth_;
-
+    /// GL rule for E' tail (log/rlog) sub-regions.
     GaussLegendreRule tail_rule_;
-
+    /// GL rule for E' far-from-peak sub-regions.
     GaussLegendreRule far_rule_;
 
-    double group_cutoff_ratio_ = 1e-8;
-    double log_E_ratio_threshold_ = 10.0;
+    double integration_tolerance_;
+    int peak_max_depth_;
+    double group_cutoff_ratio_;
 };
 
 } // namespace compton

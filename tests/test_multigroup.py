@@ -50,7 +50,7 @@ class TestDenominator:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=[E_lo, E_hi],
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-3, base_order=8)
+            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
 
         x_lo, x_hi = 0.1, 5.0
         from scipy.integrate import quad as scipy_quad
@@ -72,7 +72,7 @@ class TestDenominator:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=[E_lo, E_hi],
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-3, base_order=8)
+            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
 
         cap_x = 25.0
         w0 = cap_x**3 / np.expm1(cap_x)
@@ -128,11 +128,11 @@ class TestAdaptiveConvergence:
         mg_loose = cm.ComptonMultigroupKernel(
             energy_group_boundaries=narrow_bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-2, base_order=8)
+            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-2))
         mg_tight = cm.ComptonMultigroupKernel(
             energy_group_boundaries=narrow_bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-4, base_order=8)
+            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-4))
 
         S_loose = mg_loose.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
         S_tight = mg_tight.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
@@ -166,7 +166,7 @@ class TestAngleBinSummation:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=narrow_bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-3, base_order=8)
+            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
 
         S_integrated = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
         S_binned = mg.compute_sigma_matrix(KERNEL, num_angle_bins=num_bins, T=T, Ne=1.0)
@@ -260,7 +260,7 @@ class TestMCComparison:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=mc_bounds_erg,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-3, base_order=8)
+            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
         S_det = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
 
         row_sums_mc = S_mc.sum(axis=1)
@@ -333,21 +333,21 @@ class TestPeakAwareConsistency:
     """Peak-aware integration should agree with uniform (default) scheme."""
 
     def test_default_constructor_matches(self):
-        """Both constructors produce consistent results."""
+        """Default config and explicit config produce consistent results."""
         T = 10.0 * kev_kelvin
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
+
+        cfg = cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3)
 
         mg_default = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-3, base_order=8)
+            config=cfg)
 
-        ep_cfg = cm.EpQuadratureConfig()
         mg_cfg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-3, base_order=8,
-            ep_config=ep_cfg)
+            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
 
         S_default = mg_default.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
         S_cfg = mg_cfg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
@@ -357,7 +357,7 @@ class TestPeakAwareConsistency:
             rel_diff = np.max(
                 np.abs(S_default[mask] - S_cfg[mask]) / np.abs(S_default[mask]))
             assert rel_diff < 0.05, (
-                f"default vs ep_config: max rel diff = {rel_diff:.2e}")
+                f"default vs explicit config: max rel diff = {rel_diff:.2e}")
 
     @pytest.mark.parametrize("num_bins", [1, 4])
     def test_angle_bin_consistency(self, num_bins):
@@ -368,7 +368,7 @@ class TestPeakAwareConsistency:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-3, base_order=8)
+            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
 
         S_integrated = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
         S_binned = mg.compute_sigma_matrix(
@@ -398,7 +398,7 @@ class TestHardPhysicsRegression:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-2, base_order=8)
+            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-2))
 
         S = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
         row_sums = S.sum(axis=1)
@@ -413,7 +413,7 @@ class TestHardPhysicsRegression:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-2, base_order=8)
+            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-2))
 
         S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
         assert S.shape == (2, 2, 4)
@@ -459,7 +459,7 @@ class TestAngleCDFComparison:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=mc_bounds_erg,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-3, base_order=8)
+            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
         S_det = mg.compute_sigma_matrix(
             KERNEL, num_angle_bins=NUM_ANGLE_BINS, T=T, Ne=1.0)
 
@@ -494,31 +494,30 @@ class TestAngleCDFComparison:
 class TestGroupCutoff:
     """Verify outward-from-peak group cutoff produces correct results."""
 
-    def test_cutoff_rejects_zero(self):
-        """Setting cutoff=0 raises ValueError."""
-        bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
-        mg = cm.ComptonMultigroupKernel(
+    def _make_mg(self, bounds, *, base_order=8, tol=1e-3, cutoff=1e-8):
+        return cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-3, base_order=8)
+            config=cm.MGIntegrationConfig(
+                base_order=base_order,
+                integration_tolerance=tol,
+                cutoff_ratio=cutoff))
 
+    def test_cutoff_rejects_zero(self):
+        """Setting cutoff_ratio=0 raises ValueError."""
         with pytest.raises(Exception):
-            mg.group_cutoff_ratio = 0.0
+            cm.MGIntegrationConfig(cutoff_ratio=0.0)
 
     def test_default_cutoff(self):
         """Default cutoff (1e-8) produces identical results to explicit 1e-8."""
         T = 10.0 * kev_kelvin
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
 
-        mg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=bounds,
-            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-3, base_order=8)
+        mg_default = self._make_mg(bounds)
+        mg_explicit = self._make_mg(bounds, cutoff=1e-8)
 
-        S_default = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
-
-        mg.group_cutoff_ratio = 1e-8
-        S_explicit = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        S_default = mg_default.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        S_explicit = mg_explicit.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
 
         np.testing.assert_array_equal(S_default, S_explicit)
 
@@ -526,16 +525,11 @@ class TestGroupCutoff:
         """Cutoff at 1e-8 should preserve row sums vs very tight cutoff."""
         T = 10.0 * kev_kelvin
 
-        mg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=BOUNDARIES_ERG,
-            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-3, base_order=8)
+        mg_full = self._make_mg(BOUNDARIES_ERG, cutoff=1e-30)
+        mg_cut = self._make_mg(BOUNDARIES_ERG, cutoff=1e-8)
 
-        mg.group_cutoff_ratio = 1e-30
-        S_full = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
-
-        mg.group_cutoff_ratio = 1e-8
-        S_cut = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        S_full = mg_full.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        S_cut = mg_cut.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
 
         rs_full = S_full.sum(axis=1)
         rs_cut = S_cut.sum(axis=1)
@@ -552,16 +546,11 @@ class TestGroupCutoff:
         """Tighter cutoff should skip more groups than a loose one."""
         T = 1.0 * kev_kelvin
 
-        mg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=BOUNDARIES_ERG,
-            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-3, base_order=8)
+        mg_full = self._make_mg(BOUNDARIES_ERG, cutoff=1e-30)
+        mg_cut = self._make_mg(BOUNDARIES_ERG, cutoff=1e-8)
 
-        mg.group_cutoff_ratio = 1e-30
-        S_full = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
-
-        mg.group_cutoff_ratio = 1e-8
-        S_cut = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        S_full = mg_full.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        S_cut = mg_cut.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
 
         nz_full = np.count_nonzero(S_full)
         nz_cut = np.count_nonzero(S_cut)
@@ -572,17 +561,12 @@ class TestGroupCutoff:
         T = 10.0 * kev_kelvin
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
 
-        mg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=bounds,
-            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            tol=1e-3, base_order=8)
+        mg_full = self._make_mg(bounds, cutoff=1e-30)
+        mg_cut = self._make_mg(bounds, cutoff=1e-8)
 
-        mg.group_cutoff_ratio = 1e-30
-        S_full = mg.compute_sigma_matrix(
+        S_full = mg_full.compute_sigma_matrix(
             KERNEL, num_angle_bins=4, T=T, Ne=1.0)
-
-        mg.group_cutoff_ratio = 1e-8
-        S_cut = mg.compute_sigma_matrix(
+        S_cut = mg_cut.compute_sigma_matrix(
             KERNEL, num_angle_bins=4, T=T, Ne=1.0)
 
         rs_full = S_full.sum(axis=(1, 2))

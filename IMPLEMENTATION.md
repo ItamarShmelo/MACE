@@ -217,10 +217,10 @@ $I_\text{whole}$ using the base rule, then compute
 $I_\text{halves} = I_\text{left} + I_\text{right}$ by splitting at the midpoint.
 The error estimate is $|I_\text{halves} - I_\text{whole}|$.  If this exceeds
 `peak_tol * |I_halves|`, recurse independently on each half.  A maximum recursion
-depth (configurable via `EpQuadratureConfig::peak_max_depth`) prevents runaway
+depth (configurable via `MGIntegrationConfig::peak_max_depth`) prevents runaway
 subdivision.
 
-**Peak tolerance:** `tol * 0.1 * peak_tol_factor` controls adaptive refinement of
+**Peak tolerance:** `integration_tolerance * 0.1` controls adaptive refinement of
 the E' peak region.  Accuracy of other axes is controlled by increasing `base_order`.
 
 Group centers are placed at the geometric mean $\sqrt{E_\text{lo} \cdot E_\text{hi}}$.
@@ -317,26 +317,36 @@ The peak can span any number of groups: one group (both boundaries inside),
 two groups (boundary in each), or three+ groups (interior groups entirely within
 the peak).  All cases are handled uniformly by the clamp logic.
 
-#### `EpQuadratureConfig`
+#### `MGIntegrationConfig`
 
-The `EpQuadratureConfig` struct controls per-region GL order and peak adaptive
-refinement.  Only the peak region uses adaptive quadrature; tails and far use
-single-panel GL with their respective coordinate mappings:
+The `MGIntegrationConfig` struct consolidates all multigroup integration
+parameters: GL orders, adaptive refinement depth, integration tolerance, and
+the outward-from-peak cutoff ratio.  All parameter validation is performed by
+the constructor so that invalid configurations are rejected early.
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `base_order` | 24 | GL panel order for E, mu, and E'-peak axes |
+| `peak_max_depth` | 5 | Maximum recursion depth for adaptive E' peak |
+| `tail_order` | `nullopt` → `base_order` | GL order for E' tail (log/rlog) regions |
+| `far_order` | `nullopt` → `base_order` | GL order for E' far-from-peak regions |
+| `integration_tolerance` | 1e-3 | Overall relative tolerance for the outer integral |
+| `cutoff_ratio` | 1e-8 | Outward-from-peak early-termination ratio |
+
+Only the peak region uses adaptive quadrature; tails and far use single-panel
+GL with their respective coordinate mappings:
 
 | Region | Order | Quadrature | Adaptive |
 |--------|-------|------------|----------|
 | Peak   | `base_order` | linear GL | Yes (configurable depth) |
-| Tail   | `base_order` | log/rlog GL | No |
-| Far    | `base_order/2` (min 4) | linear GL | No |
+| Tail   | `tail_order` (default: `base_order`) | log/rlog GL | No |
+| Far    | `far_order` (default: `base_order`) | linear GL | No |
 
 The tail integrand is smooth (exponentially decaying away from the peak
 boundary), so the log-space change of variable already concentrates nodes
 where the integrand is largest; no adaptive refinement is needed.
 The far region carries negligible mass and needs only a single low-order
 GL panel.
-
-Configurable fields: `peak_base_order`, `peak_tol_factor`, `peak_max_depth`,
-`tail_base_order`, `far_base_order`.
 
 
 ### Outward-from-Peak Group Cutoff
@@ -366,9 +376,8 @@ for large energy transfers, so the omitted groups contribute a fraction below
 `cutoff_ratio` of the peak.  For `cutoff_ratio = 1e-8`, the row-sum error is
 negligible compared to quadrature tolerances.
 
-**Default:** `group_cutoff_ratio = 0` (disabled; all target groups are
-integrated).  Set via `set_group_cutoff_ratio(ratio)`.  A value of `1e-8` is
-recommended for production use.
+**Default:** `cutoff_ratio = 1e-8`, set at construction time via
+`MGIntegrationConfig`.
 
 
 ## Error Estimation

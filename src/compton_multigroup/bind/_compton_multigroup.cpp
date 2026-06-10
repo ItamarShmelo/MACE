@@ -72,33 +72,33 @@ PYBIND11_MODULE(_compton_multigroup, m) {
     py::class_<ConstantMultiplier, KernelMultiplier>(m, "ConstantMultiplier")
         .def(py::init<>());
 
-    py::class_<EpQuadratureConfig>(m, "EpQuadratureConfig")
-        .def(py::init<>())
-        .def_readwrite("peak_base_order",  &EpQuadratureConfig::peak_base_order)
-        .def_readwrite("peak_tol_factor",  &EpQuadratureConfig::peak_tol_factor)
-        .def_readwrite("peak_max_depth",   &EpQuadratureConfig::peak_max_depth)
-        .def_readwrite("tail_base_order",  &EpQuadratureConfig::tail_base_order)
-        .def_readwrite("far_base_order",   &EpQuadratureConfig::far_base_order);
+    py::class_<MGIntegrationConfig>(m, "MGIntegrationConfig")
+        .def(py::init<int, double, double, int,
+                       std::optional<int>, std::optional<int>>(),
+             "base_order"_a = 24,
+             "integration_tolerance"_a = 1e-3,
+             "cutoff_ratio"_a = 1e-8,
+             "peak_max_depth"_a = 5,
+             "tail_order"_a = std::nullopt,
+             "far_order"_a = std::nullopt)
+        .def_readwrite("base_order",            &MGIntegrationConfig::base_order)
+        .def_readwrite("peak_max_depth",        &MGIntegrationConfig::peak_max_depth)
+        .def_readwrite("tail_order",            &MGIntegrationConfig::tail_order)
+        .def_readwrite("far_order",             &MGIntegrationConfig::far_order)
+        .def_readwrite("integration_tolerance", &MGIntegrationConfig::integration_tolerance)
+        .def_readwrite("cutoff_ratio",          &MGIntegrationConfig::cutoff_ratio)
+        .def("effective_tail_order", &MGIntegrationConfig::effective_tail_order)
+        .def("effective_far_order",  &MGIntegrationConfig::effective_far_order);
 
     py::class_<ComptonMultigroupKernel>(m, "ComptonMultigroupKernel")
         .def(py::init<std::vector<double> const&,
                        std::shared_ptr<WeightFunction const>,
-                       double, int, EpQuadratureConfig const&>(),
+                       MGIntegrationConfig const&>(),
              "energy_group_boundaries"_a,
              "weight_function"_a,
-             "tol"_a = 1e-3,
-             "base_order"_a = 16,
-             "ep_config"_a = EpQuadratureConfig{})
+             "config"_a = MGIntegrationConfig{})
 
         .def_property_readonly("num_groups", &ComptonMultigroupKernel::num_groups)
-
-        .def_property("group_cutoff_ratio",
-            &ComptonMultigroupKernel::group_cutoff_ratio,
-            &ComptonMultigroupKernel::set_group_cutoff_ratio)
-
-        .def_property("log_E_ratio_threshold",
-            &ComptonMultigroupKernel::log_E_ratio_threshold,
-            &ComptonMultigroupKernel::set_log_E_ratio_threshold)
 
         .def_property_readonly("group_centers", [](ComptonMultigroupKernel const& self) {
             auto const& c = self.group_centers();

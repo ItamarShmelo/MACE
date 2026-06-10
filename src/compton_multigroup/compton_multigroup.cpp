@@ -7,23 +7,50 @@
 
 namespace compton {
 
-// ── Constructor ──────────────────────────────────────────────────────────
+// ── MGIntegrationConfig ─────────────────────────────────────────────────
+
+MGIntegrationConfig::MGIntegrationConfig(
+    int const base_order,
+    double const integration_tolerance,
+    double const cutoff_ratio,
+    int const peak_max_depth,
+    std::optional<int> const tail_order,
+    std::optional<int> const far_order)
+    : base_order(base_order)
+    , peak_max_depth(peak_max_depth)
+    , tail_order(tail_order)
+    , far_order(far_order)
+    , integration_tolerance(integration_tolerance)
+    , cutoff_ratio(cutoff_ratio)
+{
+    if (base_order < 1)
+        throw std::invalid_argument("base_order must be >= 1");
+    if (!(integration_tolerance > 0.0))
+        throw std::invalid_argument("integration_tolerance must be > 0");
+    if (!(cutoff_ratio > 0.0))
+        throw std::invalid_argument("cutoff_ratio must be > 0");
+    if (peak_max_depth < 0)
+        throw std::invalid_argument("peak_max_depth must be >= 0");
+    if (tail_order.has_value() && tail_order.value() < 1)
+        throw std::invalid_argument("tail_order must be >= 1");
+    if (far_order.has_value() && far_order.value() < 1)
+        throw std::invalid_argument("far_order must be >= 1");
+}
+
+// ── ComptonMultigroupKernel ─────────────────────────────────────────────
 
 ComptonMultigroupKernel::ComptonMultigroupKernel(
     std::vector<double> const& energy_group_boundaries,
     std::shared_ptr<WeightFunction const> weight_function,
-    double const tol,
-    int const base_order,
-    EpQuadratureConfig const& ep)
+    MGIntegrationConfig const& config)
     : group_boundaries_(energy_group_boundaries)
     , weight_func_(std::move(weight_function))
-    , base_rule_(compute_gauss_legendre(base_order))
-    , tol_(tol)
-    , peak_rule_(compute_gauss_legendre(ep.peak_base_order > 0 ? ep.peak_base_order : base_order))
-    , peak_tol_factor_(ep.peak_tol_factor)
-    , peak_max_depth_(ep.peak_max_depth)
-    , tail_rule_(compute_gauss_legendre(ep.tail_base_order > 0 ? ep.tail_base_order : base_order))
-    , far_rule_(compute_gauss_legendre(ep.far_base_order > 0 ? ep.far_base_order : std::max(base_order / 2, 4)))
+    , base_rule_(compute_gauss_legendre(config.base_order))
+    , tail_rule_(compute_gauss_legendre(config.effective_tail_order()))
+    , far_rule_(compute_gauss_legendre(config.effective_far_order()))
+    , integration_tolerance_(config.integration_tolerance)
+    , peak_max_depth_(config.peak_max_depth)
+    , group_cutoff_ratio_(config.cutoff_ratio)
 {
     if (energy_group_boundaries.size() < 2)
         throw std::invalid_argument("need at least 2 boundaries (1 group)");
@@ -38,11 +65,6 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
         if (energy_group_boundaries[i] >= energy_group_boundaries[i + 1])
             throw std::invalid_argument("boundaries must be strictly increasing");
     }
-
-    if (base_order < 1)
-        throw std::invalid_argument("base_order must be >= 1");
-    if (!(tol > 0.0))
-        throw std::invalid_argument("tol must be > 0");
 
     int const G = static_cast<int>(energy_group_boundaries.size()) - 1;
     group_centers_.resize(G);
@@ -140,7 +162,7 @@ double integrate_Ep_group(
 //   3. Outermost: E integral over the incoming group [E_lo, E_hi].
 //                 Single-panel GL with mapping (linear / log / reflected-log)
 //                 chosen per angle bin based on the weight-function contrast:
-//                 when E_hi/E_lo exceeds log_E_ratio_threshold_, 
+//                 when E_hi/E_lo exceeds LOG_E_RATIO_THRESHOLD,
 //                 a logarithmic change of variable clusters quadrature nodes near
 //                 the heavy-weight boundary.
 //
@@ -213,7 +235,7 @@ double ComptonMultigroupKernel::compute_group_entry(
                         base_rule_, mu_lo, mu_hi);
                 },
                 Ep_lo, Ep_hi, band_lo, band_hi,
-                peak_rule_, peak_tol, peak_max_depth_,
+                base_rule_, peak_tol, peak_max_depth_,
                 tail_rule_,
                 far_rule_);
 
@@ -228,7 +250,7 @@ double ComptonMultigroupKernel::compute_group_entry(
         //   log   (nodes near E_lo) when w(E_lo) >= w(E_hi)
         //   rlog  (nodes near E_hi) when w(E_hi) >  w(E_lo)
         double numerator = 0.0;
-        if (E_hi / E_lo > log_E_ratio_threshold_) {
+        if (E_hi / E_lo > constants::LOG_E_RATIO_THRESHOLD) {
             double const w_lo = weight_func_->weight(E_lo, T);
             double const w_hi = weight_func_->weight(E_hi, T);
             if (w_lo >= w_hi) {
@@ -283,7 +305,7 @@ double ComptonMultigroupKernel::compute_group_entry(
 //   3. Each (g, gp) pair is delegated to compute_group_entry().
 //
 // Adaptive refinement is used only for the E' peak region:
-//   peak_tol = tol_ * 0.1 * peak_tol_factor_
+//   peak_tol = integration_tolerance_ * 0.1
 // All other axes (E, mu, tail, far) use single-panel GL quadrature
 // whose accuracy is controlled by increasing base_order.
 
@@ -321,7 +343,7 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     // --- Peak tolerance ---
     // Only the E' peak region uses adaptive refinement; all other axes
     // (E, mu, tail, far) use single-panel GL quadrature.
-    double const peak_tol = tol_ * 0.1 * peak_tol_factor_;
+    double const peak_tol = integration_tolerance_ * 0.1;
 
     // --- Main loop over incoming groups g ---
     for (int g = 0; g < G; ++g) {
@@ -381,8 +403,6 @@ std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
 {
     return compute_matrix_impl(kernel, &KernelT::dsigma_E_dT, num_angle_bins, T, Ne, multiplier);
 }
-
-// ── Explicit instantiations ─────────────────────────────────────────────
 
 template std::vector<double> ComptonMultigroupKernel::compute_sigma_matrix(
     ComptonKernelSolver const&, int, double, double, KernelMultiplier const&) const;

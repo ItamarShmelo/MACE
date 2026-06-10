@@ -321,6 +321,10 @@ constexpr double POISSON_Y_MAX = 500.0;
 /// 0.02 (~10 keV) is 3.15e-7 across all tested (E'/E, xi, T) combinations.
 constexpr double GAMMA_DOUBLE_PRECISION_SAFE = 0.02;
 
+/// E_hi/E_lo ratio above which the outer E integral switches from
+/// linear to log/rlog mapping (resolves peaked integrands on wide groups).
+static constexpr double LOG_E_RATIO_THRESHOLD = 10.0;
+
 /// Dispatch threshold for asymptotic vs power series: use asymptotic series
 /// when tau * max(alpha_plus, alpha_minus) is below this value.
 constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.025;
