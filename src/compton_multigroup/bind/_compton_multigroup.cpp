@@ -73,20 +73,22 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .def(py::init<>());
 
     py::class_<MGIntegrationConfig>(m, "MGIntegrationConfig")
-        .def(py::init<int, double, double, int,
+        .def(py::init<int, double, double, int, int,
                        std::optional<int>, std::optional<int>>(),
              "base_order"_a = 24,
              "integration_tolerance"_a = 1e-3,
              "cutoff_ratio"_a = 1e-8,
              "peak_max_depth"_a = 5,
+             "cold_temperature_order"_a = 48,
              "tail_order"_a = std::nullopt,
              "far_order"_a = std::nullopt)
-        .def_readwrite("base_order",            &MGIntegrationConfig::base_order)
-        .def_readwrite("peak_max_depth",        &MGIntegrationConfig::peak_max_depth)
-        .def_readwrite("tail_order",            &MGIntegrationConfig::tail_order)
-        .def_readwrite("far_order",             &MGIntegrationConfig::far_order)
-        .def_readwrite("integration_tolerance", &MGIntegrationConfig::integration_tolerance)
-        .def_readwrite("cutoff_ratio",          &MGIntegrationConfig::cutoff_ratio)
+        .def_readwrite("base_order",              &MGIntegrationConfig::base_order)
+        .def_readwrite("cold_temperature_order",  &MGIntegrationConfig::cold_temperature_order)
+        .def_readwrite("peak_max_depth",          &MGIntegrationConfig::peak_max_depth)
+        .def_readwrite("tail_order",              &MGIntegrationConfig::tail_order)
+        .def_readwrite("far_order",               &MGIntegrationConfig::far_order)
+        .def_readwrite("integration_tolerance",   &MGIntegrationConfig::integration_tolerance)
+        .def_readwrite("cutoff_ratio",            &MGIntegrationConfig::cutoff_ratio)
         .def("effective_tail_order", &MGIntegrationConfig::effective_tail_order)
         .def("effective_far_order",  &MGIntegrationConfig::effective_far_order);
 

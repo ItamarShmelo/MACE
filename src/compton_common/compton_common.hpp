@@ -335,6 +335,10 @@ constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.025;
 /// across all tested cold temperatures (0.01--5 keV).
 constexpr double ASYMP_GAMMA_DD_THRESHOLD = 0.002;
 
+/// Temperature [K] below which the multigroup integrator switches to
+/// cold_temperature_order for the E and mu axes (0.005 keV).
+constexpr double COLD_TEMPERATURE_THRESHOLD = 0.005 * units::kev_kelvin;
+
 } // namespace constants
 
 /**

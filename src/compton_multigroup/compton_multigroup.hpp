@@ -74,6 +74,7 @@ namespace compton {
  */
 struct MGIntegrationConfig {
     int base_order;
+    int cold_temperature_order;
     int peak_max_depth;
     std::optional<int> tail_order;
     std::optional<int> far_order;
@@ -83,12 +84,13 @@ struct MGIntegrationConfig {
     /**
      * @brief Construct with validated defaults.
      *
-     * @param base_order            GL panel order for E, mu, and E'-peak axes.
-     * @param integration_tolerance Overall relative tolerance for the outer integral.
-     * @param cutoff_ratio          Outward-from-peak early-termination ratio.
-     * @param peak_max_depth        Maximum recursion depth for adaptive E' peak.
-     * @param tail_order            GL order for E' tail regions (defaults to base_order).
-     * @param far_order             GL order for E' far-from-peak regions (defaults to base_order).
+     * @param base_order              GL panel order for E, mu, and E'-peak axes.
+     * @param integration_tolerance   Overall relative tolerance for the outer integral.
+     * @param cutoff_ratio            Outward-from-peak early-termination ratio.
+     * @param peak_max_depth          Maximum recursion depth for adaptive E' peak.
+     * @param cold_temperature_order  GL order for E/mu when T < COLD_TEMPERATURE_THRESHOLD.
+     * @param tail_order              GL order for E' tail regions (defaults to base_order).
+     * @param far_order               GL order for E' far-from-peak regions (defaults to base_order).
      * @throws std::invalid_argument on invalid parameters.
      */
     MGIntegrationConfig(
@@ -96,6 +98,7 @@ struct MGIntegrationConfig {
         double integration_tolerance = 1e-3,
         double cutoff_ratio = 1e-8,
         int peak_max_depth = 5,
+        int cold_temperature_order = 48,
         std::optional<int> tail_order = std::nullopt,
         std::optional<int> far_order = std::nullopt);
 
@@ -296,6 +299,7 @@ private:
         double peak_tol,
         double inv_denom,
         KernelMultiplier const& multiplier,
+        GaussLegendreRule const& active_rule,
         std::vector<double>& result) const;
 
     std::vector<double> group_boundaries_;
@@ -306,6 +310,8 @@ private:
 
     /// GL rule for E, mu, and E'-peak axes.
     GaussLegendreRule base_rule_;
+    /// GL rule for E/mu axes when T < COLD_TEMPERATURE_THRESHOLD.
+    GaussLegendreRule cold_rule_;
     /// GL rule for E' tail (log/rlog) sub-regions.
     GaussLegendreRule tail_rule_;
     /// GL rule for E' far-from-peak sub-regions.

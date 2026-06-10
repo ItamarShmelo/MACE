@@ -223,6 +223,14 @@ subdivision.
 **Peak tolerance:** `integration_tolerance * 0.1` controls adaptive refinement of
 the E' peak region.  Accuracy of other axes is controlled by increasing `base_order`.
 
+**Cold-temperature regime:** Below 0.005 keV the Compton kernel narrows to
+near-Thomson scattering, requiring more quadrature nodes for convergence.
+When $T <$ `COLD_TEMPERATURE_THRESHOLD` (defined in `compton_common.hpp`),
+the integrator automatically substitutes `cold_temperature_order` (default 48)
+for `base_order` on the E and $\mu$ axes.  The threshold was determined
+empirically: `base_order=24` produces < 0.05% self-convergence error above
+0.002 keV but degrades to ~8% at 0.0001 keV.
+
 Group centers are placed at the geometric mean $\sqrt{E_\text{lo} \cdot E_\text{hi}}$.
 Angle bins partition $[-1, 1]$ into $N$ equal segments of width $2/N$.  The $2\pi$
 azimuthal factor is included so that summing over angle bins recovers the total
@@ -327,6 +335,7 @@ the constructor so that invalid configurations are rejected early.
 | Field | Default | Description |
 |-------|---------|-------------|
 | `base_order` | 24 | GL panel order for E, mu, and E'-peak axes |
+| `cold_temperature_order` | 48 | GL order for E/mu axes when T < 0.005 keV |
 | `peak_max_depth` | 5 | Maximum recursion depth for adaptive E' peak |
 | `tail_order` | `nullopt` → `base_order` | GL order for E' tail (log/rlog) regions |
 | `far_order` | `nullopt` → `base_order` | GL order for E' far-from-peak regions |

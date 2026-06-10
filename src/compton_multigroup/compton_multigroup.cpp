@@ -1,4 +1,5 @@
 #include "compton_multigroup/compton_multigroup.hpp"
+#include "compton_common/compton_common.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -14,9 +15,11 @@ MGIntegrationConfig::MGIntegrationConfig(
     double const integration_tolerance,
     double const cutoff_ratio,
     int const peak_max_depth,
+    int const cold_temperature_order,
     std::optional<int> const tail_order,
     std::optional<int> const far_order)
     : base_order(base_order)
+    , cold_temperature_order(cold_temperature_order)
     , peak_max_depth(peak_max_depth)
     , tail_order(tail_order)
     , far_order(far_order)
@@ -25,6 +28,8 @@ MGIntegrationConfig::MGIntegrationConfig(
 {
     if (base_order < 1)
         throw std::invalid_argument("base_order must be >= 1");
+    if (cold_temperature_order < base_order)
+        throw std::invalid_argument("cold_temperature_order must be >= base_order");
     if (!(integration_tolerance > 0.0))
         throw std::invalid_argument("integration_tolerance must be > 0");
     if (!(cutoff_ratio > 0.0))
@@ -37,8 +42,6 @@ MGIntegrationConfig::MGIntegrationConfig(
         throw std::invalid_argument("far_order must be >= 1");
 }
 
-// ── ComptonMultigroupKernel ─────────────────────────────────────────────
-
 ComptonMultigroupKernel::ComptonMultigroupKernel(
     std::vector<double> const& energy_group_boundaries,
     std::shared_ptr<WeightFunction const> weight_function,
@@ -46,6 +49,7 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
     : group_boundaries_(energy_group_boundaries)
     , weight_func_(std::move(weight_function))
     , base_rule_(compute_gauss_legendre(config.base_order))
+    , cold_rule_(compute_gauss_legendre(config.cold_temperature_order))
     , tail_rule_(compute_gauss_legendre(config.effective_tail_order()))
     , far_rule_(compute_gauss_legendre(config.effective_far_order()))
     , integration_tolerance_(config.integration_tolerance)
@@ -186,6 +190,7 @@ double ComptonMultigroupKernel::compute_group_entry(
     double const peak_tol,
     double const inv_denom,
     KernelMultiplier const& multiplier,
+    GaussLegendreRule const& active_rule,
     std::vector<double>& result) const
 {
     int const G = num_groups();
@@ -232,10 +237,10 @@ double ComptonMultigroupKernel::compute_group_entry(
                             return multiplier(E, Ep, mu, T, Ne) *
                                    (kernel.*eval)(E, Ep, mu, T, Ne).value;
                         },
-                        base_rule_, mu_lo, mu_hi);
+                        active_rule, mu_lo, mu_hi);
                 },
                 Ep_lo, Ep_hi, band_lo, band_hi,
-                base_rule_, peak_tol, peak_max_depth_,
+                active_rule, peak_tol, peak_max_depth_,
                 tail_rule_,
                 far_rule_);
 
@@ -255,14 +260,14 @@ double ComptonMultigroupKernel::compute_group_entry(
             double const w_hi = weight_func_->weight(E_hi, T);
             if (w_lo >= w_hi) {
                 numerator = log_legendre_integrate(
-                    E_integrand, base_rule_, E_lo, E_hi);
+                    E_integrand, active_rule, E_lo, E_hi);
             } else {
                 numerator = rlog_legendre_integrate(
-                    E_integrand, base_rule_, E_lo, E_hi);
+                    E_integrand, active_rule, E_lo, E_hi);
             }
         } else {
             numerator = legendre_integrate(
-                E_integrand, base_rule_, E_lo, E_hi);
+                E_integrand, active_rule, E_lo, E_hi);
         }
 
         // Store the final matrix element:
@@ -345,6 +350,12 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     // (E, mu, tail, far) use single-panel GL quadrature.
     double const peak_tol = integration_tolerance_ * 0.1;
 
+    // --- Cold-temperature rule selection ---
+    // Below the threshold the kernel is extremely sharp (near-Thomson);
+    // a higher-order rule is needed for the E and mu axes.
+    GaussLegendreRule const& active_rule =
+        (T < constants::COLD_TEMPERATURE_THRESHOLD) ? cold_rule_ : base_rule_;
+
     // --- Main loop over incoming groups g ---
     for (int g = 0; g < G; ++g) {
         double const inv_denom = 1.0 / denominators[g];
@@ -353,7 +364,7 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
             return compute_group_entry(
                 kernel, eval, g, gp, num_angle_bins, dmu,
                 T, Ne, peak_tol,
-                inv_denom, multiplier, result);
+                inv_denom, multiplier, active_rule, result);
         };
 
         // --- Outward-from-peak target-group traversal ---
