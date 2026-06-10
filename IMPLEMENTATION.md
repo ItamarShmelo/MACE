@@ -194,36 +194,34 @@ error.
 
 ## Multigroup Integration
 
-### Adaptive Recursive Gauss–Legendre Quadrature
+### Gauss–Legendre Quadrature Strategy
 
 The multigroup cross section
 
 $$\sigma(g \to g') = \frac{2\pi \int_{\Delta E_g} \int_{\Delta E_{g'}} \int_{\mu_i}^{\mu_{i+1}} w(E,T)\,\Sigma_E\, d\mu\, dE'\, dE}{\int_{\Delta E_g} w(E,T)\, dE}$$
 
-is evaluated by **adaptive recursive Gauss–Legendre** quadrature on all three
-finite intervals $(E, E', \mu)$.  Each axis uses the same base GL rule (default
-order 16, configurable via `base_order`) and recursively bisects panels until
-the error estimate drops below a per-axis tolerance.
+is evaluated by Gauss–Legendre quadrature on three finite intervals $(E, E', \mu)$.
+**Only the E' peak region uses adaptive refinement**; all other axes and sub-regions
+use single-panel GL quadrature with appropriate coordinate mappings.
 
-**Error estimation:** For each panel $[a, b]$, compute $I_\text{whole}$ using the
-base rule, then compute $I_\text{halves} = I_\text{left} + I_\text{right}$ by
-splitting at the midpoint.  The error estimate is $|I_\text{halves} - I_\text{whole}|$.
-If this exceeds `tol * |I_halves|`, recurse independently on each half.  A maximum
-recursion depth of 15 prevents runaway subdivision.
+**Rationale:** The Compton kernel has a sharp recoil-band peak in $E'$ that benefits
+from adaptive bisection.  The tails decay smoothly (exponentially away from the
+peak boundary) and are well resolved by the log/rlog change of variable alone.
+The $E$ and $\mu$ integrands, being weighted integrals over the $E'$ axis result,
+are already smooth.  Removing adaptivity from these axes dramatically reduces
+function evaluations, allowing higher base quadrature orders without performance
+penalty.
 
-**Tolerance hierarchy:** Inner integrals use progressively tighter tolerances to
-keep the total error within the user-specified budget:
+**Adaptive error estimation (E' peak only):** For each panel $[a, b]$, compute
+$I_\text{whole}$ using the base rule, then compute
+$I_\text{halves} = I_\text{left} + I_\text{right}$ by splitting at the midpoint.
+The error estimate is $|I_\text{halves} - I_\text{whole}|$.  If this exceeds
+`peak_tol * |I_halves|`, recurse independently on each half.  A maximum recursion
+depth (configurable via `EpQuadratureConfig::peak_max_depth`) prevents runaway
+subdivision.
 
-| Axis | Tolerance |
-|------|-----------|
-| E (outer) | `tol` |
-| E' (middle) | `tol * 0.1` |
-| μ (inner) | `tol * 0.01` |
-
-This ensures inner-axis quadrature noise, when propagated through outer-axis
-summations, stays below the overall target.  The default `tol = 1e-3` was chosen
-as a practical balance between accuracy and speed for the full 3-axis adaptive
-approach.
+**Peak tolerance:** `tol * 0.1 * peak_tol_factor` controls adaptive refinement of
+the E' peak region.  Accuracy of other axes is controlled by increasing `base_order`.
 
 Group centers are placed at the geometric mean $\sqrt{E_\text{lo} \cdot E_\text{hi}}$.
 Angle bins partition $[-1, 1]$ into $N$ equal segments of width $2/N$.  The $2\pi$
@@ -279,21 +277,24 @@ $$a = \frac{E}{1 + \gamma(1 - \mu_\text{lo})}, \quad
 where $\gamma = E / m_e c^2$.  Inside this band there exists a scattering angle
 for which a cold (rest-frame) electron can produce the observed $E'$; outside,
 the kernel is exponentially suppressed by the Boltzmann factor
-$\sim\exp(-(\lambda_\min - 1)/\tau)$.  This kinematic band depends only on $E$
+$\sim\exp(-(\lambda_\mathrm{min} - 1)/\tau)$.  This kinematic band depends only on $E$
 and the $\mu$-bin endpoints, not on temperature.
 
 #### Direction-Aware Log-Space Integrators
 
-Two log-space GL quadrature variants handle the exponentially decaying tails:
+Two single-panel log-space GL quadrature variants handle the exponentially
+decaying tails:
 
-- **`adaptive_log_legendre_integrate`** (right tail): substitution $u = \log(x)$
+- **`log_legendre_integrate`** (right tail): substitution $u = \log(x)$
   clusters nodes near the lower end $a$ (the peak boundary).
-- **`adaptive_rlog_legendre_integrate`** (left tail): reflected substitution
+- **`rlog_legendre_integrate`** (left tail): reflected substitution
   $u = \log(a + b - x)$ applied to $y = a + b - x$ clusters nodes near the
   upper end $b$ (the peak boundary).
 
 Both accept the integrand in the original $E'$ space and handle the change of
-variable internally.
+variable internally.  The log-space mapping alone concentrates quadrature nodes
+where the exponentially decaying integrand is largest, making adaptive refinement
+unnecessary for these smooth tails.
 
 #### `integrate_Ep_group` Splitting Logic
 
@@ -306,11 +307,11 @@ overlap_hi = clamp(b, Ep_lo, Ep_hi)
 ```
 
 - If `overlap_lo >= overlap_hi`: the group is **far** (no overlap with peak).
-  Uses standard adaptive GL with loose tolerance, low order, shallow depth.
+  Uses single-panel linear GL with the far rule (lower order).
 - Otherwise the group is split into up to three sub-intervals:
-  - `[Ep_lo, overlap_lo]` **left tail**: reflected-log GL (nodes near peak boundary).
-  - `[overlap_lo, overlap_hi]` **peak**: standard adaptive GL with tight tolerance.
-  - `[overlap_hi, Ep_hi]` **right tail**: log GL (nodes near peak boundary).
+  - `[Ep_lo, overlap_lo]` **left tail**: single-panel reflected-log GL (nodes near peak boundary).
+  - `[overlap_lo, overlap_hi]` **peak**: adaptive GL with tight tolerance.
+  - `[overlap_hi, Ep_hi]` **right tail**: single-panel log GL (nodes near peak boundary).
 
 The peak can span any number of groups: one group (both boundaries inside),
 two groups (boundary in each), or three+ groups (interior groups entirely within
@@ -318,23 +319,24 @@ the peak).  All cases are handled uniformly by the clamp logic.
 
 #### `EpQuadratureConfig`
 
-The `EpQuadratureConfig` struct controls per-region GL order, tolerance factor,
-and maximum recursion depth.  Default settings are conservative to avoid
-degrading accuracy while the recoil band validation confirms coverage:
+The `EpQuadratureConfig` struct controls per-region GL order and peak adaptive
+refinement.  Only the peak region uses adaptive quadrature; tails and far use
+single-panel GL with their respective coordinate mappings:
 
-| Region | Order | Tolerance | Max depth |
-|--------|-------|-----------|-----------|
-| Peak   | `base_order` | `tol_Ep * 1.0` | 15 |
-| Tail   | `base_order` | `tol_Ep * 1.0` | 3 |
-| Far    | `base_order/2` (min 4) | `tol_Ep * 10` | 1 |
+| Region | Order | Quadrature | Adaptive |
+|--------|-------|------------|----------|
+| Peak   | `base_order` | linear GL | Yes (configurable depth) |
+| Tail   | `base_order` | log/rlog GL | No |
+| Far    | `base_order/2` (min 4) | linear GL | No |
 
 The tail integrand is smooth (exponentially decaying away from the peak
 boundary), so the log-space change of variable already concentrates nodes
-where the integrand is largest; 3 levels of adaptive refinement suffice.
-The far region carries negligible mass and needs no adaptive subdivision at
-all -- a single GL panel is enough.
+where the integrand is largest; no adaptive refinement is needed.
+The far region carries negligible mass and needs only a single low-order
+GL panel.
 
-These can be tuned via the `EpQuadratureConfig` constructor overload.
+Configurable fields: `peak_base_order`, `peak_tol_factor`, `peak_max_depth`,
+`tail_base_order`, `far_base_order`.
 
 
 ### Outward-from-Peak Group Cutoff

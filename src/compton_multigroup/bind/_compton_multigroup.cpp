@@ -78,11 +78,7 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .def_readwrite("peak_tol_factor",  &EpQuadratureConfig::peak_tol_factor)
         .def_readwrite("peak_max_depth",   &EpQuadratureConfig::peak_max_depth)
         .def_readwrite("tail_base_order",  &EpQuadratureConfig::tail_base_order)
-        .def_readwrite("tail_tol_factor",  &EpQuadratureConfig::tail_tol_factor)
-        .def_readwrite("tail_max_depth",   &EpQuadratureConfig::tail_max_depth)
-        .def_readwrite("far_base_order",   &EpQuadratureConfig::far_base_order)
-        .def_readwrite("far_tol_factor",   &EpQuadratureConfig::far_tol_factor)
-        .def_readwrite("far_max_depth",    &EpQuadratureConfig::far_max_depth);
+        .def_readwrite("far_base_order",   &EpQuadratureConfig::far_base_order);
 
     py::class_<ComptonMultigroupKernel>(m, "ComptonMultigroupKernel")
         .def(py::init<std::vector<double> const&,
@@ -99,14 +95,6 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .def_property("group_cutoff_ratio",
             &ComptonMultigroupKernel::group_cutoff_ratio,
             &ComptonMultigroupKernel::set_group_cutoff_ratio)
-
-        .def_property("max_depth_E",
-            &ComptonMultigroupKernel::max_depth_E,
-            &ComptonMultigroupKernel::set_max_depth_E)
-
-        .def_property("max_depth_mu",
-            &ComptonMultigroupKernel::max_depth_mu,
-            &ComptonMultigroupKernel::set_max_depth_mu)
 
         .def_property("log_E_ratio_threshold",
             &ComptonMultigroupKernel::log_E_ratio_threshold,

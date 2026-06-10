@@ -23,11 +23,7 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
     , peak_tol_factor_(ep.peak_tol_factor)
     , peak_max_depth_(ep.peak_max_depth)
     , tail_rule_(compute_gauss_legendre(ep.tail_base_order > 0 ? ep.tail_base_order : base_order))
-    , tail_tol_factor_(ep.tail_tol_factor)
-    , tail_max_depth_(ep.tail_max_depth)
     , far_rule_(compute_gauss_legendre(ep.far_base_order > 0 ? ep.far_base_order : std::max(base_order / 2, 4)))
-    , far_tol_factor_(ep.far_tol_factor)
-    , far_max_depth_(ep.far_max_depth)
 {
     if (energy_group_boundaries.size() < 2)
         throw std::invalid_argument("need at least 2 boundaries (1 group)");
@@ -76,11 +72,9 @@ double integrate_Ep_left_tail(
     F&& f,
     GaussLegendreRule const& rule,
     double const Ep_lo,
-    double const Ep_hi,
-    double const tol,
-    int const max_depth)
+    double const Ep_hi)
 {
-    return adaptive_rlog_legendre_integrate(f, rule, Ep_lo, Ep_hi, tol, max_depth);
+    return rlog_legendre_integrate(f, rule, Ep_lo, Ep_hi);
 }
 
 template<typename F>
@@ -88,11 +82,9 @@ double integrate_Ep_right_tail(
     F&& f,
     GaussLegendreRule const& rule,
     double const Ep_lo,
-    double const Ep_hi,
-    double const tol,
-    int const max_depth)
+    double const Ep_hi)
 {
-    return adaptive_log_legendre_integrate(f, rule, Ep_lo, Ep_hi, tol, max_depth);
+    return log_legendre_integrate(f, rule, Ep_lo, Ep_hi);
 }
 
 template<typename F>
@@ -106,28 +98,24 @@ double integrate_Ep_group(
     double const peak_tol,
     int const peak_depth,
     GaussLegendreRule const& tail_rule,
-    double const tail_tol,
-    int const tail_depth,
-    GaussLegendreRule const& far_rule,
-    double const far_tol,
-    int const far_depth)
+    GaussLegendreRule const& far_rule)
 {
     double const overlap_lo = std::clamp(peak_lo, Ep_lo, Ep_hi);
     double const overlap_hi = std::clamp(peak_hi, Ep_lo, Ep_hi);
 
     if (overlap_lo >= overlap_hi) {
-        return adaptive_legendre_integrate(f, far_rule, Ep_lo, Ep_hi, far_tol, far_depth);
+        return legendre_integrate(f, far_rule, Ep_lo, Ep_hi);
     }
 
     double result = 0.0;
 
     if (overlap_lo > Ep_lo)
-        result += integrate_Ep_left_tail(f, tail_rule, Ep_lo, overlap_lo, tail_tol, tail_depth);
+        result += integrate_Ep_left_tail(f, tail_rule, Ep_lo, overlap_lo);
 
     result += integrate_Ep_peak(f, peak_rule, overlap_lo, overlap_hi, peak_tol, peak_depth);
 
     if (overlap_hi < Ep_hi)
-        result += integrate_Ep_right_tail(f, tail_rule, overlap_hi, Ep_hi, tail_tol, tail_depth);
+        result += integrate_Ep_right_tail(f, tail_rule, overlap_hi, Ep_hi);
 
     return result;
 }
@@ -141,19 +129,20 @@ double integrate_Ep_group(
 //
 // The integral is three-dimensional (E × E' × μ) and evaluated inside-out:
 //
-//   1. Innermost: μ integral via adaptive Gauss-Legendre over one angle bin.
+//   1. Innermost: μ integral via single-panel Gauss-Legendre over one angle bin.
 //   2. Middle:    E' integral via peak-aware three-region quadrature.
 //                 The cold-electron recoil band (thermally broadened by
 //                 peak_limits) splits E' into a peak region where the kernel
 //                 is strongest, exponentially suppressed tail regions on
-//                 either side, and far regions beyond.  Each region uses its
-//                 own GL rule, tolerance, and recursion depth.
+//                 either side, and far regions beyond.  Only the peak uses
+//                 adaptive refinement; tails use single-panel log/rlog GL
+//                 and far uses single-panel linear GL.
 //   3. Outermost: E integral over the incoming group [E_lo, E_hi].
-//                 The mapping (linear / log / reflected-log) is chosen per
-//                 angle bin based on the weight-function contrast: when
-//                 w(E_lo)/w(E_hi) or E_hi/E_lo exceeds log_E_ratio_threshold_,
-//                 a logarithmic change of variable clusters quadrature nodes
-//                 near the heavy-weight boundary to resolve steep integrands.
+//                 Single-panel GL with mapping (linear / log / reflected-log)
+//                 chosen per angle bin based on the weight-function contrast:
+//                 when E_hi/E_lo exceeds log_E_ratio_threshold_, 
+//                 a logarithmic change of variable clusters quadrature nodes near
+//                 the heavy-weight boundary.
 //
 // The final matrix element is:
 //
@@ -172,11 +161,7 @@ double ComptonMultigroupKernel::compute_group_entry(
     double const dmu,
     double const T,
     double const Ne,
-    double const tol_E,
-    double const tol_mu,
     double const peak_tol,
-    double const tail_tol,
-    double const far_tol,
     double const inv_denom,
     KernelMultiplier const& multiplier,
     std::vector<double>& result) const
@@ -212,26 +197,25 @@ double ComptonMultigroupKernel::compute_group_entry(
             // --- E' integral (middle axis) ---
             // integrate_Ep_group splits [Ep_lo, Ep_hi] into three regions
             // relative to [band_lo, band_hi]:
-            //   peak: [max(Ep_lo, band_lo), min(Ep_hi, band_hi)]
-            //   tail: transition zones adjacent to the peak
-            //   far:  remainder, where the kernel is negligible
-            // Each region gets its own GL rule, tolerance, and max depth.
+            //   peak: adaptive GL
+            //   tail: single-panel log/rlog GL
+            //   far:  single-panel linear GL
             double const inner = integrate_Ep_group(
                 [&](double const Ep) {
                     // --- μ integral (innermost axis) ---
-                    // Adaptive GL quadrature of f(E,E',μ)·Σ_E(E,E',μ,T,Ne)
+                    // Single-panel GL of f(E,E',μ)·Σ_E(E,E',μ,T,Ne)
                     // over the angle bin [mu_lo, mu_hi].
-                    return adaptive_legendre_integrate(
+                    return legendre_integrate(
                         [&](double const mu) {
                             return multiplier(E, Ep, mu, T, Ne) *
                                    (kernel.*eval)(E, Ep, mu, T, Ne).value;
                         },
-                        base_rule_, mu_lo, mu_hi, tol_mu, max_depth_mu_);
+                        base_rule_, mu_lo, mu_hi);
                 },
                 Ep_lo, Ep_hi, band_lo, band_hi,
                 peak_rule_, peak_tol, peak_max_depth_,
-                tail_rule_, tail_tol, tail_max_depth_,
-                far_rule_,  far_tol,  far_max_depth_);
+                tail_rule_,
+                far_rule_);
 
             return w * inner;
         };
@@ -248,18 +232,15 @@ double ComptonMultigroupKernel::compute_group_entry(
             double const w_lo = weight_func_->weight(E_lo, T);
             double const w_hi = weight_func_->weight(E_hi, T);
             if (w_lo >= w_hi) {
-                numerator = adaptive_log_legendre_integrate(
-                    E_integrand, base_rule_, E_lo, E_hi,
-                    tol_E, max_depth_E_);
+                numerator = log_legendre_integrate(
+                    E_integrand, base_rule_, E_lo, E_hi);
             } else {
-                numerator = adaptive_rlog_legendre_integrate(
-                    E_integrand, base_rule_, E_lo, E_hi,
-                    tol_E, max_depth_E_);
+                numerator = rlog_legendre_integrate(
+                    E_integrand, base_rule_, E_lo, E_hi);
             }
         } else {
-            numerator = adaptive_legendre_integrate(
-                E_integrand, base_rule_, E_lo, E_hi,
-                tol_E, max_depth_E_);
+            numerator = legendre_integrate(
+                E_integrand, base_rule_, E_lo, E_hi);
         }
 
         // Store the final matrix element:
@@ -301,10 +282,10 @@ double ComptonMultigroupKernel::compute_group_entry(
 //
 //   3. Each (g, gp) pair is delegated to compute_group_entry().
 //
-// The tolerance hierarchy is:
-//   tol_E  = tol_           (outermost, loosest)
-//   tol_E' = tol_ * 0.1 * {peak,tail,far}_tol_factor_
-//   tol_mu = tol_ * 0.01   (innermost, tightest)
+// Adaptive refinement is used only for the E' peak region:
+//   peak_tol = tol_ * 0.1 * peak_tol_factor_
+// All other axes (E, mu, tail, far) use single-panel GL quadrature
+// whose accuracy is controlled by increasing base_order.
 
 template<typename KernelT>
 std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
@@ -337,28 +318,19 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
             group_boundaries_[g], group_boundaries_[g + 1], T);
     }
 
-    // --- Tolerance hierarchy ---
-    // Inner axes use progressively tighter tolerances so that quadrature
-    // errors do not accumulate across the three nested integrals.
-    double const tol_E  = tol_;               // outermost (E)
-    double const tol_Ep_base = tol_ * 0.1;    // middle    (E')
-    double const tol_mu = tol_ * 0.01;        // innermost (μ)
-
-    // E' tolerances are further split by region (peak / tail / far).
-    double const peak_tol = tol_Ep_base * peak_tol_factor_;
-    double const tail_tol = tol_Ep_base * tail_tol_factor_;
-    double const far_tol  = tol_Ep_base * far_tol_factor_;
+    // --- Peak tolerance ---
+    // Only the E' peak region uses adaptive refinement; all other axes
+    // (E, mu, tail, far) use single-panel GL quadrature.
+    double const peak_tol = tol_ * 0.1 * peak_tol_factor_;
 
     // --- Main loop over incoming groups g ---
     for (int g = 0; g < G; ++g) {
         double const inv_denom = 1.0 / denominators[g];
 
-        // Thin forwarding lambda: captures the per-g state and delegates
-        // the full 3D integration for a single (g, gp) to compute_group_entry.
         auto do_group = [&](int const gp) {
             return compute_group_entry(
                 kernel, eval, g, gp, num_angle_bins, dmu,
-                T, Ne, tol_E, tol_mu, peak_tol, tail_tol, far_tol,
+                T, Ne, peak_tol,
                 inv_denom, multiplier, result);
         };
 

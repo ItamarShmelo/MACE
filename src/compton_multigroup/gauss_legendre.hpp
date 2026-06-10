@@ -132,6 +132,66 @@ inline double legendre_integrate(F&& integrand,
 }
 
 /**
+ * @brief Integrate f over [a, b] in log-space (clusters nodes near lower end).
+ *
+ * Performs the change of variable u = log(x):
+ *     integral_a^b f(x) dx = integral_{log(a)}^{log(b)} f(exp(u)) * exp(u) du
+ *
+ * Single-panel (non-adaptive) version.  Concentrates quadrature nodes near
+ * `a`, suitable for right-tail intervals where the integrand decays away
+ * from the lower (peak-side) boundary.
+ *
+ * @param integrand   Callable f(x) -> double, in the original x space.
+ * @param rule        Precomputed GL rule.
+ * @param a           Lower integration limit (must be > 0).
+ * @param b           Upper integration limit (must be > a).
+ * @return            Approximate value of integral_a^b f(x) dx.
+ */
+template<typename F>
+inline double log_legendre_integrate(F&& integrand,
+                                     GaussLegendreRule const& rule,
+                                     double const a,
+                                     double const b) {
+    double const log_a = std::log(a);
+    double const log_b = std::log(b);
+    return legendre_integrate(
+        [&](double const u) {
+            double const x = std::exp(u);
+            return integrand(x) * x;
+        }, rule, log_a, log_b);
+}
+
+/**
+ * @brief Integrate f over [a, b] with reflected-log mapping (clusters nodes
+ *        near upper end).
+ *
+ * Substitutes x = a + b - exp(v) with v running from log(a) to log(b).
+ * Single-panel (non-adaptive) version.  Concentrates quadrature nodes near
+ * `b`, suitable for left-tail intervals where the integrand decays away
+ * from the upper (peak-side) boundary.
+ *
+ * @param integrand   Callable f(x) -> double, in the original x space.
+ * @param rule        Precomputed GL rule.
+ * @param a           Lower integration limit (must be > 0).
+ * @param b           Upper integration limit (must be > a).
+ * @return            Approximate value of integral_a^b f(x) dx.
+ */
+template<typename F>
+inline double rlog_legendre_integrate(F&& integrand,
+                                      GaussLegendreRule const& rule,
+                                      double const a,
+                                      double const b) {
+    double const sum_ab = a + b;
+    double const log_a = std::log(a);
+    double const log_b = std::log(b);
+    return legendre_integrate(
+        [&](double const u) {
+            double const y = std::exp(u);
+            return integrand(sum_ab - y) * y;
+        }, rule, log_a, log_b);
+}
+
+/**
  * @brief Adaptive Gauss-Legendre integration via recursive bisection.
  *
  * Estimates the integral over [a, b] by comparing the single-panel GL

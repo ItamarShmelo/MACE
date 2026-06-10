@@ -66,10 +66,9 @@ namespace compton {
 /**
  * @brief Configuration for the peak-aware E' quadrature scheme.
  *
- * Controls the GL order, tolerance factor, and recursion depth for each
- * of the three E' sub-regions (peak, tail, far).  Tolerance factors are
- * multiplied by the base E' tolerance (tol * 0.1) to get the per-region
- * tolerance.
+ * Controls the GL order for each of the three E' sub-regions (peak, tail,
+ * far).  Only the peak region uses adaptive refinement; tails use single-panel
+ * log/rlog GL and the far region uses single-panel linear GL.
  */
 struct EpQuadratureConfig {
     int peak_base_order   = 0;
@@ -77,12 +76,8 @@ struct EpQuadratureConfig {
     int peak_max_depth    = 5;
 
     int tail_base_order   = 0;
-    double tail_tol_factor = 1.0;
-    int tail_max_depth    = 1;
 
     int far_base_order    = 0;
-    double far_tol_factor  = 10.0;
-    int far_max_depth     = 1;
 };
 
 /**
@@ -149,18 +144,6 @@ public:
 
     /** @brief Energy group boundaries [erg], length G+1. */
     std::vector<double> const& group_boundaries() const { return group_boundaries_; }
-
-    /** @brief Set the maximum adaptive recursion depth for the outer E integral. */
-    void set_max_depth_E(int depth) { max_depth_E_ = depth; }
-
-    /** @brief Current max recursion depth for the E axis (default 10). */
-    int max_depth_E() const { return max_depth_E_; }
-
-    /** @brief Set the maximum adaptive recursion depth for the inner mu integral. */
-    void set_max_depth_mu(int depth) { max_depth_mu_ = depth; }
-
-    /** @brief Current max recursion depth for the mu axis (default 10). */
-    int max_depth_mu() const { return max_depth_mu_; }
 
     /**
      * @brief Set the group cutoff ratio for outward-from-peak early termination.
@@ -310,11 +293,7 @@ private:
      * @param dmu            Bin width: 2 / num_angle_bins.
      * @param T              Electron temperature [K].
      * @param Ne             Electron density [cm⁻³].
-     * @param tol_E          Relative tolerance for the outer E integral.
-     * @param tol_mu         Relative tolerance for the inner μ integral.
-     * @param peak_tol       Tolerance for E' integration inside the recoil band.
-     * @param tail_tol       Tolerance for E' integration in the tail regions.
-     * @param far_tol        Tolerance for E' integration far from the band.
+     * @param peak_tol       Tolerance for adaptive E' integration inside the recoil band.
      * @param inv_denom      1 / D(g), precomputed weight-function denominator.
      * @param multiplier     Pointwise factor f(E, E', μ, T, Ne).
      * @param[in,out] result Flat output vector; entries at the (g, gp, a)
@@ -330,11 +309,7 @@ private:
         double dmu,
         double T,
         double Ne,
-        double tol_E,
-        double tol_mu,
         double peak_tol,
-        double tail_tol,
-        double far_tol,
         double inv_denom,
         KernelMultiplier const& multiplier,
         std::vector<double>& result) const;
@@ -351,16 +326,10 @@ private:
     int peak_max_depth_;
 
     GaussLegendreRule tail_rule_;
-    double tail_tol_factor_;
-    int tail_max_depth_;
 
     GaussLegendreRule far_rule_;
-    double far_tol_factor_;
-    int far_max_depth_;
 
     double group_cutoff_ratio_ = 1e-8;
-    int max_depth_E_ = 10;
-    int max_depth_mu_ = 10;
     double log_E_ratio_threshold_ = 10.0;
 };
 
