@@ -1,4 +1,4 @@
-#include "compton_power_series.hpp"
+#include "compton_differential_cross_section/compton_kernel_power_series/compton_kernel_power_series.hpp"
 #include "compton_common/compton_common.hpp"
 
 #include <algorithm>
@@ -7,6 +7,10 @@
 #include <stdexcept>
 
 namespace compton {
+
+namespace constants {
+constexpr double POISSON_Y_MAX = 500.0;
+} // namespace constants
 
 ComptonPowerSeries::ComptonPowerSeries(
     bool const high_precision,

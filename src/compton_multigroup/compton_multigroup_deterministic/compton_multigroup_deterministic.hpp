@@ -1,5 +1,5 @@
-#ifndef COMPTON_MULTIGROUP_HPP
-#define COMPTON_MULTIGROUP_HPP
+#ifndef COMPTON_MULTIGROUP_DETERMINISTIC_HPP
+#define COMPTON_MULTIGROUP_DETERMINISTIC_HPP
 /**
  * @file compton_multigroup.hpp
  * @brief Planck-weighted multigroup-multiangle Compton scattering matrix.
@@ -51,18 +51,27 @@
  *   polylogarithm-based methods," JCP 70(2):311–329, 1987.
  */
 
-#include "compton_multigroup/gauss_legendre.hpp"
+#include "utilities/gauss_legendre.hpp"
+#include "utilities/units.hpp"
 #include "compton_multigroup/weight_function.hpp"
-#include "compton_kernel_quadrature/compton_kernel_quadrature.hpp"
-#include "compton_kernel_solver/compton_kernel_solver.hpp"
+#include "compton_differential_cross_section/compton_kernel_quadrature/compton_kernel_quadrature.hpp"
+#include "compton_differential_cross_section/compton_kernel_solver/compton_kernel_solver.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
-#include <optional>
-#include <vector>
 #include <numbers>
+#include <optional>
+#include <utility>
+#include <vector>
 
 namespace compton {
+
+namespace constants {
+/// Temperature [K] below which the multigroup integrator switches to
+/// cold_temperature_order for the E and mu axes (0.005 keV).
+constexpr double COLD_TEMPERATURE_THRESHOLD = 0.005 * units::kev_kelvin;
+} // namespace constants
 
 /**
  * @brief Consolidated configuration for multigroup integration.
@@ -314,6 +323,41 @@ private:
     int peak_max_depth_;
     double group_cutoff_ratio_;
 };
+
+/**
+ * @brief E' limits for peak-aware quadrature in an angle bin [mu_lo, mu_hi].
+ *
+ * Starts from the cold-electron recoil band:
+ *
+ *     E'(mu) = E / (1 + gamma * (1 - mu)),    gamma = E / (m_e c^2)
+ *
+ * and extends each edge by the thermal Doppler width
+ *
+ *     dE = E * sqrt(2 k_B T / m_e c^2)
+ *
+ * so that the peak-aware E' quadrature captures the kernel peak even when
+ * E sits right at a group boundary.
+ *
+ * @param E     Incoming photon energy [erg].
+ * @param mu_lo Lower edge of the mu bin.
+ * @param mu_hi Upper edge of the mu bin.
+ * @param T     Electron temperature [K].
+ * @return      {lo, hi} in [erg], thermally broadened.
+ */
+inline std::pair<double, double> peak_limits(
+    double const E,
+    double const mu_lo,
+    double const mu_hi,
+    double const T)
+{
+    double const gamma = E / units::me_c2;
+    double const tau = T * units::k_boltz / units::me_c2;
+    double thermal_dE = E * std::sqrt(2.0 * tau);
+    if (T < constants::COLD_TEMPERATURE_THRESHOLD)
+        thermal_dE *= 5.0;
+    return {E / (1.0 + gamma * (1.0 - mu_lo)) - thermal_dE,
+            E / (1.0 + gamma * (1.0 - mu_hi)) + thermal_dE};
+}
 
 } // namespace compton
 

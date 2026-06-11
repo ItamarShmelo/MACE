@@ -18,7 +18,7 @@ import pytest
 sys.path.insert(0, "cpp_modules")
 
 import _compton_multigroup as cm
-from _compton_kernel_solver import ComptonKernelSolver
+from _compton_differential_cross_section import ComptonKernelSolver
 from _units import kev, kev_kelvin, k_boltz
 
 

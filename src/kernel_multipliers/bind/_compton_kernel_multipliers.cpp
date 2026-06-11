@@ -1,7 +1,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include "compton_multigroup/compton_multigroup.hpp"
+#include "compton_multigroup/compton_multigroup_deterministic/compton_multigroup_deterministic.hpp"
 
 #include <algorithm>
 #include <stdexcept>
@@ -37,7 +37,7 @@ private:
     std::vector<double> centers_;
 };
 
-PYBIND11_MODULE(_compton_multigroup_misc, m) {
+PYBIND11_MODULE(_compton_kernel_multipliers, m) {
     m.doc() = "Concrete kernel multipliers for multigroup Compton integrals";
 
     py::module_::import("_compton_multigroup");

@@ -20,11 +20,17 @@
  * All dispatch thresholds are configurable at construction time.
  */
 
-#include "compton_power_series/compton_power_series.hpp"
-#include "compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.hpp"
-#include "compton_kernel_quadrature/compton_kernel_quadrature.hpp"
+#include "compton_differential_cross_section/compton_kernel_power_series/compton_kernel_power_series.hpp"
+#include "compton_differential_cross_section/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.hpp"
+#include "compton_differential_cross_section/compton_kernel_quadrature/compton_kernel_quadrature.hpp"
 
 namespace compton {
+
+namespace constants {
+constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.025;
+constexpr double GAMMA_DOUBLE_PRECISION_SAFE = 0.02;
+constexpr double ASYMP_GAMMA_DD_THRESHOLD = 0.002;
+} // namespace constants
 
 class ComptonKernelSolver {
 public:
@@ -40,10 +46,10 @@ public:
      *        Set to 0 to disable DD in the asymptotic path.
      */
     ComptonKernelSolver(
-        double asymp_tau_alpha_threshold   = 0.025,
-        double gamma_double_precision_safe = 0.02,
+        double asymp_tau_alpha_threshold   = constants::ASYMP_TAU_ALPHA_THRESHOLD,
+        double gamma_double_precision_safe = constants::GAMMA_DOUBLE_PRECISION_SAFE,
         double quadrature_self_tol         = 1e-6,
-        double asymp_gamma_dd_threshold    = 0.002);
+        double asymp_gamma_dd_threshold    = constants::ASYMP_GAMMA_DD_THRESHOLD);
 
     ComptonResult sigma_E(
         double E,

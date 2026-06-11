@@ -1,6 +1,6 @@
 #include "compton_multigroup/weight_function.hpp"
 #include "planck_integral.hpp"
-#include "units/units.hpp"
+#include "utilities/units.hpp"
 
 #include <cmath>
 #include <numbers>

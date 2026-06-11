@@ -18,8 +18,8 @@
 #include <stdexcept>
 #include <utility>
 
-#include "doubledouble.h"
-#include "units/units.hpp"
+#include <doubledouble.h>
+#include "utilities/units.hpp"
 
 namespace compton {
 
@@ -310,35 +310,6 @@ namespace constants {
 /// Floor added to relative-error denominators to avoid division by zero.
 constexpr double REL_ERROR_TINY_SCALE = 1e-300;
 
-/// Guard to keep xi away from the direct-quadrature endpoint singularity.
-constexpr double XI_DIRECT_QUADRATURE_GUARD = 1e-14;
-
-constexpr double POISSON_Y_MAX = 500.0;
-
-/// Minimum dimensionless photon energy (gamma = E / m_e c^2) at which the
-/// double-precision power series agrees with the DD power series to better
-/// than 1e-6.  Empirically validated: worst-case relative error at gamma =
-/// 0.02 (~10 keV) is 3.15e-7 across all tested (E'/E, xi, T) combinations.
-constexpr double GAMMA_DOUBLE_PRECISION_SAFE = 0.02;
-
-/// E_hi/E_lo ratio above which the outer E integral switches from
-/// linear to log/rlog mapping (resolves peaked integrands on wide groups).
-static constexpr double LOG_E_RATIO_THRESHOLD = 10.0;
-
-/// Dispatch threshold for asymptotic vs power series: use asymptotic series
-/// when tau * max(alpha_plus, alpha_minus) is below this value.
-constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.025;
-
-/// Within the asymptotic regime, use DD arithmetic when min(gamma, gamma')
-/// falls below this value.  Empirically validated: worst-case double-vs-DD
-/// relative error is ~7e-7 at gamma = 1e-3 and ~1e-9 at gamma = 1e-2
-/// across all tested cold temperatures (0.01--5 keV).
-constexpr double ASYMP_GAMMA_DD_THRESHOLD = 0.002;
-
-/// Temperature [K] below which the multigroup integrator switches to
-/// cold_temperature_order for the E and mu axes (0.005 keV).
-constexpr double COLD_TEMPERATURE_THRESHOLD = 0.005 * units::kev_kelvin;
-
 } // namespace constants
 
 /**
@@ -483,41 +454,6 @@ inline void assert_parameters(
         throw std::invalid_argument("Ne must be finite");
     if (1.0 - xi < 1e-14)
         throw std::invalid_argument("xi too close to 1");
-}
-
-/**
- * @brief E' limits for peak-aware quadrature in an angle bin [mu_lo, mu_hi].
- *
- * Starts from the cold-electron recoil band:
- *
- *     E'(mu) = E / (1 + gamma * (1 - mu)),    gamma = E / (m_e c^2)
- *
- * and extends each edge by the thermal Doppler width
- *
- *     dE = E * sqrt(2 k_B T / m_e c^2)
- *
- * so that the peak-aware E' quadrature captures the kernel peak even when
- * E sits right at a group boundary.
- *
- * @param E     Incoming photon energy [erg].
- * @param mu_lo Lower edge of the mu bin.
- * @param mu_hi Upper edge of the mu bin.
- * @param T     Electron temperature [K].
- * @return      {lo, hi} in [erg], thermally broadened.
- */
-inline std::pair<double, double> peak_limits(
-    double const E,
-    double const mu_lo,
-    double const mu_hi,
-    double const T)
-{
-    double const gamma = E / units::me_c2;
-    double const tau = T * units::k_boltz / units::me_c2;
-    double thermal_dE = E * std::sqrt(2.0 * tau);
-    if (T < constants::COLD_TEMPERATURE_THRESHOLD)
-        thermal_dE *= 5.0;
-    return {E / (1.0 + gamma * (1.0 - mu_lo)) - thermal_dE,
-            E / (1.0 + gamma * (1.0 - mu_hi)) + thermal_dE};
 }
 
 } // namespace compton

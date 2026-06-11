@@ -18,10 +18,10 @@ import pytest
 
 sys.path.insert(0, "cpp_modules")
 
-import _compton_kernel_quadrature as cq
-from _compton_power_series import ComptonPowerSeries
-from _compton_kernel_asymptotic_series import ComptonKernelAsymptoticSeries
-from _compton_kernel_solver import ComptonKernelSolver
+import _compton_differential_cross_section as cq
+from _compton_differential_cross_section import ComptonPowerSeries
+from _compton_differential_cross_section import ComptonKernelAsymptoticSeries
+from _compton_differential_cross_section import ComptonKernelSolver
 from _units import kev, kev_kelvin
 
 TEST_POINTS = [

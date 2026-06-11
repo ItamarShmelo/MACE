@@ -1,5 +1,5 @@
-#ifndef COMPTON_POWER_SERIES_HPP
-#define COMPTON_POWER_SERIES_HPP
+#ifndef COMPTON_KERNEL_POWER_SERIES_HPP
+#define COMPTON_KERNEL_POWER_SERIES_HPP
 /**
  * @file compton_power_series.hpp
  * @brief Kershaw-Prasad-Beason thermal Compton frequency kernel via

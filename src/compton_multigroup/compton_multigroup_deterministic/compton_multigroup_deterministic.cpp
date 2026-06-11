@@ -1,4 +1,4 @@
-#include "compton_multigroup/compton_multigroup.hpp"
+#include "compton_multigroup/compton_multigroup_deterministic/compton_multigroup_deterministic.hpp"
 #include "compton_common/compton_common.hpp"
 
 #include <algorithm>
@@ -7,6 +7,10 @@
 #include <stdexcept>
 
 namespace compton {
+
+namespace constants {
+static constexpr double LOG_E_RATIO_THRESHOLD = 10.0;
+} // namespace constants
 
 // ── MGIntegrationConfig ─────────────────────────────────────────────────
 

@@ -14,7 +14,7 @@ from scipy.special import exp1
 
 sys.path.insert(0, "cpp_modules")
 
-import _compton_kernel_quadrature as cq
+import _compton_differential_cross_section as cq
 import _compton_multigroup as cm
 
 

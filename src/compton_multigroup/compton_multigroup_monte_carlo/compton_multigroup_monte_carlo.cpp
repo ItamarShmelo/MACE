@@ -1,6 +1,6 @@
-#include "compton_monte_carlo/compton_monte_carlo.hpp"
+#include "compton_multigroup/compton_multigroup_monte_carlo/compton_multigroup_monte_carlo.hpp"
 #include "compton_common/compton_common.hpp"
-#include "units/units.hpp"
+#include "utilities/units.hpp"
 
 #include <algorithm>
 #include <cmath>

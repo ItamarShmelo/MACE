@@ -1,5 +1,5 @@
-#ifndef COMPTON_MONTE_CARLO_HPP
-#define COMPTON_MONTE_CARLO_HPP
+#ifndef COMPTON_MULTIGROUP_MONTE_CARLO_HPP
+#define COMPTON_MULTIGROUP_MONTE_CARLO_HPP
 /**
  * @file compton_monte_carlo.hpp
  * @brief Monte Carlo multigroup-multiangle Compton scattering matrix.
@@ -34,7 +34,7 @@
  *   [−1,1].
  */
 
-#include "compton_multigroup/compton_multigroup.hpp"
+#include "compton_multigroup/compton_multigroup_deterministic/compton_multigroup_deterministic.hpp"
 #include "compton_multigroup/weight_function.hpp"
 
 #include <boost/random.hpp>

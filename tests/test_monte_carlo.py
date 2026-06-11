@@ -17,7 +17,7 @@ import pytest
 
 sys.path.insert(0, "cpp_modules")
 
-import _compton_monte_carlo as mc
+import _compton_multigroup as mc
 import _compton_multigroup as cm
 from _units import kev, kev_kelvin
 

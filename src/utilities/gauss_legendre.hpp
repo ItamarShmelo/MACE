@@ -50,7 +50,7 @@
  *   Mathematics of Computation 23 (106): 221–230, 1969.
  */
 
-#include "compton_kernel_quadrature/gauss_laguerre.hpp"
+#include "utilities/gauss_laguerre.hpp"
 
 #include <vector>
 #include <cmath>

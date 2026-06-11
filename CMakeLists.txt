@@ -25,7 +25,7 @@ FetchContent_Populate(planck_integral)
 # planck_integral.hpp includes "../units/units.hpp" via a relative path.
 # Create a symlink so that path resolves to our src/units/.
 file(CREATE_LINK
-  "${PROJECT_SOURCE_DIR}/src/units"
+  "${PROJECT_SOURCE_DIR}/src/utilities"
   "${planck_integral_SOURCE_DIR}/../units"
   SYMBOLIC
 )
@@ -46,41 +46,22 @@ set_target_properties(_compton_common PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
 )
 
-pybind11_add_module(_compton_kernel_quadrature
-    src/compton_kernel_quadrature/compton_kernel_quadrature.cpp
-    src/compton_kernel_quadrature/bind/_compton_kernel_quadrature.cpp
+pybind11_add_module(_compton_differential_cross_section
+    src/compton_differential_cross_section/bind/_compton_differential_cross_section.cpp
+    src/compton_differential_cross_section/compton_kernel_power_series/compton_kernel_power_series.cpp
+    src/compton_differential_cross_section/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.cpp
+    src/compton_differential_cross_section/compton_kernel_quadrature/compton_kernel_quadrature.cpp
+    src/compton_differential_cross_section/compton_kernel_solver/compton_kernel_solver.cpp
 )
-target_compile_options(_compton_kernel_quadrature PRIVATE
+target_compile_options(_compton_differential_cross_section PRIVATE
     -O3 -Wall -Wextra -Wpedantic
 )
-set_target_properties(_compton_kernel_quadrature PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
-)
-
-pybind11_add_module(_compton_power_series
-    src/compton_power_series/compton_power_series.cpp
-    src/compton_power_series/bind/_compton_power_series.cpp
-)
-target_compile_options(_compton_power_series PRIVATE
-    -O3 -Wall -Wextra -Wpedantic
-)
-set_target_properties(_compton_power_series PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
-)
-
-pybind11_add_module(_compton_kernel_asymptotic_series
-    src/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.cpp
-    src/compton_kernel_asymptotic_series/bind/_compton_kernel_asymptotic_series.cpp
-)
-target_compile_options(_compton_kernel_asymptotic_series PRIVATE
-    -O3 -Wall -Wextra -Wpedantic
-)
-set_target_properties(_compton_kernel_asymptotic_series PROPERTIES
+set_target_properties(_compton_differential_cross_section PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
 )
 
 pybind11_add_module(_units
-    src/units/bind/_units.cpp
+    src/utilities/bind/_units.cpp
 )
 target_compile_options(_units PRIVATE
     -O3 -Wall -Wextra -Wpedantic
@@ -89,28 +70,15 @@ set_target_properties(_units PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
 )
 
-pybind11_add_module(_compton_kernel_solver
-    src/compton_kernel_solver/compton_kernel_solver.cpp
-    src/compton_kernel_solver/bind/_compton_kernel_solver.cpp
-    src/compton_kernel_quadrature/compton_kernel_quadrature.cpp
-    src/compton_power_series/compton_power_series.cpp
-    src/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.cpp
-)
-target_compile_options(_compton_kernel_solver PRIVATE
-    -O3 -Wall -Wextra -Wpedantic
-)
-set_target_properties(_compton_kernel_solver PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
-)
-
 pybind11_add_module(_compton_multigroup
-    src/compton_multigroup/compton_multigroup.cpp
+    src/compton_multigroup/compton_multigroup_deterministic/compton_multigroup_deterministic.cpp
+    src/compton_multigroup/compton_multigroup_monte_carlo/compton_multigroup_monte_carlo.cpp
     src/compton_multigroup/weight_function.cpp
     src/compton_multigroup/bind/_compton_multigroup.cpp
-    src/compton_kernel_solver/compton_kernel_solver.cpp
-    src/compton_kernel_quadrature/compton_kernel_quadrature.cpp
-    src/compton_power_series/compton_power_series.cpp
-    src/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.cpp
+    src/compton_differential_cross_section/compton_kernel_solver/compton_kernel_solver.cpp
+    src/compton_differential_cross_section/compton_kernel_quadrature/compton_kernel_quadrature.cpp
+    src/compton_differential_cross_section/compton_kernel_power_series/compton_kernel_power_series.cpp
+    src/compton_differential_cross_section/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.cpp
 )
 target_compile_options(_compton_multigroup PRIVATE
     -O3 -Wall -Wextra -Wpedantic
@@ -119,24 +87,22 @@ set_target_properties(_compton_multigroup PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
 )
 
-pybind11_add_module(_compton_monte_carlo
-    src/compton_monte_carlo/compton_monte_carlo.cpp
-    src/compton_multigroup/weight_function.cpp
-    src/compton_monte_carlo/bind/_compton_monte_carlo.cpp
+pybind11_add_module(_utilities
+    src/utilities/bind/_utilities.cpp
 )
-target_compile_options(_compton_monte_carlo PRIVATE
+target_compile_options(_utilities PRIVATE
     -O3 -Wall -Wextra -Wpedantic
 )
-set_target_properties(_compton_monte_carlo PROPERTIES
+set_target_properties(_utilities PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
 )
 
-pybind11_add_module(_compton_multigroup_misc
-    src/compton_multigroup/bind/_compton_multigroup_misc.cpp
+pybind11_add_module(_compton_kernel_multipliers
+    src/kernel_multipliers/bind/_compton_kernel_multipliers.cpp
 )
-target_compile_options(_compton_multigroup_misc PRIVATE
+target_compile_options(_compton_kernel_multipliers PRIVATE
     -O3 -Wall -Wextra -Wpedantic
 )
-set_target_properties(_compton_multigroup_misc PROPERTIES
+set_target_properties(_compton_kernel_multipliers PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
 )

@@ -1,5 +1,5 @@
 #include <pybind11/pybind11.h>
-#include "units/units.hpp"
+#include "utilities/units.hpp"
 
 PYBIND11_MODULE(_units, m) {
     m.doc() = "Physical constants in CGS units";

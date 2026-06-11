@@ -1,4 +1,4 @@
-#include "compton_kernel_solver/compton_kernel_solver.hpp"
+#include "compton_differential_cross_section/compton_kernel_solver/compton_kernel_solver.hpp"
 
 namespace compton {
 
