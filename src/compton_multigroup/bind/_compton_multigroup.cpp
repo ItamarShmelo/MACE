@@ -2,64 +2,17 @@
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 
-#include "compton_multigroup/compton_multigroup.hpp"
+#include "compton_common/bind_helpers.hpp"
 #include "compton_common/compton_common.hpp"
+#include "compton_multigroup/compton_multigroup.hpp"
 #include "compton_multigroup/gauss_legendre.hpp"
 #include "compton_multigroup/weight_function.hpp"
 
 namespace py = pybind11;
 using namespace pybind11::literals;
 using namespace compton;
-
-namespace {
-
-template<typename KernelT>
-using MatrixMethod = std::vector<double> (ComptonMultigroupKernel::*)(
-    KernelT const&, int, double, double, KernelMultiplier const&) const;
-
-template<typename KernelT>
-py::array_t<double> wrap_3d(
-    ComptonMultigroupKernel const& self,
-    KernelT const& kernel,
-    int const num_angle_bins,
-    double const T,
-    double const Ne,
-    KernelMultiplier const& multiplier,
-    MatrixMethod<KernelT> method)
-{
-    std::vector<double> flat = (self.*method)(kernel, num_angle_bins, T, Ne, multiplier);
-    int const G = self.num_groups();
-    py::array_t<double> arr({G, G, num_angle_bins});
-    auto buf = arr.mutable_unchecked<3>();
-    std::size_t idx = 0;
-    for (int g = 0; g < G; ++g)
-        for (int gp = 0; gp < G; ++gp)
-            for (int a = 0; a < num_angle_bins; ++a)
-                buf(g, gp, a) = flat[idx++];
-    return arr;
-}
-
-template<typename KernelT>
-py::array_t<double> wrap_2d(
-    ComptonMultigroupKernel const& self,
-    KernelT const& kernel,
-    double const T,
-    double const Ne,
-    KernelMultiplier const& multiplier,
-    MatrixMethod<KernelT> method)
-{
-    std::vector<double> flat = (self.*method)(kernel, 1, T, Ne, multiplier);
-    int const G = self.num_groups();
-    py::array_t<double> arr({G, G});
-    auto buf = arr.mutable_unchecked<2>();
-    std::size_t idx = 0;
-    for (int g = 0; g < G; ++g)
-        for (int gp = 0; gp < G; ++gp)
-            buf(g, gp) = flat[idx++];
-    return arr;
-}
-
-} // anonymous namespace
+using compton::bind::flat_to_numpy_2d;
+using compton::bind::flat_to_numpy_3d;
 
 PYBIND11_MODULE(_compton_multigroup, m) {
     m.doc() = "Weighted multigroup-multiangle Compton scattering matrix";
@@ -120,14 +73,14 @@ PYBIND11_MODULE(_compton_multigroup, m) {
             return arr;
         })
 
-        // ── Multiangle: solver kernel ─────────────────────────────────────
         .def("compute_sigma_matrix",
             [](ComptonMultigroupKernel const& self,
                ComptonKernelSolver const& kernel,
                int num_angle_bins, double T, double Ne,
                KernelMultiplier const& multiplier) {
-                return wrap_3d(self, kernel, num_angle_bins, T, Ne, multiplier,
-                    &ComptonMultigroupKernel::compute_sigma_matrix<ComptonKernelSolver>);
+                return flat_to_numpy_3d(self.num_groups(), num_angle_bins, [&] {
+                    return self.compute_sigma_matrix(kernel, num_angle_bins, T, Ne, multiplier);
+                });
             },
             "kernel"_a, "num_angle_bins"_a, "T"_a, "Ne"_a,
             "multiplier"_a = ConstantMultiplier())
@@ -137,20 +90,21 @@ PYBIND11_MODULE(_compton_multigroup, m) {
                ComptonKernelSolver const& kernel,
                int num_angle_bins, double T, double Ne,
                KernelMultiplier const& multiplier) {
-                return wrap_3d(self, kernel, num_angle_bins, T, Ne, multiplier,
-                    &ComptonMultigroupKernel::compute_dsigma_dT_matrix<ComptonKernelSolver>);
+                return flat_to_numpy_3d(self.num_groups(), num_angle_bins, [&] {
+                    return self.compute_dsigma_dT_matrix(kernel, num_angle_bins, T, Ne, multiplier);
+                });
             },
             "kernel"_a, "num_angle_bins"_a, "T"_a, "Ne"_a,
             "multiplier"_a = ConstantMultiplier())
 
-        // ── Angle-integrated: solver kernel ──────────────────────────────
         .def("compute_sigma_matrix",
             [](ComptonMultigroupKernel const& self,
                ComptonKernelSolver const& kernel,
                double T, double Ne,
                KernelMultiplier const& multiplier) {
-                return wrap_2d(self, kernel, T, Ne, multiplier,
-                    &ComptonMultigroupKernel::compute_sigma_matrix<ComptonKernelSolver>);
+                return flat_to_numpy_2d(self.num_groups(), [&] {
+                    return self.compute_sigma_matrix(kernel, 1, T, Ne, multiplier);
+                });
             },
             "kernel"_a, "T"_a, "Ne"_a,
             "multiplier"_a = ConstantMultiplier())
@@ -160,8 +114,9 @@ PYBIND11_MODULE(_compton_multigroup, m) {
                ComptonKernelSolver const& kernel,
                double T, double Ne,
                KernelMultiplier const& multiplier) {
-                return wrap_2d(self, kernel, T, Ne, multiplier,
-                    &ComptonMultigroupKernel::compute_dsigma_dT_matrix<ComptonKernelSolver>);
+                return flat_to_numpy_2d(self.num_groups(), [&] {
+                    return self.compute_dsigma_dT_matrix(kernel, 1, T, Ne, multiplier);
+                });
             },
             "kernel"_a, "T"_a, "Ne"_a,
             "multiplier"_a = ConstantMultiplier());

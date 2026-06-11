@@ -123,17 +123,11 @@ public:
     /**
      * @brief Compute the multigroup-multiangle ∂σ/∂T matrix via MC.
      *
-     * Plugs the temperature-derivative kernel ∂Σ_KN/∂T into the same
-     * weighted-integral formula as compute_sigma_matrix.  This is NOT the
-     * full d/dT of compute_sigma_matrix (which would need quotient-rule
-     * terms); it matches the convention of
-     * ComptonMultigroupKernel::compute_dsigma_dT_matrix.
-     *
-     * Uses a single-pass two-accumulator approach: the MC loop tallies both
-     * J₀ (Klein-Nishina contribution) and J₁ (gamma-weighted contribution)
-     * per matrix element, then applies the analytical derivative factor
-     *   ∂kernel/∂T = kernel · [J₁/(τ²J₀) − 3/τ − κ/τ²] · dτ/dT
-     * where κ = K₁(1/τ)/K₂(1/τ).
+     * Each MC sample's Klein-Nishina contribution is scaled by the
+     * derivative weight (λ − κ)/τ² − 3/τ before accumulation, and the
+     * result is multiplied by dτ/dT.  This is NOT the full d/dT of
+     * compute_sigma_matrix (which would need quotient-rule terms); it
+     * matches ComptonMultigroupKernel::compute_dsigma_dT_matrix.
      *
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
      * @param T               Electron temperature [K].
@@ -156,6 +150,21 @@ public:
         KernelMultiplier const& multiplier) const;
 
 private:
+    /**
+     * @brief Core MC integration loop parameterized by a multiplier callable.
+     *
+     * @tparam MultiplierFn  Callable (E0, E, mu_scat, T, Ne, lam) -> double.
+     *         For plain sigma this wraps KernelMultiplier (ignoring lam).
+     *         For dsigma/dT it wraps KernelMultiplier times the derivative
+     *         weight ((λ − κ)/τ² − 3/τ) · dτ/dT.
+     */
+    template<typename MultiplierFn>
+    std::vector<double> mc_integrate(
+        int num_angle_bins,
+        double T,
+        double Ne,
+        MultiplierFn&& multiplier_fn) const;
+
     /**
      * @brief Sample electron Lorentz factor from the velocity-weighted
      *        Maxwell-Jüttner distribution via three-branch inverse CDF.

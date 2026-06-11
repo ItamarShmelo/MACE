@@ -375,3 +375,53 @@ class TestBasicSanity:
         mc_obj = _make_mc(BOUNDARIES_ERG, num_samples=100)
         with pytest.raises(Exception):
             mc_obj.compute_sigma_matrix(T=-1.0, Ne=1.0)
+
+
+# ---------------------------------------------------------------------------
+# 6. Derivative golden-value regression
+# ---------------------------------------------------------------------------
+
+class TestDerivativeGolden:
+    """Seed-locked golden values for compute_dsigma_dT_matrix."""
+
+    def test_derivative_seed_reproducibility(self):
+        """Same seed produces bitwise identical derivative matrices."""
+        T = 10.0 * kev_kelvin
+        bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
+
+        mc1 = _make_mc(bounds, seed=42, num_samples=100_000)
+        mc2 = _make_mc(bounds, seed=42, num_samples=100_000)
+
+        dS1 = mc1.compute_dsigma_dT_matrix(T=T, Ne=1.0)
+        dS2 = mc2.compute_dsigma_dT_matrix(T=T, Ne=1.0)
+
+        np.testing.assert_array_equal(dS1, dS2)
+
+    def test_derivative_golden_values(self):
+        """Lock current output to detect unintentional behavior changes."""
+        T = 10.0 * kev_kelvin
+        bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
+
+        mc_obj = _make_mc(bounds, seed=42, num_samples=100_000)
+        dS = mc_obj.compute_dsigma_dT_matrix(T=T, Ne=1.0)
+
+        expected = np.array([
+            [-6.35909511869973661076e-34,  6.31800766422992232794e-34],
+            [ 7.46477093608892448577e-35, -7.43325988878795136172e-34],
+        ])
+
+        np.testing.assert_array_equal(
+            dS, expected,
+            err_msg="derivative golden values changed -- "
+                    "update if intentional")
+
+    def test_derivative_output_shape_2d(self):
+        mc_obj = _make_mc(BOUNDARIES_ERG, num_samples=1000)
+        dS = mc_obj.compute_dsigma_dT_matrix(T=10.0 * kev_kelvin, Ne=1.0)
+        assert dS.shape == (G, G)
+
+    def test_derivative_output_shape_3d(self):
+        mc_obj = _make_mc(BOUNDARIES_ERG, num_samples=1000)
+        dS = mc_obj.compute_dsigma_dT_matrix(
+            num_angle_bins=4, T=10.0 * kev_kelvin, Ne=1.0)
+        assert dS.shape == (G, G, 4)

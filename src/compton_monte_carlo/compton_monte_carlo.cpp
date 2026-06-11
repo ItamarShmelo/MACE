@@ -86,13 +86,14 @@ double ComptonMonteCarloKernel::sample_gamma(double const theta) const {
     return 1.0 - theta * std::log(r1);
 }
 
-// ── Core MC integration ─────────────────────────────────────────────────
+// ── Core MC integration ──────────────────────────────────────────────────
 
-std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
+template<typename MultiplierFn>
+std::vector<double> ComptonMonteCarloKernel::mc_integrate(
     int const num_angle_bins,
     double const T,
     double const Ne,
-    KernelMultiplier const& multiplier) const
+    MultiplierFn&& multiplier_fn) const
 {
     if (num_angle_bins < 1)
         throw std::invalid_argument("num_angle_bins must be >= 1");
@@ -110,22 +111,18 @@ std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
 
     for (std::size_t sample_i = 0; sample_i < num_samples_; ++sample_i) {
 
-        // Step 1: sample electron Lorentz factor from Maxwell-Jüttner
-        double const gamma = sample_gamma(theta);
-        double const beta = std::sqrt(1.0 - 1.0 / (gamma * gamma));
+        double const lam = sample_gamma(theta);
+        double const beta = std::sqrt(1.0 - 1.0 / (lam * lam));
         sum_beta += beta;
 
-        // Step 2: sample isotropic electron direction
         double const mu_e = 1.0 - 2.0 * uniform_dist_(rng_);
         double const sin_e = std::sqrt(1.0 - mu_e * mu_e);
 
-        // Step 3: incoming-photon Doppler factor
-        double const D0 = gamma * (1.0 - beta * mu_e);
+        double const D0 = lam * (1.0 - beta * mu_e);
 
-        // Step 4: incoming photon direction in electron rest frame
         double const mu_0_tag =
             (1.0 / D0) *
-            (1.0 - gamma / (1.0 + gamma) * (D0 + 1.0) * beta * mu_e);
+            (1.0 - lam / (1.0 + lam) * (D0 + 1.0) * beta * mu_e);
         double const sin_0_tag = std::sqrt(1.0 - mu_0_tag * mu_0_tag);
 
         // Step 5: sample isotropic scattering in electron rest frame
@@ -144,11 +141,11 @@ std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
         // (y-component not needed: electron lies in x-z plane)
         double const dot_Omega_tag_e =
             Omega_tag_x * sin_e + Omega_tag_z * mu_e;
-        double const D_tag = gamma * (1.0 + beta * dot_Omega_tag_e);
+        double const D_tag = lam * (1.0 + beta * dot_Omega_tag_e);
 
         double mu_scat_lab =
             (Omega_tag_z +
-             ((gamma - 1.0) * dot_Omega_tag_e + gamma * beta) * mu_e) /
+             ((lam - 1.0) * dot_Omega_tag_e + lam * beta) * mu_e) /
             D_tag;
         mu_scat_lab = std::clamp(mu_scat_lab, -1.0, 1.0);
 
@@ -186,11 +183,11 @@ std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
 
             // Klein-Nishina contribution
             double const sigma =
-                0.75 * D0 / gamma * A * A *
+                0.75 * D0 / lam * A * A *
                 (A + 1.0 / A - sin_p_tag * sin_p_tag) *
                 w_E0 * beta;
 
-            double const mult = multiplier(E0, E, mu_scat_lab, T, Ne);
+            double const mult = multiplier_fn(E0, E, mu_scat_lab, T, Ne, lam);
 
             std::size_t const idx =
                 static_cast<std::size_t>(g0) * G * num_angle_bins +
@@ -222,6 +219,20 @@ std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
     return result;
 }
 
+// ── Public API ──────────────────────────────────────────────────────────
+
+std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
+    int const num_angle_bins,
+    double const T,
+    double const Ne,
+    KernelMultiplier const& multiplier) const
+{
+    return mc_integrate(num_angle_bins, T, Ne,
+        [&](double E0, double E, double mu, double Tv, double Nev, double) {
+            return multiplier(E0, E, mu, Tv, Nev);
+        });
+}
+
 std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
     double const T,
     double const Ne,
@@ -230,134 +241,24 @@ std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
     return compute_sigma_matrix(1, T, Ne, multiplier);
 }
 
-// ── MC derivative integration ───────────────────────────────────────────
-
 std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
     int const num_angle_bins,
     double const T,
     double const Ne,
     KernelMultiplier const& multiplier) const
 {
-    if (num_angle_bins < 1)
-        throw std::invalid_argument("num_angle_bins must be >= 1");
-    if (T <= 0.0)
-        throw std::invalid_argument("temperature T must be > 0");
-
-    int const G = num_groups();
-    std::size_t const total = static_cast<std::size_t>(G) * G * num_angle_bins;
-    std::vector<double> deriv_result(total, 0.0);
-
     double const tau = units::k_boltz * T / units::me_c2;
     double const tau2 = tau * tau;
     double const kappa_val = kappa_ratio(tau);
     double const dtau_dT = units::k_boltz / units::me_c2;
 
-    double sum_beta = 0.0;
-    std::vector<double> weight_sum(G, 0.0);
-
-    for (std::size_t sample_i = 0; sample_i < num_samples_; ++sample_i) {
-
-        double const gamma = sample_gamma(tau);
-        double const beta = std::sqrt(1.0 - 1.0 / (gamma * gamma));
-        sum_beta += beta;
-
-        double const deriv_weight =
-            (gamma - kappa_val) / tau2 - 3.0 / tau;
-
-        double const mu_e = 1.0 - 2.0 * uniform_dist_(rng_);
-        double const sin_e = std::sqrt(1.0 - mu_e * mu_e);
-
-        double const D0 = gamma * (1.0 - beta * mu_e);
-
-        double const mu_0_tag =
-            (1.0 / D0) *
-            (1.0 - gamma / (1.0 + gamma) * (D0 + 1.0) * beta * mu_e);
-        double const sin_0_tag = std::sqrt(1.0 - mu_0_tag * mu_0_tag);
-
-        double const mu_p_tag = 1.0 - 2.0 * uniform_dist_(rng_);
-        double const sin_p_tag = std::sqrt(1.0 - mu_p_tag * mu_p_tag);
-        double const psi_p_tag = uniform_dist_(rng_) * 2.0 * std::numbers::pi;
-        double const cos_psi = std::cos(psi_p_tag);
-
-        double const Omega_tag_x =
-            mu_0_tag * sin_p_tag * cos_psi - sin_0_tag * mu_p_tag;
-        double const Omega_tag_z =
-            sin_0_tag * sin_p_tag * cos_psi + mu_0_tag * mu_p_tag;
-
-        double const dot_Omega_tag_e =
-            Omega_tag_x * sin_e + Omega_tag_z * mu_e;
-        double const D_tag = gamma * (1.0 + beta * dot_Omega_tag_e);
-
-        double mu_scat_lab =
-            (Omega_tag_z +
-             ((gamma - 1.0) * dot_Omega_tag_e + gamma * beta) * mu_e) /
-            D_tag;
-        mu_scat_lab = std::clamp(mu_scat_lab, -1.0, 1.0);
-
-        int const angle_bin = std::min(
-            static_cast<int>((mu_scat_lab + 1.0) * 0.5 * num_angle_bins),
-            num_angle_bins - 1);
-
-        double const interp = uniform_dist_(rng_);
-
-        for (int g0 = 0; g0 < G; ++g0) {
-            double const E0 =
-                group_boundaries_[g0] + interp * group_widths_[g0];
-
-            double const w_E0 = weight_func_->weight(E0, T);
-            weight_sum[g0] += w_E0;
-
-            double const E0_tag = D0 * E0;
-            double const A =
-                1.0 / (1.0 + (1.0 - mu_p_tag) * E0_tag / units::me_c2);
-            double const E = D_tag * A * E0_tag;
-
-            auto const it = std::lower_bound(
-                group_boundaries_.begin(), group_boundaries_.end(), E);
-            long g = std::distance(group_boundaries_.begin(), it) - 1;
-
-            if (discard_out_of_grid_) {
-                if (g < 0 || g >= G)
-                    continue;
-            } else {
-                g = std::clamp(g, 0L, static_cast<long>(G) - 1);
-            }
-
-            double const sigma =
-                0.75 * D0 / gamma * A * A *
-                (A + 1.0 / A - sin_p_tag * sin_p_tag) *
-                w_E0 * beta;
-
-            double const mult = multiplier(E0, E, mu_scat_lab, T, Ne);
-
-            std::size_t const idx =
-                static_cast<std::size_t>(g0) * G * num_angle_bins +
-                static_cast<std::size_t>(g) * num_angle_bins +
-                angle_bin;
-            deriv_result[idx] += sigma * mult * deriv_weight;
-        }
-    }
-
-    // Normalization
-    double const beta_avg = sum_beta / static_cast<double>(num_samples_);
-
-    for (int g0 = 0; g0 < G; ++g0) {
-        double const weight_avg =
-            weight_sum[g0] / static_cast<double>(num_samples_);
-        double const norm =
-            units::sigma_thomson * dtau_dT /
-            (static_cast<double>(num_samples_) * beta_avg * weight_avg);
-
-        for (int gp = 0; gp < G; ++gp)
-            for (int a = 0; a < num_angle_bins; ++a) {
-                std::size_t const idx =
-                    static_cast<std::size_t>(g0) * G * num_angle_bins +
-                    static_cast<std::size_t>(gp) * num_angle_bins + a;
-                deriv_result[idx] *= norm;
-            }
-    }
-
-    return deriv_result;
+    return mc_integrate(num_angle_bins, T, Ne,
+        [&, kappa_val, tau2, dtau_dT](
+            double E0, double E, double mu,
+            double Tv, double Nev, double lam) {
+            return multiplier(E0, E, mu, Tv, Nev)
+                 * ((lam - kappa_val) / tau2 - 3.0 / tau) * dtau_dT;
+        });
 }
 
 std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
