@@ -177,10 +177,9 @@ double integrate_Ep_group(
 // Returns Σ_a |result[g, gp, a]| so the caller can apply the
 // outward-from-peak cutoff.
 
-template<typename KernelT>
 double ComptonMultigroupKernel::compute_group_entry(
-    KernelT const& kernel,
-    ComptonResult (KernelT::*eval)(double, double, double, double, double) const,
+    ComptonKernelSolver const& kernel,
+    ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
     int const g,
     int const gp,
     int const num_angle_bins,
@@ -314,10 +313,9 @@ double ComptonMultigroupKernel::compute_group_entry(
 // All other axes (E, mu, tail, far) use single-panel GL quadrature
 // whose accuracy is controlled by increasing base_order.
 
-template<typename KernelT>
 std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
-    KernelT const& kernel,
-    ComptonResult (KernelT::*eval)(double, double, double, double, double) const,
+    ComptonKernelSolver const& kernel,
+    ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
     int const num_angle_bins,
     double const T,
     double const Ne,
@@ -395,30 +393,22 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     return result;
 }
 
-template<typename KernelT>
 std::vector<double> ComptonMultigroupKernel::compute_sigma_matrix(
-    KernelT const& kernel,
+    ComptonKernelSolver const& kernel,
     int const num_angle_bins,
     double const T, double const Ne,
     KernelMultiplier const& multiplier) const
 {
-    return compute_matrix_impl(kernel, &KernelT::sigma_E, num_angle_bins, T, Ne, multiplier);
+    return compute_matrix_impl(kernel, &ComptonKernelSolver::sigma_E, num_angle_bins, T, Ne, multiplier);
 }
 
-template<typename KernelT>
 std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
-    KernelT const& kernel,
+    ComptonKernelSolver const& kernel,
     int const num_angle_bins,
     double const T, double const Ne,
     KernelMultiplier const& multiplier) const
 {
-    return compute_matrix_impl(kernel, &KernelT::dsigma_E_dT, num_angle_bins, T, Ne, multiplier);
+    return compute_matrix_impl(kernel, &ComptonKernelSolver::dsigma_E_dT, num_angle_bins, T, Ne, multiplier);
 }
-
-template std::vector<double> ComptonMultigroupKernel::compute_sigma_matrix(
-    ComptonKernelSolver const&, int, double, double, KernelMultiplier const&) const;
-
-template std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
-    ComptonKernelSolver const&, int, double, double, KernelMultiplier const&) const;
 
 } // namespace compton

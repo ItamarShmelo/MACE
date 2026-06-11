@@ -174,7 +174,6 @@ public:
     /**
      * @brief Compute the multigroup-multiangle σ matrix.
      *
-     * @tparam KernelT        Kernel type (e.g. ComptonKernelSolver, ComptonKernelQuadrature).
      * @param kernel          Point-wise kernel evaluator.
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
      * @param T               Electron temperature [K].
@@ -182,9 +181,8 @@ public:
      * @param multiplier      Pointwise kernel multiplier applied before integration.
      * @return Flat vector of size G×G×N_angles, row-major [g][g'][angle].
      */
-    template<typename KernelT>
     std::vector<double> compute_sigma_matrix(
-        KernelT const& kernel,
+        ComptonKernelSolver const& kernel,
         int num_angle_bins,
         double T, double Ne,
         KernelMultiplier const& multiplier) const;
@@ -192,7 +190,6 @@ public:
     /**
      * @brief Compute the multigroup-multiangle ∂σ/∂T matrix.
      *
-     * @tparam KernelT        Kernel type (e.g. ComptonKernelSolver, ComptonKernelQuadrature).
      * @param kernel          Point-wise kernel evaluator.
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
      * @param T               Electron temperature [K].
@@ -200,9 +197,8 @@ public:
      * @param multiplier      Pointwise kernel multiplier applied before integration.
      * @return Flat vector of size G×G×N_angles, row-major [g][g'][angle].
      */
-    template<typename KernelT>
     std::vector<double> compute_dsigma_dT_matrix(
-        KernelT const& kernel,
+        ComptonKernelSolver const& kernel,
         int num_angle_bins,
         double T, double Ne,
         KernelMultiplier const& multiplier) const;
@@ -224,7 +220,6 @@ private:
      *   - E' axis:  integration_tolerance_ × 0.1
      *   - μ  axis:  integration_tolerance_ × 0.01
      *
-     * @tparam KernelT  Kernel class whose @p eval member returns ComptonResult.
      * @param kernel         Point-wise kernel evaluator.
      * @param eval           Pointer-to-member: sigma_E or dsigma_E_dT.
      * @param num_angle_bins Number of equal-width μ bins on [−1, 1].
@@ -234,10 +229,9 @@ private:
      * @return Flat row-major vector of size G×G×num_angle_bins,
      *         indexed as result[g * G * num_angle_bins + gp * num_angle_bins + a].
      */
-    template<typename KernelT>
     std::vector<double> compute_matrix_impl(
-        KernelT const& kernel,
-        ComptonResult (KernelT::*eval)(double, double, double, double, double) const,
+        ComptonKernelSolver const& kernel,
+        ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
         int num_angle_bins,
         double T,
         double Ne,
@@ -286,10 +280,9 @@ private:
      * @param[in,out] result Flat output vector; entries at the (g, gp, a)
      *                       positions are written (row-major layout).
      */
-    template<typename KernelT>
     double compute_group_entry(
-        KernelT const& kernel,
-        ComptonResult (KernelT::*eval)(double, double, double, double, double) const,
+        ComptonKernelSolver const& kernel,
+        ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
         int g,
         int gp,
         int num_angle_bins,
