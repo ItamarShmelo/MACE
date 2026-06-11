@@ -8,6 +8,7 @@ both sigma_E and dsigma_E_dT, and that custom threshold parameters work.
 
 import sys
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, "cpp_modules")
@@ -233,3 +234,51 @@ class TestAsymptoticDDThreshold:
         solver_res = dd_forced.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
         dd_res = dd_asymp.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
         assert _rel_diff(solver_res.value, dd_res.value) < 1e-12
+
+
+# ── Vec methods: verify vectorized wrappers match scalar calls ────────────
+
+VEC_KERNELS = [
+    ("quadrature", lambda: cq.ComptonKernelQuadrature(64)),
+    ("power_series", lambda: ComptonPowerSeries()),
+    ("asymptotic", lambda: ComptonKernelAsymptoticSeries()),
+    ("solver", lambda: ComptonKernelSolver()),
+]
+
+VEC_E_PRIME_KEV = np.array([9.5, 10.0, 10.5, 11.0, 12.0])
+
+
+class TestVecMethods:
+    """sigma_E_vec / dsigma_E_dT_vec must match element-wise scalar calls."""
+
+    @pytest.mark.parametrize("name,make_kernel", VEC_KERNELS, ids=[k[0] for k in VEC_KERNELS])
+    def test_sigma_E_vec(self, name, make_kernel):
+        kernel = make_kernel()
+        E = 10.0 * kev
+        Ep_arr = VEC_E_PRIME_KEV * kev
+        xi, T, Ne = 0.0, 1.0 * kev_kelvin, 1.0
+
+        values, errors = kernel.sigma_E_vec(E, Ep_arr, xi, T, Ne)
+
+        for i, Ep in enumerate(Ep_arr):
+            scalar = kernel.sigma_E(E, float(Ep), xi, T, Ne)
+            assert values[i] == pytest.approx(scalar.value, rel=0, abs=0), \
+                f"value mismatch at i={i}"
+            assert errors[i] == pytest.approx(scalar.estimated_abs_error, rel=0, abs=0), \
+                f"error mismatch at i={i}"
+
+    @pytest.mark.parametrize("name,make_kernel", VEC_KERNELS, ids=[k[0] for k in VEC_KERNELS])
+    def test_dsigma_E_dT_vec(self, name, make_kernel):
+        kernel = make_kernel()
+        E = 10.0 * kev
+        Ep_arr = VEC_E_PRIME_KEV * kev
+        xi, T, Ne = 0.0, 1.0 * kev_kelvin, 1.0
+
+        values, errors = kernel.dsigma_E_dT_vec(E, Ep_arr, xi, T, Ne)
+
+        for i, Ep in enumerate(Ep_arr):
+            scalar = kernel.dsigma_E_dT(E, float(Ep), xi, T, Ne)
+            assert values[i] == pytest.approx(scalar.value, rel=0, abs=0), \
+                f"value mismatch at i={i}"
+            assert errors[i] == pytest.approx(scalar.estimated_abs_error, rel=0, abs=0), \
+                f"error mismatch at i={i}"

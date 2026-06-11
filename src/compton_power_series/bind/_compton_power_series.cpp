@@ -1,8 +1,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 
+#include "compton_common/bind_helpers.hpp"
 #include "compton_power_series/compton_power_series.hpp"
-#include "compton_common/compton_common.hpp"
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -29,20 +29,9 @@ PYBIND11_MODULE(_compton_power_series, m) {
                                double E,
                                py::array_t<double, py::array::c_style | py::array::forcecast> E_prime_arr,
                                double xi, double T, double Ne) {
-            auto in = E_prime_arr.unchecked<1>();
-            py::ssize_t const n = in.shape(0);
-
-            py::array_t<double> values(n);
-            py::array_t<double> errors(n);
-            auto out_values = values.mutable_unchecked<1>();
-            auto out_errors = errors.mutable_unchecked<1>();
-
-            for (py::ssize_t i = 0; i < n; ++i) {
-                SigmaResult r = self.sigma_E(E, in(i), xi, T, Ne);
-                out_values(i) = r.value;
-                out_errors(i) = r.estimated_abs_error;
-            }
-            return py::make_tuple(values, errors);
+            return compton::bind::vectorize_sigma(
+                self, E, E_prime_arr, xi, T, Ne,
+                &ComptonPowerSeries::sigma_E);
         }, "E"_a, "E_prime_arr"_a, "xi"_a,
            "T"_a, "Ne"_a)
         .def("dsigma_E_dT", &ComptonPowerSeries::dsigma_E_dT,
@@ -52,20 +41,9 @@ PYBIND11_MODULE(_compton_power_series, m) {
                                     double E,
                                     py::array_t<double, py::array::c_style | py::array::forcecast> E_prime_arr,
                                     double xi, double T, double Ne) {
-            auto in = E_prime_arr.unchecked<1>();
-            py::ssize_t const n = in.shape(0);
-
-            py::array_t<double> values(n);
-            py::array_t<double> errors(n);
-            auto out_values = values.mutable_unchecked<1>();
-            auto out_errors = errors.mutable_unchecked<1>();
-
-            for (py::ssize_t i = 0; i < n; ++i) {
-                SigmaResult r = self.dsigma_E_dT(E, in(i), xi, T, Ne);
-                out_values(i) = r.value;
-                out_errors(i) = r.estimated_abs_error;
-            }
-            return py::make_tuple(values, errors);
+            return compton::bind::vectorize_sigma(
+                self, E, E_prime_arr, xi, T, Ne,
+                &ComptonPowerSeries::dsigma_E_dT);
         }, "E"_a, "E_prime_arr"_a, "xi"_a,
            "T"_a, "Ne"_a)
         .def("dsigma_E_dT_precision_check", &ComptonPowerSeries::dsigma_E_dT_precision_check,
