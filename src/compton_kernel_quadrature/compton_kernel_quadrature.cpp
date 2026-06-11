@@ -73,7 +73,7 @@ double ComptonKernelQuadrature::compute_IQ_pre_ibp(
     return laguerre_integrate(integrand, get_rule(NL));
 }
 
-SigmaResult ComptonKernelQuadrature::sigma_E(
+ComptonResult ComptonKernelQuadrature::sigma_E(
     double const E,
     double const E_prime,
     double const xi,
@@ -97,7 +97,7 @@ SigmaResult ComptonKernelQuadrature::sigma_E(
         double const abs_err = std::abs(sigma0) * std::abs(IQ_hi - IQ_lo);
         double const rel_err = abs_err / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
 
-        return SigmaResult{value, abs_err, rel_err};
+        return ComptonResult{value, abs_err, rel_err};
     } else {
         double const IQ_hi = compute_IQ_pre_ibp(p, tau, NL_);
         double const IQ_lo = compute_IQ_pre_ibp(p, tau, NL_ / 2);
@@ -106,7 +106,7 @@ SigmaResult ComptonKernelQuadrature::sigma_E(
         double const abs_err = std::abs(sigma0) * std::abs(IQ_hi - IQ_lo);
         double const rel_err = abs_err / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
 
-        return SigmaResult{value, abs_err, rel_err};
+        return ComptonResult{value, abs_err, rel_err};
     }
 }
 
@@ -191,7 +191,7 @@ double ComptonKernelQuadrature::compute_dIQ_pre_ibp(
     return laguerre_integrate(integrand, get_rule(NL));
 }
 
-SigmaResult ComptonKernelQuadrature::dsigma_E_dT(
+ComptonResult ComptonKernelQuadrature::dsigma_E_dT(
     double const E,
     double const E_prime,
     double const xi,
@@ -220,7 +220,7 @@ SigmaResult ComptonKernelQuadrature::dsigma_E_dT(
 
         double const abs_err = std::abs(sigma0) * std::abs(dIQ_hi - dIQ_lo) * dtau_dT;
         double const rel_err = abs_err / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
-        return SigmaResult{value, abs_err, rel_err};
+        return ComptonResult{value, abs_err, rel_err};
 
     } else {
         double const dIQ_hi = compute_dIQ_pre_ibp(p, tau, NL_, kappa_val);
@@ -229,7 +229,7 @@ SigmaResult ComptonKernelQuadrature::dsigma_E_dT(
 
         double const abs_err = std::abs(sigma0) * std::abs(dIQ_hi - dIQ_lo) * dtau_dT;
         double const rel_err = abs_err / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
-        return SigmaResult{value, abs_err, rel_err};
+        return ComptonResult{value, abs_err, rel_err};
     }
 }
 

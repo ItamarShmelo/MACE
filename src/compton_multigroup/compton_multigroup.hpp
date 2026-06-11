@@ -224,7 +224,7 @@ private:
      *   - E' axis:  integration_tolerance_ × 0.1
      *   - μ  axis:  integration_tolerance_ × 0.01
      *
-     * @tparam KernelT  Kernel class whose @p eval member returns SigmaResult.
+     * @tparam KernelT  Kernel class whose @p eval member returns ComptonResult.
      * @param kernel         Point-wise kernel evaluator.
      * @param eval           Pointer-to-member: sigma_E or dsigma_E_dT.
      * @param num_angle_bins Number of equal-width μ bins on [−1, 1].
@@ -237,7 +237,7 @@ private:
     template<typename KernelT>
     std::vector<double> compute_matrix_impl(
         KernelT const& kernel,
-        SigmaResult (KernelT::*eval)(double, double, double, double, double) const,
+        ComptonResult (KernelT::*eval)(double, double, double, double, double) const,
         int num_angle_bins,
         double T,
         double Ne,
@@ -273,7 +273,7 @@ private:
      *         outward-from-peak cutoff in compute_matrix_impl().
      *
      * @param kernel         Point-wise kernel evaluator.
-     * @param eval           Pointer-to-member returning SigmaResult.
+     * @param eval           Pointer-to-member returning ComptonResult.
      * @param g              Incoming energy group index.
      * @param gp             Target (scattered) energy group index.
      * @param num_angle_bins Number of equal-width μ bins.
@@ -289,7 +289,7 @@ private:
     template<typename KernelT>
     double compute_group_entry(
         KernelT const& kernel,
-        SigmaResult (KernelT::*eval)(double, double, double, double, double) const,
+        ComptonResult (KernelT::*eval)(double, double, double, double, double) const,
         int g,
         int gp,
         int num_angle_bins,

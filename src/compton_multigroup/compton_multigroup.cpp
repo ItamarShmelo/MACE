@@ -180,7 +180,7 @@ double integrate_Ep_group(
 template<typename KernelT>
 double ComptonMultigroupKernel::compute_group_entry(
     KernelT const& kernel,
-    SigmaResult (KernelT::*eval)(double, double, double, double, double) const,
+    ComptonResult (KernelT::*eval)(double, double, double, double, double) const,
     int const g,
     int const gp,
     int const num_angle_bins,
@@ -317,7 +317,7 @@ double ComptonMultigroupKernel::compute_group_entry(
 template<typename KernelT>
 std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     KernelT const& kernel,
-    SigmaResult (KernelT::*eval)(double, double, double, double, double) const,
+    ComptonResult (KernelT::*eval)(double, double, double, double, double) const,
     int const num_angle_bins,
     double const T,
     double const Ne,

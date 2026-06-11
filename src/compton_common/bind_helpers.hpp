@@ -73,11 +73,11 @@ py::array_t<double> flat_to_numpy_2d(
  * @brief Vectorize a scalar kernel method over an array of E' values.
  *
  * Calls (self.*fn)(E, E'[i], xi, T, Ne) for each element, collecting
- * SigmaResult::value and SigmaResult::estimated_abs_error into two
+ * ComptonResult::value and ComptonResult::estimated_abs_error into two
  * numpy arrays returned as a tuple.
  *
  * @tparam Class           Kernel class (e.g. ComptonKernelQuadrature).
- * @tparam MemberFunction  Pointer-to-member returning SigmaResult.
+ * @tparam MemberFunction  Pointer-to-member returning ComptonResult.
  */
 template<typename Class, typename MemberFunction>
 py::tuple vectorize_sigma(
@@ -98,7 +98,7 @@ py::tuple vectorize_sigma(
     auto out_errors = errors.mutable_unchecked<1>();
 
     for (py::ssize_t i = 0; i < n; ++i) {
-        SigmaResult r = (self.*fn)(E, in(i), xi, T, Ne);
+        ComptonResult r = (self.*fn)(E, in(i), xi, T, Ne);
         out_values(i) = r.value;
         out_errors(i) = r.estimated_abs_error;
     }

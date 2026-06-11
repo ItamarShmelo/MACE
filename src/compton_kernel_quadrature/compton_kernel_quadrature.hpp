@@ -79,9 +79,9 @@ public:
      * @param xi       cos(scattering angle), strictly in (−1, 1)
      * @param T        Electron temperature [K]
      * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
-     * @return SigmaResult with value and error estimates
+     * @return ComptonResult with value and error estimates
      */
-    SigmaResult sigma_E(double const E,
+    ComptonResult sigma_E(double const E,
                         double const E_prime,
                         double const xi,
                         double const T,
@@ -100,9 +100,9 @@ public:
      * @param xi       cos(scattering angle), strictly in (−1, 1)
      * @param T        Electron temperature [K]
      * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
-     * @return SigmaResult with value and error estimates
+     * @return ComptonResult with value and error estimates
      */
-    SigmaResult dsigma_E_dT(double const E,
+    ComptonResult dsigma_E_dT(double const E,
                              double const E_prime,
                              double const xi,
                              double const T,

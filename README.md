@@ -37,7 +37,7 @@ This produces pybind11 extension modules in `cpp_modules/`:
 
 | Module | Contents |
 |--------|----------|
-| `_compton_common` | `SigmaResult` result type |
+| `_compton_common` | `ComptonResult` result type |
 | `_compton_kernel_quadrature` | Gauss-Laguerre quadrature evaluator |
 | `_compton_power_series` | Convergent power series evaluator (double / DD) |
 | `_compton_kernel_asymptotic_series` | Divergent asymptotic series evaluator |
@@ -66,7 +66,7 @@ r = solver.sigma_E(1*kev, 2*kev, 0.0, 1*kev_kelvin, 1.0)
 print(f"solver:     {r.value:.6e}  (rel_err ~ {r.estimated_rel_error:.1e})")
 ```
 
-Both return a `SigmaResult` with fields `value`, `estimated_abs_error`, and
+Both return a `ComptonResult` with fields `value`, `estimated_abs_error`, and
 `estimated_rel_error`. Temperature derivatives `dsigma_E_dT` and vectorized
 `sigma_E_vec` / `dsigma_E_dT_vec` are also available.
 

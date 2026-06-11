@@ -19,7 +19,7 @@ ComptonKernelAsymptoticSeries::ComptonKernelAsymptoticSeries(
 {}
 
 template<typename T>
-SigmaResult ComptonKernelAsymptoticSeries::asymptotic_series(
+ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
     double const gamma,
     double const gamma_p,
     double const xi,
@@ -113,7 +113,7 @@ SigmaResult ComptonKernelAsymptoticSeries::asymptotic_series(
             double const value = sigma0 * normalized;
             double const abs_error = std::abs(sigma0) * term_mag;
             double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
-            return SigmaResult{value, abs_error, rel_error};
+            return ComptonResult{value, abs_error, rel_error};
         }
 
         if (n >= n_min_ && term_mag > prev_term_mag) {
@@ -123,7 +123,7 @@ SigmaResult ComptonKernelAsymptoticSeries::asymptotic_series(
                 double const value = sigma0 * normalized;
                 double const abs_error = std::abs(sigma0) * smallest_term_mag;
                 double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
-                return SigmaResult{value, abs_error, rel_error};
+                return ComptonResult{value, abs_error, rel_error};
             }
         } else {
             increase_count = 0;
@@ -149,13 +149,13 @@ SigmaResult ComptonKernelAsymptoticSeries::asymptotic_series(
     throw std::runtime_error("asymptotic series failed to converge");
 }
 
-template SigmaResult ComptonKernelAsymptoticSeries::asymptotic_series<double>(
+template ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series<double>(
     double, double, double, double, double, double) const;
-template SigmaResult ComptonKernelAsymptoticSeries::asymptotic_series<DD>(
+template ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series<DD>(
     double, double, double, double, double, double) const;
 
 template<typename T>
-SigmaResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
+ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
     double const gamma,
     double const gamma_p,
     double const xi,
@@ -253,7 +253,7 @@ SigmaResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
             double const value = sigma0 * normalized;
             double const abs_error = std::abs(sigma0) * dterm_mag;
             double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
-            return SigmaResult{value, abs_error, rel_error};
+            return ComptonResult{value, abs_error, rel_error};
         }
 
         if (n >= n_min_ && dterm_mag > prev_dterm_mag) {
@@ -263,7 +263,7 @@ SigmaResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
                 double const value = sigma0 * normalized;
                 double const abs_error = std::abs(sigma0) * smallest_dterm_mag;
                 double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
-                return SigmaResult{value, abs_error, rel_error};
+                return ComptonResult{value, abs_error, rel_error};
             }
         } else {
             increase_count = 0;
@@ -289,12 +289,12 @@ SigmaResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
     throw std::runtime_error("asymptotic series derivative failed to converge");
 }
 
-template SigmaResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative<double>(
+template ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative<double>(
     double, double, double, double, double, double) const;
-template SigmaResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative<DD>(
+template ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative<DD>(
     double, double, double, double, double, double) const;
 
-SigmaResult ComptonKernelAsymptoticSeries::sigma_E(
+ComptonResult ComptonKernelAsymptoticSeries::sigma_E(
     double const E,
     double const E_prime,
     double const xi,
@@ -324,14 +324,14 @@ double ComptonKernelAsymptoticSeries::sigma_E_precision_check(
     double const gamma   = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
-    SigmaResult const dd_res  = asymptotic_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
-    SigmaResult const dbl_res = asymptotic_series<double>(gamma, gamma_p, xi, tau, E, Ne);
+    ComptonResult const dd_res  = asymptotic_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
+    ComptonResult const dbl_res = asymptotic_series<double>(gamma, gamma_p, xi, tau, E, Ne);
 
     return std::abs(dd_res.value - dbl_res.value)
          / (std::abs(dd_res.value) + constants::REL_ERROR_TINY_SCALE);
 }
 
-SigmaResult ComptonKernelAsymptoticSeries::dsigma_E_dT(
+ComptonResult ComptonKernelAsymptoticSeries::dsigma_E_dT(
     double const E,
     double const E_prime,
     double const xi,
@@ -344,13 +344,13 @@ SigmaResult ComptonKernelAsymptoticSeries::dsigma_E_dT(
     double const gamma   = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
-    SigmaResult dtau_result;
+    ComptonResult dtau_result;
     if (high_precision_)
         dtau_result = asymptotic_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);
     else
         dtau_result = asymptotic_series_derivative<double>(gamma, gamma_p, xi, tau, E, Ne);
 
-    return SigmaResult{
+    return ComptonResult{
         dtau_result.value * dtau_dT,
         dtau_result.estimated_abs_error * dtau_dT,
         dtau_result.estimated_rel_error};
@@ -368,8 +368,8 @@ double ComptonKernelAsymptoticSeries::dsigma_E_dT_precision_check(
     double const gamma   = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
-    SigmaResult const dd_res  = asymptotic_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);
-    SigmaResult const dbl_res = asymptotic_series_derivative<double>(gamma, gamma_p, xi, tau, E, Ne);
+    ComptonResult const dd_res  = asymptotic_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);
+    ComptonResult const dbl_res = asymptotic_series_derivative<double>(gamma, gamma_p, xi, tau, E, Ne);
 
     return std::abs(dd_res.value - dbl_res.value)
          / (std::abs(dd_res.value) + constants::REL_ERROR_TINY_SCALE);

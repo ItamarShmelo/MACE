@@ -391,7 +391,7 @@ negligible compared to quadrature tolerances.
 
 ## Error Estimation
 
-All kernel evaluations return a `SigmaResult` containing `value` and
+All kernel evaluations return a `ComptonResult` containing `value` and
 `estimated_rel_error`.  These are **heuristic** estimates, not rigorous bounds:
 
 - **Quadrature:** Richardson-style comparison of order $N_L$ vs $N_L/2$:

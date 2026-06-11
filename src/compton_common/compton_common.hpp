@@ -447,7 +447,7 @@ inline double sigma0_E(
 }
 
 /// Result of a kernel evaluation: value plus heuristic error estimates.
-struct SigmaResult {
+struct ComptonResult {
     double value;               /// Σ_E in [cm²/erg] (Nₑ=1) or [1/(cm·erg)]
     double estimated_abs_error; ///
     double estimated_rel_error; /// abs_error / |value|

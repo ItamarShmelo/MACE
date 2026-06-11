@@ -47,9 +47,9 @@ public:
      * @param xi       cos(scattering angle), strictly in (−1, 1)
      * @param T        Electron temperature [K]
      * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
-     * @return SigmaResult with value and error estimates
+     * @return ComptonResult with value and error estimates
      */
-    SigmaResult sigma_E(
+    ComptonResult sigma_E(
         double E,
         double E_prime,
         double xi,
@@ -68,9 +68,9 @@ public:
      * @param xi       cos(scattering angle), strictly in (−1, 1)
      * @param T        Electron temperature [K]
      * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
-     * @return SigmaResult with value and error estimates
+     * @return ComptonResult with value and error estimates
      */
-    SigmaResult dsigma_E_dT(
+    ComptonResult dsigma_E_dT(
         double E,
         double E_prime,
         double xi,
@@ -132,7 +132,7 @@ private:
      * double-double (~31 digits) arithmetic.
      */
     template<typename T>
-    SigmaResult asymptotic_series(
+    ComptonResult asymptotic_series(
         double gamma,
         double gamma_p,
         double xi,
@@ -158,7 +158,7 @@ private:
      * double-double (~31 digits) arithmetic.
      */
     template<typename T>
-    SigmaResult asymptotic_series_derivative(
+    ComptonResult asymptotic_series_derivative(
         double gamma,
         double gamma_p,
         double xi,

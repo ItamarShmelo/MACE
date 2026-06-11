@@ -20,7 +20,7 @@ ComptonPowerSeries::ComptonPowerSeries(
 {}
 
 template<typename T>
-SigmaResult ComptonPowerSeries::power_series(
+ComptonResult ComptonPowerSeries::power_series(
     double const gamma,
     double const gamma_p,
     double const xi,
@@ -128,19 +128,19 @@ SigmaResult ComptonPowerSeries::power_series(
     T const rel_error = std::max(trunc_rel, round_rel);
     T const abs_error = rel_error * param_abs(value);
 
-    return SigmaResult{
+    return ComptonResult{
         to_double(value),
         to_double(abs_error),
         to_double(rel_error)};
 }
 
-template SigmaResult ComptonPowerSeries::power_series<double>(
+template ComptonResult ComptonPowerSeries::power_series<double>(
     double, double, double, double, double, double) const;
-template SigmaResult ComptonPowerSeries::power_series<DD>(
+template ComptonResult ComptonPowerSeries::power_series<DD>(
     double, double, double, double, double, double) const;
 
 template<typename T>
-SigmaResult ComptonPowerSeries::power_series_derivative(
+ComptonResult ComptonPowerSeries::power_series_derivative(
     double const gamma,
     double const gamma_p,
     double const xi,
@@ -281,18 +281,18 @@ SigmaResult ComptonPowerSeries::power_series_derivative(
     T const rel_error = std::max(trunc_rel, round_rel);
     T const abs_error = rel_error * param_abs(value);
 
-    return SigmaResult{
+    return ComptonResult{
         to_double(value),
         to_double(abs_error),
         to_double(rel_error)};
 }
 
-template SigmaResult ComptonPowerSeries::power_series_derivative<double>(
+template ComptonResult ComptonPowerSeries::power_series_derivative<double>(
     double, double, double, double, double, double) const;
-template SigmaResult ComptonPowerSeries::power_series_derivative<DD>(
+template ComptonResult ComptonPowerSeries::power_series_derivative<DD>(
     double, double, double, double, double, double) const;
 
-SigmaResult ComptonPowerSeries::sigma_E(
+ComptonResult ComptonPowerSeries::sigma_E(
     double const E,
     double const E_prime,
     double const xi,
@@ -322,14 +322,14 @@ double ComptonPowerSeries::sigma_E_precision_check(
     double const gamma   = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
-    SigmaResult const dd_res  = power_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
-    SigmaResult const dbl_res = power_series<double>(gamma, gamma_p, xi, tau, E, Ne);
+    ComptonResult const dd_res  = power_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
+    ComptonResult const dbl_res = power_series<double>(gamma, gamma_p, xi, tau, E, Ne);
 
     return std::abs(dd_res.value - dbl_res.value)
          / (std::abs(dd_res.value) + constants::REL_ERROR_TINY_SCALE);
 }
 
-SigmaResult ComptonPowerSeries::dsigma_E_dT(
+ComptonResult ComptonPowerSeries::dsigma_E_dT(
     double const E,
     double const E_prime,
     double const xi,
@@ -342,13 +342,13 @@ SigmaResult ComptonPowerSeries::dsigma_E_dT(
     double const gamma   = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
-    SigmaResult dtau_result;
+    ComptonResult dtau_result;
     if (high_precision_)
         dtau_result = power_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);
     else
         dtau_result = power_series_derivative<double>(gamma, gamma_p, xi, tau, E, Ne);
 
-    return SigmaResult{
+    return ComptonResult{
         dtau_result.value * dtau_dT,
         dtau_result.estimated_abs_error * dtau_dT,
         dtau_result.estimated_rel_error};
@@ -366,8 +366,8 @@ double ComptonPowerSeries::dsigma_E_dT_precision_check(
     double const gamma   = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
-    SigmaResult const dd_res  = power_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);
-    SigmaResult const dbl_res = power_series_derivative<double>(gamma, gamma_p, xi, tau, E, Ne);
+    ComptonResult const dd_res  = power_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);
+    ComptonResult const dbl_res = power_series_derivative<double>(gamma, gamma_p, xi, tau, E, Ne);
 
     return std::abs(dd_res.value - dbl_res.value)
          / (std::abs(dd_res.value) + constants::REL_ERROR_TINY_SCALE);

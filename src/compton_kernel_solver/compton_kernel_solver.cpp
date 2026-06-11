@@ -18,7 +18,7 @@ ComptonKernelSolver::ComptonKernelSolver(
     , quadrature_(64)
 {}
 
-SigmaResult ComptonKernelSolver::sigma_E(
+ComptonResult ComptonKernelSolver::sigma_E(
     double const E,
     double const E_prime,
     double const xi,
@@ -50,7 +50,7 @@ SigmaResult ComptonKernelSolver::sigma_E(
     return power_series_dd_.sigma_E(E, E_prime, xi, T, Ne);
 }
 
-SigmaResult ComptonKernelSolver::dsigma_E_dT(
+ComptonResult ComptonKernelSolver::dsigma_E_dT(
     double const E,
     double const E_prime,
     double const xi,

@@ -45,14 +45,14 @@ public:
         double quadrature_self_tol         = 1e-6,
         double asymp_gamma_dd_threshold    = 0.002);
 
-    SigmaResult sigma_E(
+    ComptonResult sigma_E(
         double E,
         double E_prime,
         double xi,
         double T,
         double Ne) const;
 
-    SigmaResult dsigma_E_dT(
+    ComptonResult dsigma_E_dT(
         double E,
         double E_prime,
         double xi,
