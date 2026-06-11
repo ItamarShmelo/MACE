@@ -512,8 +512,10 @@ inline std::pair<double, double> peak_limits(
     double const T)
 {
     double const gamma = E / units::me_c2;
-    double const thermal_dE =
-        E * std::sqrt(2.0 * T * units::k_boltz / units::me_c2);
+    double const tau = T * units::k_boltz / units::me_c2;
+    double thermal_dE = E * std::sqrt(2.0 * tau);
+    if (T < constants::COLD_TEMPERATURE_THRESHOLD)
+        thermal_dE *= 5.0;
     return {E / (1.0 + gamma * (1.0 - mu_lo)) - thermal_dE,
             E / (1.0 + gamma * (1.0 - mu_hi)) + thermal_dE};
 }
