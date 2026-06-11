@@ -111,15 +111,19 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
 
     for (std::size_t sample_i = 0; sample_i < num_samples_; ++sample_i) {
 
+        // Step 1: sample electron Lorentz factor from Maxwell-Jüttner
         double const lam = sample_gamma(theta);
         double const beta = std::sqrt(1.0 - 1.0 / (lam * lam));
         sum_beta += beta;
 
+        // Step 2: sample isotropic electron direction
         double const mu_e = 1.0 - 2.0 * uniform_dist_(rng_);
         double const sin_e = std::sqrt(1.0 - mu_e * mu_e);
 
+        // Step 3: incoming-photon Doppler factor
         double const D0 = lam * (1.0 - beta * mu_e);
 
+        // Step 4: incoming photon direction in electron rest frame
         double const mu_0_tag =
             (1.0 / D0) *
             (1.0 - lam / (1.0 + lam) * (D0 + 1.0) * beta * mu_e);
