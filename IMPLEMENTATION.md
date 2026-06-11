@@ -422,3 +422,21 @@ The chain rule factor $d\tau/dT = k_B / (m_e c^2)$ is applied at the API
 boundary.  The multigroup `dsigma_dT` plugs this derivative kernel into the
 same weighted integral; it is **not** the full $\partial\sigma/\partial T$ of
 the ratio (which would need quotient-rule terms for the denominator).
+
+- **Monte Carlo:** uses a direct per-sample derivative weight.  Each MC
+  sample's Klein-Nishina contribution is multiplied by the derivative weight
+  $(\gamma_i - \kappa)/\tau^2 - 3/\tau$ (where $\gamma_i$ is the sampled
+  Lorentz factor and $\kappa = K_1(1/\tau)/K_2(1/\tau)$) and accumulated
+  into a single tally.  The derivative is then
+
+  $$\frac{\partial\sigma}{\partial T}\bigg|_{g_0,g'} = \text{norm} \sum_i \sigma_i \left[\frac{\gamma_i - \kappa(\tau)}{\tau^2} - \frac{3}{\tau}\right] \frac{d\tau}{dT}$$
+
+  This is algebraically equivalent to the ratio form
+  $\sigma \cdot [J_1/(\tau^2 J_0) - 3/\tau - \kappa/\tau^2]$, but avoids
+  the catastrophic cancellation that occurs at cold temperatures ($\tau \ll 1$)
+  where $J_1/J_0 \approx \kappa \approx 1$ and dividing their stochastic
+  difference by $\tau^2$ amplifies MC noise.  The direct form computes
+  $\gamma_i - \kappa$ per sample where $\gamma_i$ is exact, eliminating the
+  noisy-ratio problem.  The same normalization (`beta_avg`, `weight_avg`) is
+  applied, matching the multigroup convention (kernel-only derivative, no
+  quotient-rule terms).

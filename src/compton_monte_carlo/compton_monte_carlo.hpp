@@ -120,6 +120,41 @@ public:
         double T, double Ne,
         KernelMultiplier const& multiplier) const;
 
+    /**
+     * @brief Compute the multigroup-multiangle ∂σ/∂T matrix via MC.
+     *
+     * Plugs the temperature-derivative kernel ∂Σ_KN/∂T into the same
+     * weighted-integral formula as compute_sigma_matrix.  This is NOT the
+     * full d/dT of compute_sigma_matrix (which would need quotient-rule
+     * terms); it matches the convention of
+     * ComptonMultigroupKernel::compute_dsigma_dT_matrix.
+     *
+     * Uses a single-pass two-accumulator approach: the MC loop tallies both
+     * J₀ (Klein-Nishina contribution) and J₁ (gamma-weighted contribution)
+     * per matrix element, then applies the analytical derivative factor
+     *   ∂kernel/∂T = kernel · [J₁/(τ²J₀) − 3/τ − κ/τ²] · dτ/dT
+     * where κ = K₁(1/τ)/K₂(1/τ).
+     *
+     * @param num_angle_bins  Number of equal-width bins on [−1, 1].
+     * @param T               Electron temperature [K].
+     * @param Ne              Electron density [cm⁻³] (forwarded to multiplier only).
+     * @param multiplier      Pointwise kernel multiplier applied before accumulation.
+     * @return Flat vector of size G×G×N_angles, row-major [g][g'][angle].
+     */
+    std::vector<double> compute_dsigma_dT_matrix(
+        int num_angle_bins,
+        double T, double Ne,
+        KernelMultiplier const& multiplier) const;
+
+    /**
+     * @brief Compute the angle-integrated ∂σ/∂T matrix via MC.
+     *
+     * Equivalent to compute_dsigma_dT_matrix(1, T, Ne, multiplier) reshaped to G×G.
+     */
+    std::vector<double> compute_dsigma_dT_matrix(
+        double T, double Ne,
+        KernelMultiplier const& multiplier) const;
+
 private:
     /**
      * @brief Sample electron Lorentz factor from the velocity-weighted
