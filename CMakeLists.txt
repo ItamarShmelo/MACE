@@ -119,6 +119,18 @@ set_target_properties(_compton_multigroup PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
 )
 
+pybind11_add_module(_compton_monte_carlo
+    src/compton_monte_carlo/compton_monte_carlo.cpp
+    src/compton_multigroup/weight_function.cpp
+    src/compton_monte_carlo/bind/_compton_monte_carlo.cpp
+)
+target_compile_options(_compton_monte_carlo PRIVATE
+    -O3 -Wall -Wextra -Wpedantic
+)
+set_target_properties(_compton_monte_carlo PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
+)
+
 pybind11_add_module(_compton_multigroup_misc
     src/compton_multigroup/bind/_compton_multigroup_misc.cpp
 )
