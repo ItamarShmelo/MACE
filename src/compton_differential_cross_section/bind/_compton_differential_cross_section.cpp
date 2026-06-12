@@ -160,11 +160,13 @@ PYBIND11_MODULE(_compton_differential_cross_section, m) {
 
     // --- Solver ---
     py::class_<ComptonKernelSolver>(m, "ComptonKernelSolver")
-        .def(py::init<double, double, double, double>(),
+        .def(py::init<double, double, double, double, double, double>(),
              "asymp_tau_alpha_threshold"_a   = 0.025,
              "gamma_double_precision_safe"_a = 0.02,
              "quadrature_self_tol"_a         = 1e-6,
-             "asymp_gamma_dd_threshold"_a    = 0.002)
+             "asymp_gamma_dd_threshold"_a    = 0.002,
+             "asymp_self_tol"_a              = 1e-3,
+             "asymp_gamma_dd_cross_val_threshold"_a = 1e-4)
         .def("sigma_E", &ComptonKernelSolver::sigma_E,
              "E"_a, "E_prime"_a, "xi"_a, "T"_a, "Ne"_a)
         .def("dsigma_E_dT", &ComptonKernelSolver::dsigma_E_dT,

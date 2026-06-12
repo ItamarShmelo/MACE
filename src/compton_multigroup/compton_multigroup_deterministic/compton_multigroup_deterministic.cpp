@@ -21,12 +21,14 @@ MGIntegrationConfig::MGIntegrationConfig(
     int const peak_max_depth,
     int const cold_temperature_order,
     std::optional<int> const tail_order,
-    std::optional<int> const far_order)
+    std::optional<int> const far_order,
+    std::optional<int> const mu_order)
     : base_order(base_order)
     , cold_temperature_order(cold_temperature_order)
     , peak_max_depth(peak_max_depth)
     , tail_order(tail_order)
     , far_order(far_order)
+    , mu_order(mu_order)
     , integration_tolerance(integration_tolerance)
     , cutoff_ratio(cutoff_ratio)
 {
@@ -44,6 +46,8 @@ MGIntegrationConfig::MGIntegrationConfig(
         throw std::invalid_argument("tail_order must be >= 1");
     if (far_order.has_value() && far_order.value() < 1)
         throw std::invalid_argument("far_order must be >= 1");
+    if (mu_order.has_value() && mu_order.value() < 1)
+        throw std::invalid_argument("mu_order must be >= 1");
 }
 
 ComptonMultigroupKernel::ComptonMultigroupKernel(
@@ -56,6 +60,9 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
     , cold_rule_(compute_gauss_legendre(config.cold_temperature_order))
     , tail_rule_(compute_gauss_legendre(config.effective_tail_order()))
     , far_rule_(compute_gauss_legendre(config.effective_far_order()))
+    , mu_rule_(compute_gauss_legendre(config.effective_mu_order()))
+    , mu_cold_rule_(compute_gauss_legendre(
+          std::max(config.cold_temperature_order, config.effective_mu_order())))
     , integration_tolerance_(config.integration_tolerance)
     , peak_max_depth_(config.peak_max_depth)
     , group_cutoff_ratio_(config.cutoff_ratio)
@@ -194,6 +201,7 @@ double ComptonMultigroupKernel::compute_group_entry(
     double const inv_denom,
     KernelMultiplier const& multiplier,
     GaussLegendreRule const& active_rule,
+    GaussLegendreRule const& active_mu_rule,
     std::vector<double>& result) const
 {
     int const G = num_groups();
@@ -232,15 +240,12 @@ double ComptonMultigroupKernel::compute_group_entry(
             //   far:  single-panel linear GL
             double const inner = integrate_Ep_group(
                 [&](double const Ep) {
-                    // --- μ integral (innermost axis) ---
-                    // Single-panel GL of f(E,E',μ)·Σ_E(E,E',μ,T,Ne)
-                    // over the angle bin [mu_lo, mu_hi].
                     return legendre_integrate(
                         [&](double const mu) {
                             return multiplier(E, Ep, mu, T, Ne) *
                                    (kernel.*eval)(E, Ep, mu, T, Ne).value;
                         },
-                        active_rule, mu_lo, mu_hi);
+                        active_mu_rule, mu_lo, mu_hi);
                 },
                 Ep_lo, Ep_hi, band_lo, band_hi,
                 active_rule, peak_tol, peak_max_depth_,
@@ -355,8 +360,9 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     // --- Cold-temperature rule selection ---
     // Below the threshold the kernel is extremely sharp (near-Thomson);
     // a higher-order rule is needed for the E and mu axes.
-    GaussLegendreRule const& active_rule =
-        (T < constants::COLD_TEMPERATURE_THRESHOLD) ? cold_rule_ : base_rule_;
+    bool const is_cold = T < constants::COLD_TEMPERATURE_THRESHOLD;
+    GaussLegendreRule const& active_rule = is_cold ? cold_rule_ : base_rule_;
+    GaussLegendreRule const& active_mu_rule = is_cold ? mu_cold_rule_ : mu_rule_;
 
     // --- Main loop over incoming groups g ---
     for (int g = 0; g < G; ++g) {
@@ -366,7 +372,7 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
             return compute_group_entry(
                 kernel, eval, g, gp, num_angle_bins, dmu,
                 T, Ne, peak_tol,
-                inv_denom, multiplier, active_rule, result);
+                inv_denom, multiplier, active_rule, active_mu_rule, result);
         };
 
         // --- Outward-from-peak target-group traversal ---

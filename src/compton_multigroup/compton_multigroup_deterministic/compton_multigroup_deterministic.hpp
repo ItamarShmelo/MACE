@@ -87,19 +87,21 @@ struct MGIntegrationConfig {
     int peak_max_depth;
     std::optional<int> tail_order;
     std::optional<int> far_order;
+    std::optional<int> mu_order;
     double integration_tolerance;
     double cutoff_ratio;
 
     /**
      * @brief Construct with validated defaults.
      *
-     * @param base_order              GL panel order for E, mu, and E'-peak axes.
+     * @param base_order              GL panel order for E and E'-peak axes.
      * @param integration_tolerance   Overall relative tolerance for the outer integral.
      * @param cutoff_ratio            Outward-from-peak early-termination ratio.
      * @param peak_max_depth          Maximum recursion depth for adaptive E' peak.
      * @param cold_temperature_order  GL order for E/mu when T < COLD_TEMPERATURE_THRESHOLD.
      * @param tail_order              GL order for E' tail regions (defaults to base_order).
      * @param far_order               GL order for E' far-from-peak regions (defaults to base_order).
+     * @param mu_order                GL order for the μ axis (defaults to base_order).
      * @throws std::invalid_argument on invalid parameters.
      */
     MGIntegrationConfig(
@@ -109,13 +111,17 @@ struct MGIntegrationConfig {
         int peak_max_depth = 5,
         int cold_temperature_order = 48,
         std::optional<int> tail_order = std::nullopt,
-        std::optional<int> far_order = std::nullopt);
+        std::optional<int> far_order = std::nullopt,
+        std::optional<int> mu_order = std::nullopt);
 
     /** @brief Effective tail GL order (tail_order if set, otherwise base_order). */
     int effective_tail_order() const { return tail_order.value_or(base_order); }
 
     /** @brief Effective far GL order (far_order if set, otherwise base_order). */
     int effective_far_order() const { return far_order.value_or(base_order); }
+
+    /** @brief Effective μ GL order (mu_order if set, otherwise base_order). */
+    int effective_mu_order() const { return mu_order.value_or(base_order); }
 };
 
 /**
@@ -302,6 +308,7 @@ private:
         double inv_denom,
         KernelMultiplier const& multiplier,
         GaussLegendreRule const& active_rule,
+        GaussLegendreRule const& active_mu_rule,
         std::vector<double>& result) const;
 
     std::vector<double> group_boundaries_;
@@ -310,14 +317,18 @@ private:
     /// Shared weight function for the Planck/Wien/Uniform numerator and denominator.
     std::shared_ptr<WeightFunction const> weight_func_;
 
-    /// GL rule for E, mu, and E'-peak axes.
+    /// GL rule for E and E'-peak axes.
     GaussLegendreRule base_rule_;
-    /// GL rule for E/mu axes when T < COLD_TEMPERATURE_THRESHOLD.
+    /// GL rule for E axes when T < COLD_TEMPERATURE_THRESHOLD.
     GaussLegendreRule cold_rule_;
     /// GL rule for E' tail (log/rlog) sub-regions.
     GaussLegendreRule tail_rule_;
     /// GL rule for E' far-from-peak sub-regions.
     GaussLegendreRule far_rule_;
+    /// GL rule for the μ (scattering-angle) axis.
+    GaussLegendreRule mu_rule_;
+    /// GL rule for μ when T < COLD_TEMPERATURE_THRESHOLD.
+    GaussLegendreRule mu_cold_rule_;
 
     double integration_tolerance_;
     int peak_max_depth_;

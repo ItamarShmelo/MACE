@@ -110,15 +110,38 @@ point:
 tau_alpha_max = tau * max(alpha_+, alpha_-)
 gamma_min     = min(gamma, gamma')
 
-1a. if tau_alpha_max < 0.025 AND gamma_min >= 0.002
-                                   --> Asymptotic series (double)
-1b. if tau_alpha_max < 0.025 AND gamma_min <  0.002
-                                   --> Asymptotic series (double-double)
+1.  if tau_alpha_max < 0.025:
+        (a) gamma_min >= 0.002  --> try Asymptotic series (double)
+        (b) gamma_min <  0.002  --> try Asymptotic series (double-double)
+        accept only if self-reported rel_error < 1e-3;
+        when accepted AND gamma_min < 1e-4, cross-validate against DD
+        power series (prefer DD power series if it succeeds with tight
+        self-error); otherwise fall through to steps 2-4.
 2.  elif gamma_min >= 0.02         --> Power series (double)
 3.  else try Q64 Gauss-Laguerre:
         if self-error < 1e-6       --> Accept Q64
-        else                       --> Power series (double-double)
+4.      else                       --> Power series (double-double)
 ```
+
+**Asymptotic quality gate (step 1).**  At high temperature and ultra-low
+photon energy ($\gamma \ll 1$), the quantity $\tau \cdot \max(\alpha_+, \alpha_-)$
+depends on the scattering angle $\xi$.  Near $\xi \approx 0.96$ (for $T = 100$
+keV), it crosses the 0.025 threshold, causing the solver to switch from DD
+power series to DD asymptotic.  Just past the boundary the asymptotic series
+reports self-errors $10^4 \times$ larger than the value, producing garbage that
+corrupts the multigroup angular integral.  The quality gate detects this and
+falls through to the DD power series path (via Q64 rejection).
+
+**Cross-validation at ultra-low $\gamma$ (step 1b).**  Even when the DD
+asymptotic self-error passes the gate, its error estimate can silently
+underreport the true error at extreme forward scattering ($\xi > 0.99$) with
+ultra-low $\gamma$ ($< 10^{-4}$).  In this regime the DD asymptotic can return
+values orders of magnitude wrong while claiming relative errors of $10^{-13}$.
+To catch this, when $\gamma_{\min} < 10^{-4}$, the solver cross-validates the
+DD asymptotic result against DD power series.  If DD power series succeeds with
+self-reported error below $10^{-6}$, its result is preferred; otherwise the DD
+asymptotic result is returned (e.g., in cold-plasma regimes where DD power
+series may not be viable).
 
 The thresholds are empirically validated:
 
@@ -128,6 +151,8 @@ The thresholds are empirically validated:
 | `ASYMP_GAMMA_DD_THRESHOLD` | 0.002 (~1 keV) | Worst-case double vs DD asymptotic error is 7e-7 at this boundary |
 | `GAMMA_DOUBLE_PRECISION_SAFE` | 0.02 (~10 keV) | Worst-case double vs DD power-series error is 3.15e-7 at this boundary |
 | `quadrature_self_tol` | 1e-6 | Accepts Q64 only when its Richardson error estimate is tight |
+| `asymp_self_tol` | 1e-3 | Rejects asymptotic when self-reported error exceeds 0.1%; guards dispatch boundary |
+| `asymp_gamma_dd_cross_val_threshold` | 1e-4 (~0.05 keV) | Cross-validate DD asymptotic against DD power series below this $\gamma$ |
 
 
 ## Precision Strategy
