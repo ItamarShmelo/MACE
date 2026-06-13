@@ -92,6 +92,14 @@ inline DD param_asinh(DD const& value) {
     return dd_asinh(value);
 }
 
+inline double param_log(double const value) {
+    return std::log(value);
+}
+
+inline DD param_log(DD const& value) {
+    return value.log();
+}
+
 inline double param_clamp(double const value, double const lo, double const hi) {
     return std::clamp(value, lo, hi);
 }
@@ -150,6 +158,49 @@ struct EhatAmpBudget<DD> {
     static constexpr double value = 1e10;
 };
 
+template<typename T> struct EulerMascheroni;
+
+template<>
+struct EulerMascheroni<double> {
+    static constexpr double value = 0.57721566490153286;
+};
+
+template<>
+struct EulerMascheroni<DD> {
+    static constexpr DD value{5.772156649015328655e-01, -4.942915152430644834e-18};
+};
+
+/**
+ * @brief Evaluate Ehat_1(x) via the Taylor series for E_1(x).
+ *
+ * Uses E_1(x) = -gamma - ln(x) + sum_{k=1}^N (-1)^{k+1} x^k / (k * k!)
+ * then Ehat_1(x) = exp(x) * E_1(x).
+ *
+ * The series converges for all x > 0 but is used only for x < 1 where
+ * the continued fraction is prohibitively slow.  For x < 1 the sum
+ * -gamma - ln(x) + S(x) has no cancellation (all terms positive).
+ */
+template<typename T>
+inline T ehat_series(T const& x, double const tol) {
+    T const gamma_euler = EulerMascheroni<T>::value;
+    T const ln_x = param_log(x);
+
+    // S = sum_{k=1}^N (-1)^{k+1} x^k / (k * k!)
+    // Recurrence: term_{k+1} = term_k * (-x) * k / ((k+1)^2)
+    T term(x);
+    T S = term;
+    for (int k = 1; k <= 60; ++k) {
+        term = term * (-x) * T(static_cast<double>(k))
+             / T(static_cast<double>((k + 1) * (k + 1)));
+        S = S + term;
+        if (param_abs(term) < tol * param_abs(S))
+            break;
+    }
+
+    T const E1 = -gamma_euler - ln_x + S;
+    return param_exp(x) * E1;
+}
+
 } // namespace details
 
 /**
@@ -171,6 +222,10 @@ inline T ehat(
     }
     if (m < 1) {
         throw std::invalid_argument("ehat requires m >= 1");
+    }
+
+    if (m == 1 && x < T(1.0)) {
+        return ehat_series(x, cf_tol);
     }
 
     constexpr double TINY = 1e-300;

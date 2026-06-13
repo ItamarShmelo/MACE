@@ -216,6 +216,23 @@ accumulated amplification stays below an **amplitude budget**: $10^3$ for double
 $10^{10}$ for DD.  Once the budget is exceeded the CF is restarted to reset
 error.
 
+**Taylor series fallback for small $x$ (m=1).**  The CF converges slowly for
+small $x$: at $x \approx 0.05$ it requires $>5000$ iterations (the partial
+quotient ratio $|a_j|/b_j \approx j/2$ grows without bound).  For $m = 1$ and
+$x < 1$, the function is evaluated via the Taylor series instead:
+
+$$E_1(x) = -\gamma - \ln x + \sum_{k=1}^{N} \frac{(-x)^k}{k \cdot k!}$$
+
+$$\hat{E}_1(x) = e^x \cdot E_1(x)$$
+
+The crossover at $x = 1$ is the classic threshold (Numerical Recipes §6.3): at
+$x = 1$ both methods cost ~25 iterations; below $x = 1$ the series is strictly
+cheaper (5 terms at $x = 0.05$, 17 terms at $x = 1$ for double; 25 for DD).
+For $x < 1$ the sum $-\gamma - \ln x + S(x)$ has no cancellation since all
+terms are positive, so double precision is safe.  Only $m = 1$ needs the
+fallback; higher-order $\hat{E}_{n+1}$ are computed via the forward recurrence
+which is stable for $x < 1$ (amplitude factor $x/(n+1) < 1$).
+
 
 ## Multigroup Integration
 
