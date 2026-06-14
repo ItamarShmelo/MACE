@@ -212,7 +212,7 @@ double adaptive_legendre_integrate(F&& integrand,
                                    double const a,
                                    double const b,
                                    double const tol,
-                                   int const max_depth = 10)
+                                   int const max_depth)
 {
     constexpr double abs_floor = 1e-300;
 
@@ -261,7 +261,7 @@ double adaptive_log_legendre_integrate(F&& integrand,
                                        double const a,
                                        double const b,
                                        double const tol,
-                                       int const max_depth = 15)
+                                       int const max_depth)
 {
     double const log_a = std::log(a);
     double const log_b = std::log(b);
@@ -302,7 +302,7 @@ double adaptive_rlog_legendre_integrate(F&& integrand,
                                         double const a,
                                         double const b,
                                         double const tol,
-                                        int const max_depth = 15)
+                                        int const max_depth)
 {
     double const sum_ab = a + b;
     double const log_a = std::log(a);

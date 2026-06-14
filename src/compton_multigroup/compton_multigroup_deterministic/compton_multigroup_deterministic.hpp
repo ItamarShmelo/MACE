@@ -173,7 +173,7 @@ public:
     ComptonMultigroupKernel(
         std::vector<double> const& energy_group_boundaries,
         std::shared_ptr<WeightFunction const> weight_function,
-        MGIntegrationConfig const& config = MGIntegrationConfig{});
+        MGIntegrationConfig const& config);
 
     /** @brief Number of energy groups G. */
     int num_groups() const { return static_cast<int>(group_centers_.size()); }
