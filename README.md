@@ -433,24 +433,46 @@ term-magnitude increases.
 
 ```
 tau_alpha_max = tau * max(alpha_plus, alpha_minus)
+gamma_min     = min(gamma, gamma_prime)
 
-if tau_alpha_max < 0.025:
-    method = AsymptoticSeries           # cold regime
-elif min(gamma, gamma_prime) >= 0.02:
-    method = PowerSeries (double)       # double precision
-else:
-    try Q64 quadrature                  # fast quadrature attempt
-    fallback PowerSeries (DD)           # double-double precision
+1. if tau_alpha_max < 0.04:                       # cold regime
+     if gamma_min < 0.002:
+         result = AsymptoticSeries (DD)
+     else:
+         result = AsymptoticSeries (double)
+     if result.rel_error < 1e-3:                  # self-tolerance gate
+         if gamma_min < 1e-4 and tau_alpha_max > 0.4 * threshold:
+             cross-validate against DD PowerSeries # guard silent misses
+         accept
+     else: fall through
+
+2. if gamma_min >= 0.02:
+     return PowerSeries (double)
+
+3. result = Q64 quadrature
+   if result.rel_error < 1e-6: accept
+
+4. try DD PowerSeries
+   if ok and rel_error < 1e-6: accept
+
+5. try DD AsymptoticSeries as last resort
+   pick best remaining result, or raise
 ```
 
-The thresholds are configurable at construction time (defaults from `compton_common.hpp`):
+The thresholds are configurable at construction time (defaults from `compton_kernel_solver.hpp`):
 
-- `asymp_tau_alpha_threshold = 0.025` -- below this, the asymptotic series
+- `asymp_tau_alpha_threshold = 0.04` -- below this, the asymptotic series
   reaches its optimal truncation with few terms.
 - `gamma_double_precision_safe = 0.02` -- above this, the $P_+-P_-$
   cancellation is mild enough for double precision.
 - `quadrature_self_tol = 1e-6` -- accept Q64 when its self-reported
   relative error is below this tolerance.
+- `asymp_gamma_dd_threshold = 0.002` -- within the asymptotic regime, switch
+  to DD arithmetic below this photon energy.
+- `asymp_self_tol = 1e-3` -- reject the asymptotic result when its
+  self-reported error exceeds this; falls through to Q64 / DD power series.
+- `asymp_gamma_dd_cross_val_threshold = 1e-4` -- at ultra-low gamma near
+  the dispatch boundary, cross-validate DD asymptotic against DD power series.
 
 ## Tests
 

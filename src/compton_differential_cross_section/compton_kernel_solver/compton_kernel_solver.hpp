@@ -34,7 +34,7 @@
 namespace compton {
 
 namespace constants {
-constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.025;
+constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.04;
 constexpr double GAMMA_DOUBLE_PRECISION_SAFE = 0.02;
 constexpr double ASYMP_GAMMA_DD_THRESHOLD = 0.002;
 /// Cross-validate DD asymptotic against DD power series when gamma is

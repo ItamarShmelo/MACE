@@ -1,5 +1,7 @@
 #include "compton_differential_cross_section/compton_kernel_solver/compton_kernel_solver.hpp"
 
+#include <cstdio>
+
 namespace compton {
 
 ComptonKernelSolver::ComptonKernelSolver(
@@ -58,6 +60,7 @@ ComptonResult ComptonKernelSolver::dispatch(
     double const gamma_min = std::min(gamma, gamma_p);
 
     if (tau_alpha_max < asymp_tau_alpha_threshold_) {
+      try {
         auto const a_result =
             (gamma_min < asymp_gamma_dd_threshold_)
                 ? eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T, Ne)
@@ -70,17 +73,22 @@ ComptonResult ComptonKernelSolver::dispatch(
             // the asymptotic regime the kernel can have narrow spikes
             // that are correct point-wise but unresolvable by GL
             // quadrature, so using asymptotic there avoids artifacts.
+            // Only prefer PS-DD when it also reports lower self-error
+            // than the asymptotic series, guarding against the PS-DD
+            // error estimator underreporting at extreme kinematics.
             if (gamma_min < asymp_gamma_dd_cross_val_threshold_
                 && tau_alpha_max > 0.4 * asymp_tau_alpha_threshold_) {
                 try {
                     auto const ps = eval_kernel<Op>(power_series_dd_,
                                                     E, E_prime, xi, T, Ne);
-                    if (ps.estimated_rel_error < quadrature_self_tol_)
+                    if (ps.estimated_rel_error < quadrature_self_tol_
+                        && ps.estimated_rel_error < a_result.estimated_rel_error)
                         return ps;
                 } catch (...) {}
             }
             return a_result;
         }
+      } catch (...) {}
     }
 
     if (gamma_min >= gamma_double_precision_safe_)
@@ -90,7 +98,35 @@ ComptonResult ComptonKernelSolver::dispatch(
     if (q_result.estimated_rel_error < quadrature_self_tol_)
         return q_result;
 
-    return eval_kernel<Op>(power_series_dd_, E, E_prime, xi, T, Ne);
+    ComptonResult ps_result;
+    bool ps_ok = false;
+    try {
+        ps_result = eval_kernel<Op>(power_series_dd_, E, E_prime, xi, T, Ne);
+        ps_ok = ps_result.estimated_rel_error < 1.0;
+    } catch (...) {}
+
+    // Always try asymp-DD as a competing estimate.  At ultra-low gamma
+    // and large tau*alpha the PS-DD error estimator can underreport,
+    // passing the tolerance gate with a wrong-sign result while
+    // asymp-DD carries the correct answer with even lower self-error.
+    ComptonResult a_last;
+    bool a_ok = false;
+    try {
+        a_last = eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T, Ne);
+        a_ok = a_last.estimated_rel_error < 1.0;
+    } catch (...) {}
+
+    if (ps_ok && a_ok) {
+        auto const& better = (a_last.estimated_rel_error <= ps_result.estimated_rel_error)
+                                 ? a_last : ps_result;
+        if (better.estimated_rel_error < quadrature_self_tol_)
+            return better;
+        return (a_last.estimated_rel_error <= ps_result.estimated_rel_error)
+                   ? a_last : ps_result;
+    }
+    if (ps_ok) return ps_result;
+    if (a_ok)  return a_last;
+    throw std::runtime_error("all kernel backends failed");
 }
 
 ComptonResult ComptonKernelSolver::sigma_E(
@@ -100,7 +136,32 @@ ComptonResult ComptonKernelSolver::sigma_E(
     double const T,
     double const Ne) const
 {
-    return dispatch<KernelOp::sigma>(E, E_prime, xi, T, Ne);
+    ComptonResult result;
+    try {
+        result = dispatch<KernelOp::sigma>(E, E_prime, xi, T, Ne);
+    } catch (...) {
+        double const gamma   = E       / units::me_c2;
+        double const gamma_p = E_prime / units::me_c2;
+        double const T_kev   = T / units::kev_kelvin;
+        double const tau     = T * units::k_boltz / units::me_c2;
+        std::fprintf(stderr,
+            "WARNING sigma_E: all backends failed, returning 0"
+            "  (gamma=%.6e, gamma'=%.6e, T=%.6e keV, tau=%.6e, xi=%.6e)\n",
+            gamma, gamma_p, T_kev, tau, xi);
+        return ComptonResult{0.0, 1.0};
+    }
+    if (result.value < 0.0) {
+        double const gamma   = E       / units::me_c2;
+        double const gamma_p = E_prime / units::me_c2;
+        double const T_kev   = T / units::kev_kelvin;
+        double const tau     = T * units::k_boltz / units::me_c2;
+        std::fprintf(stderr,
+            "WARNING sigma_E: %.6e clamped to 0"
+            "  (gamma=%.6e, gamma'=%.6e, T=%.6e keV, tau=%.6e, xi=%.6e, err=%.3e)\n",
+            result.value, gamma, gamma_p, T_kev, tau, xi, result.estimated_rel_error);
+        result.value = 0.0;
+    }
+    return result;
 }
 
 ComptonResult ComptonKernelSolver::dsigma_E_dT(
@@ -110,7 +171,19 @@ ComptonResult ComptonKernelSolver::dsigma_E_dT(
     double const T,
     double const Ne) const
 {
-    return dispatch<KernelOp::dsigma_dT>(E, E_prime, xi, T, Ne);
+    try {
+        return dispatch<KernelOp::dsigma_dT>(E, E_prime, xi, T, Ne);
+    } catch (...) {
+        double const gamma   = E       / units::me_c2;
+        double const gamma_p = E_prime / units::me_c2;
+        double const T_kev   = T / units::kev_kelvin;
+        double const tau     = T * units::k_boltz / units::me_c2;
+        std::fprintf(stderr,
+            "WARNING dsigma_E_dT: all backends failed, returning 0"
+            "  (gamma=%.6e, gamma'=%.6e, T=%.6e keV, tau=%.6e, xi=%.6e)\n",
+            gamma, gamma_p, T_kev, tau, xi);
+        return ComptonResult{0.0, 1.0};
+    }
 }
 
 } // namespace compton
