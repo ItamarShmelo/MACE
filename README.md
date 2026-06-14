@@ -38,11 +38,10 @@ This produces pybind11 extension modules in `cpp_modules/`:
 | Module | Contents |
 |--------|----------|
 | `_compton_common` | `ComptonResult` result type |
-| `_compton_kernel_quadrature` | Gauss-Laguerre quadrature evaluator |
-| `_compton_power_series` | Convergent power series evaluator (double / DD) |
-| `_compton_kernel_asymptotic_series` | Divergent asymptotic series evaluator |
-| `_compton_kernel_solver` | Adaptive dispatch kernel (asymptotic / power series / Q64) |
-| `_compton_multigroup` | Planck-weighted multigroup-multiangle kernel |
+| `_compton_differential_cross_section` | All kernel evaluators: power series, asymptotic series, quadrature, and adaptive solver |
+| `_compton_multigroup` | Multigroup deterministic + Monte Carlo integration, weight functions |
+| `_compton_kernel_multipliers` | `EnergyTransferMultiplier` for multigroup integrals |
+| `_utilities` | Gauss-Legendre / Gauss-Laguerre quadrature rules |
 | `_units` | Physical constants in CGS (`kev`, `kev_kelvin`, `me_c2`, ...) |
 
 ## Example usage
@@ -51,17 +50,16 @@ This produces pybind11 extension modules in `cpp_modules/`:
 import sys
 sys.path.insert(0, "cpp_modules")
 
-import _compton_kernel_quadrature as cq
-from _compton_kernel_solver import ComptonKernelSolver
+import _compton_differential_cross_section as cds
 from _units import kev, kev_kelvin
 
 # Quadrature (256-point Gauss-Laguerre, post-IBP form)
-quad = cq.ComptonKernelQuadrature(256, cq.QuadratureForm.PostIBP)
+quad = cds.ComptonKernelQuadrature(256, cds.QuadratureForm.PostIBP)
 r = quad.sigma_E(1*kev, 2*kev, 0.0, kev_kelvin, 1.0)
 print(f"quadrature: {r.value:.6e}  (rel_err ~ {r.estimated_rel_error:.1e})")
 
 # Solver (adaptive dispatch: asymptotic / power series / Q64)
-solver = ComptonKernelSolver()
+solver = cds.ComptonKernelSolver()
 r = solver.sigma_E(1*kev, 2*kev, 0.0, 1*kev_kelvin, 1.0)
 print(f"solver:     {r.value:.6e}  (rel_err ~ {r.estimated_rel_error:.1e})")
 ```
@@ -90,12 +88,12 @@ the `weight_function` constructor argument.
 
 **API summary.**
 
-- **Constructor**: `ComptonMultigroupKernel(energy_group_boundaries, weight_function, quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)` — boundaries are G+1 strictly increasing values in [erg], all > 0. `weight_function` is a `WeightFunction` subclass (e.g. `PlanckWeightFunction`, `UniformWeightFunction`, `WienWeightFunction`).
-- **`compute_sigma_matrix(kernel, num_angle_bins, T, Ne)`** — returns a `(G, G, N_angles)` NumPy array.
-- **`compute_sigma_matrix(kernel, T, Ne)`** — angle-integrated, returns a `(G, G)` NumPy array.
-- **`compute_dsigma_dT_matrix`** — same signatures, using the temperature-derivative kernel.
+- **Constructor**: `ComptonMultigroupKernel(energy_group_boundaries, weight_function, config=MGIntegrationConfig())` -- boundaries are G+1 strictly increasing values in [erg], all > 0. `weight_function` is a `WeightFunction` subclass (e.g. `PlanckWeightFunction`, `UniformWeightFunction`, `WienWeightFunction`). `config` controls quadrature orders, adaptive refinement depth, and convergence tolerance.
+- **`compute_sigma_matrix(kernel, num_angle_bins, T, Ne)`** -- returns a `(G, G, N_angles)` NumPy array.
+- **`compute_sigma_matrix(kernel, T, Ne)`** -- angle-integrated, returns a `(G, G)` NumPy array.
+- **`compute_dsigma_dT_matrix`** -- same signatures, using the temperature-derivative kernel.
 
-The `kernel` argument is a `ComptonKernelSolver` or `ComptonKernelQuadrature` instance.
+The `kernel` argument is a `ComptonKernelSolver` instance.
 
 **Example:**
 
@@ -104,14 +102,14 @@ import sys
 sys.path.insert(0, "cpp_modules")
 
 import _compton_multigroup as cm
-import _compton_kernel_quadrature as cq
+import _compton_differential_cross_section as cds
 from _units import kev, kev_kelvin
 
-kernel = cq.ComptonKernelQuadrature(64)
+kernel = cds.ComptonKernelSolver()
 mg = cm.ComptonMultigroupKernel(
     energy_group_boundaries=[0.1*kev, 0.5*kev, 1*kev, 5*kev, 10*kev],
     weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-    quad_order_E=8)
+    config=cm.MGIntegrationConfig(base_order=8))
 
 # Angle-integrated G x G matrix
 S = mg.compute_sigma_matrix(kernel, T=10*kev_kelvin, Ne=1.0)
