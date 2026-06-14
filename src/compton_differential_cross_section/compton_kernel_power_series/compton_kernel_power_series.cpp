@@ -126,9 +126,14 @@ ComptonResult ComptonPowerSeries::power_series(
 
     constexpr double T_EPS = details::MachineEps<T>::value;
     T const norm_abs = param_abs(normalized) + eps_tiny;
-    T const max_accum = std::max(param_abs(P_plus), param_abs(P_minus));
+
+    T const cancel_P = (param_abs(P_plus) + param_abs(P_minus))
+                     / (param_abs(diff) + T(eps_tiny));
+    T const cancel_Psi = (param_abs(p.Psi) + param_abs(diff))
+                       / (param_abs(normalized) + T(eps_tiny));
+
     T const trunc_rel = last_term_mag / norm_abs;
-    T const round_rel = T(terms_used) * T_EPS * max_accum / norm_abs;
+    T const round_rel = T(terms_used) * T_EPS * cancel_P * cancel_Psi;
     T const rel_error = std::max(trunc_rel, round_rel);
     T const abs_error = rel_error * param_abs(value);
 
@@ -274,14 +279,21 @@ ComptonResult ComptonPowerSeries::power_series_derivative(
     T const dPsi = T(2.0 * gamma * gamma_p) / p.q;
     T const dlnSig0 = lk / (tau_t * tau_t) - T(3.0) / tau_t;
     T const diff = P_plus - P_minus;
-    T const deriv_normalized = dPsi + (dP_plus - dP_minus) + dlnSig0 * (p.Psi + diff);
+    T const ddiff = dP_plus - dP_minus;
+    T const sigma_term = dlnSig0 * (p.Psi + diff);
+    T const deriv_normalized = dPsi + ddiff + sigma_term;
     T const value = sigma0 * deriv_normalized;
 
     constexpr double T_EPS = details::MachineEps<T>::value;
     T const norm_abs = param_abs(deriv_normalized) + eps_tiny;
-    T const max_accum = std::max(param_abs(dP_plus), param_abs(dP_minus));
+
+    T const cancel_dP = (param_abs(dP_plus) + param_abs(dP_minus))
+                      / (param_abs(ddiff) + T(eps_tiny));
+    T const all_terms = param_abs(dPsi) + param_abs(ddiff) + param_abs(sigma_term);
+    T const cancel_deriv = all_terms / (param_abs(deriv_normalized) + T(eps_tiny));
+
     T const trunc_rel = last_deriv_term_mag / norm_abs;
-    T const round_rel = T(terms_used) * T_EPS * max_accum / norm_abs;
+    T const round_rel = T(terms_used) * T_EPS * cancel_dP * cancel_deriv;
     T const rel_error = std::max(trunc_rel, round_rel);
     T const abs_error = rel_error * param_abs(value);
 

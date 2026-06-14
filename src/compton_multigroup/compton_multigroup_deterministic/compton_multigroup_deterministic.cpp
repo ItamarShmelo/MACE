@@ -10,6 +10,8 @@ namespace compton {
 
 namespace constants {
 static constexpr double LOG_E_RATIO_THRESHOLD = 10.0;
+static constexpr double LOG_MU_EP_RATIO_THRESHOLD = 1.5;
+static constexpr double E_BOUNDARY_LAYER_MULTIPLIER = 10.0;
 } // namespace constants
 
 // ── MGIntegrationConfig ─────────────────────────────────────────────────
@@ -141,7 +143,10 @@ double integrate_Ep_group(
     double const overlap_hi = std::clamp(peak_hi, Ep_lo, Ep_hi);
 
     if (overlap_lo >= overlap_hi) {
-        return legendre_integrate(f, far_rule, Ep_lo, Ep_hi);
+        if (peak_hi <= Ep_lo) {
+            return log_legendre_integrate(f, far_rule, Ep_lo, Ep_hi);
+        }
+        return rlog_legendre_integrate(f, far_rule, Ep_lo, Ep_hi);
     }
 
     double result = 0.0;
@@ -238,14 +243,32 @@ double ComptonMultigroupKernel::compute_group_entry(
             //   peak: adaptive GL
             //   tail: single-panel log/rlog GL
             //   far:  single-panel linear GL
+            auto mu_integrand = [&](double const E_in, double const Ep) {
+                auto f = [&](double const mu) {
+                    return multiplier(E_in, Ep, mu, T, Ne) *
+                           (kernel.*eval)(E_in, Ep, mu, T, Ne).value;
+                };
+                double const ratio = Ep / E_in;
+                if (ratio > constants::LOG_MU_EP_RATIO_THRESHOLD) {
+                    double const dmu_span = mu_hi - mu_lo;
+                    double const eps = dmu_span * 1e-14;
+                    return log_legendre_integrate(
+                        [&](double const s) { return f(mu_lo + s); },
+                        active_mu_rule, eps, dmu_span);
+                }
+                if (ratio < 1.0 / constants::LOG_MU_EP_RATIO_THRESHOLD) {
+                    double const dmu_span = mu_hi - mu_lo;
+                    double const eps = dmu_span * 1e-14;
+                    return log_legendre_integrate(
+                        [&](double const s) { return f(mu_hi - s); },
+                        active_mu_rule, eps, dmu_span);
+                }
+                return legendre_integrate(f, active_mu_rule, mu_lo, mu_hi);
+            };
+
             double const inner = integrate_Ep_group(
                 [&](double const Ep) {
-                    return legendre_integrate(
-                        [&](double const mu) {
-                            return multiplier(E, Ep, mu, T, Ne) *
-                                   (kernel.*eval)(E, Ep, mu, T, Ne).value;
-                        },
-                        active_mu_rule, mu_lo, mu_hi);
+                    return mu_integrand(E, Ep);
                 },
                 Ep_lo, Ep_hi, band_lo, band_hi,
                 active_rule, peak_tol, peak_max_depth_,
@@ -255,27 +278,58 @@ double ComptonMultigroupKernel::compute_group_entry(
             return w * inner;
         };
 
-        // --- E-axis mapping selection ---
-        // Wide groups (E_hi/E_lo > threshold) use a logarithmic change of
-        // variable to cluster quadrature nodes where the integrand is
-        // largest.  The weight function at the group edges determines which
-        // end to cluster toward:
-        //   log   (nodes near E_lo) when w(E_lo) >= w(E_hi)
-        //   rlog  (nodes near E_hi) when w(E_hi) >  w(E_lo)
+        // --- E-axis boundary sub-panels ---
+        //
+        // The Compton kernel near a group boundary has a thermal peak of
+        // width ~thermal_half_width(E, T).  At cold T this width can be
+        // much smaller than the GL node spacing, causing the quadrature
+        // to miss the boundary-straddling contribution entirely.
+        //
+        // Split the E integral into up to three sub-panels:
+        //   [E_lo, E_lo + delta_lo]             -- left boundary  (linear GL)
+        //   [E_lo + delta_lo, E_hi - delta_hi]  -- interior       (existing mapping)
+        //   [E_hi - delta_hi, E_hi]             -- right boundary (linear GL)
+
+        double const span = E_hi - E_lo;
+        double const delta_lo = std::min(
+            constants::E_BOUNDARY_LAYER_MULTIPLIER * thermal_half_width(E_lo, T),
+            0.4 * span);
+        double const delta_hi = std::min(
+            constants::E_BOUNDARY_LAYER_MULTIPLIER * thermal_half_width(E_hi, T),
+            0.4 * span);
+
         double numerator = 0.0;
-        if (E_hi / E_lo > constants::LOG_E_RATIO_THRESHOLD) {
-            double const w_lo = weight_func_->weight(E_lo, T);
-            double const w_hi = weight_func_->weight(E_hi, T);
-            if (w_lo >= w_hi) {
-                numerator = log_legendre_integrate(
-                    E_integrand, active_rule, E_lo, E_hi);
+
+        // Left boundary layer.
+        if (delta_lo > 1e-14 * span) {
+            numerator += legendre_integrate(
+                E_integrand, active_rule, E_lo, E_lo + delta_lo);
+        }
+
+        // Interior: existing mapping logic on the reduced interval.
+        double const E_int_lo = E_lo + delta_lo;
+        double const E_int_hi = E_hi - delta_hi;
+        if (E_int_hi > E_int_lo) {
+            if (E_int_hi / E_int_lo > constants::LOG_E_RATIO_THRESHOLD) {
+                double const w_lo = weight_func_->weight(E_int_lo, T);
+                double const w_hi = weight_func_->weight(E_int_hi, T);
+                if (w_lo >= w_hi) {
+                    numerator += log_legendre_integrate(
+                        E_integrand, active_rule, E_int_lo, E_int_hi);
+                } else {
+                    numerator += rlog_legendre_integrate(
+                        E_integrand, active_rule, E_int_lo, E_int_hi);
+                }
             } else {
-                numerator = rlog_legendre_integrate(
-                    E_integrand, active_rule, E_lo, E_hi);
+                numerator += legendre_integrate(
+                    E_integrand, active_rule, E_int_lo, E_int_hi);
             }
-        } else {
-            numerator = legendre_integrate(
-                E_integrand, active_rule, E_lo, E_hi);
+        }
+
+        // Right boundary layer.
+        if (delta_hi > 1e-14 * span) {
+            numerator += legendre_integrate(
+                E_integrand, active_rule, E_hi - delta_hi, E_hi);
         }
 
         // Store the final matrix element:

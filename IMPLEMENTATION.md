@@ -101,6 +101,41 @@ the solver automatically switches to DD arithmetic.  The threshold of 0.002 is
 chosen so double-vs-DD error stays below $10^{-6}$ with margin (empirically
 $7 \times 10^{-7}$ at $\gamma = 10^{-3}$, $10^{-9}$ at $\gamma = 10^{-2}$).
 
+**Rearranged accumulation for G-cancellation.**
+At ultra-low $\gamma$ the kinematic parameter
+$G = -\gamma\gamma' + 2/a + 2/(\gamma\gamma' a^2)$ is dominated by the last
+term and reaches $\sim 10^{16}$ at $\gamma \sim 10^{-8}$.  Each term
+$T_n^\pm$ in the series is proportional to $G \cdot n!$, and $S_+ + S_-$
+cancels $\sim 16$ digits.  In DD (31 digits) this leaves only $\sim 7$ good
+digits---marginal when the normalised result is $\sim 10^{-10}$.
+
+The implementation avoids this by grouping the $G$ contribution analytically:
+
+$$T_n^+ + T_n^- = \bigl(G - (n{+}1)/a\bigr)\, n!\, D_n + (n{+}1)!\, F_{n+1}$$
+
+where $D_n = (-\tau\alpha_-)^{n+1} P_n(\zeta_-) - (-\tau\alpha_+)^{n+1} P_n(\zeta_+)$
+and $F_{n+1}$ groups the $\eta_\pm$ Legendre terms (see
+`docs/asymptotic_rearrangement_derivation.md` for the full derivation).
+$D_n$ involves an $O(\gamma)$ subtraction that loses $\sim 8$ digits,
+so the combined formula preserves $\sim 15$ good digits in DD---a gain
+of $\sim 8$ digits over the original two-accumulator approach.
+
+Convergence/truncation tracks **two independent (value, error) pairs**:
+
+1. The original $|T_n^+| + |T_n^-|$ (`term_mag`), which correctly identifies
+   the optimal truncation point in the non-cancellation regime.
+2. The rearranged $|T_n^+ + T_n^-|$ (`combined_mag`), which is the actual
+   error contribution after cancellation and can be orders of magnitude
+   smaller than `term_mag`.
+
+Each pair records the partial sum at the truncation index where its metric
+was smallest.  On convergence or divergence exit, whichever pair has the
+smaller error magnitude is returned.  This ensures the self-reported error
+reflects the true accuracy of the rearranged sum rather than the inflated
+magnitude of the individual un-cancelled terms.  Empirical validation at
+50-digit precision confirms up to 74$\times$ improvement in the DD result
+accuracy.
+
 ### Solver Dispatch
 
 `ComptonKernelSolver` selects the fastest accurate method at each phase-space
@@ -110,27 +145,36 @@ point:
 tau_alpha_max = tau * max(alpha_+, alpha_-)
 gamma_min     = min(gamma, gamma')
 
-1.  if tau_alpha_max < 0.025:
+1.  if tau_alpha_max < 0.04:
         (a) gamma_min >= 0.002  --> try Asymptotic series (double)
         (b) gamma_min <  0.002  --> try Asymptotic series (double-double)
         accept only if self-reported rel_error < 1e-3;
-        when accepted AND gamma_min < 1e-4, cross-validate against DD
-        power series (prefer DD power series if it succeeds with tight
-        self-error); otherwise fall through to steps 2-4.
+        when accepted AND gamma_min < 1e-4 AND tau_alpha_max > 0.4 * 0.04,
+        cross-validate against DD power series (prefer DD power series
+        if it succeeds with tight self-error); otherwise fall through
+        to steps 2-4.
 2.  elif gamma_min >= 0.02         --> Power series (double)
 3.  else try Q64 Gauss-Laguerre:
         if self-error < 1e-6       --> Accept Q64
-4.      else                       --> Power series (double-double)
+4.      else try Power series (double-double):
+        if self-error < 1e-6       --> Accept PS_dd
+5.      else try Asymptotic series (DD) as last resort
+        (even beyond the tau_alpha threshold);
+        prefer whichever of PS_dd or Asymp_dd has lower self-error.
+        If both fail/throw, throw runtime_error.
 ```
 
 **Asymptotic quality gate (step 1).**  At high temperature and ultra-low
 photon energy ($\gamma \ll 1$), the quantity $\tau \cdot \max(\alpha_+, \alpha_-)$
 depends on the scattering angle $\xi$.  Near $\xi \approx 0.96$ (for $T = 100$
-keV), it crosses the 0.025 threshold, causing the solver to switch from DD
+keV), it crosses the 0.04 threshold, causing the solver to switch from DD
 power series to DD asymptotic.  Just past the boundary the asymptotic series
 reports self-errors $10^4 \times$ larger than the value, producing garbage that
 corrupts the multigroup angular integral.  The quality gate detects this and
-falls through to the DD power series path (via Q64 rejection).
+falls through to the DD power series path (via Q64 rejection).  The entire
+asymptotic branch (step 1) is wrapped in a `try/catch` because the series can
+throw "failed to converge" near the dispatch boundary when factorial overflow
+occurs before the optimal truncation point is reached.
 
 **Cross-validation at ultra-low $\gamma$ (step 1b).**  Even when the DD
 asymptotic self-error passes the gate, its error estimate can silently
@@ -147,7 +191,7 @@ The thresholds are empirically validated:
 
 | Constant | Value | Rationale |
 |----------|-------|-----------|
-| `ASYMP_TAU_ALPHA_THRESHOLD` | 0.025 | Asymptotic series achieves < 1e-3 relative error vs Q256 |
+| `ASYMP_TAU_ALPHA_THRESHOLD` | 0.04 | Numerical sweep shows max verified error < 5e-8 for tau_alpha in [0.025, 0.04); extends asymptotic coverage to T ~ 20 keV |
 | `ASYMP_GAMMA_DD_THRESHOLD` | 0.002 (~1 keV) | Worst-case double vs DD asymptotic error is 7e-7 at this boundary |
 | `GAMMA_DOUBLE_PRECISION_SAFE` | 0.02 (~10 keV) | Worst-case double vs DD power-series error is 3.15e-7 at this boundary |
 | `quadrature_self_tol` | 1e-6 | Accepts Q64 only when its Richardson error estimate is tight |
@@ -330,6 +374,11 @@ the kernel is exponentially suppressed by the Boltzmann factor
 $\sim\exp(-(\lambda_\mathrm{min} - 1)/\tau)$.  This kinematic band depends only on $E$
 and the $\mu$-bin endpoints, not on temperature.
 
+At finite temperature `peak_limits` extends each edge by one thermal Doppler
+half-width $\Delta E = E\sqrt{2\tau}$; below `COLD_TEMPERATURE_THRESHOLD` the
+padding is widened to $5\Delta E$ because the kernel is extremely narrow and the
+recoil band may not otherwise span a full group.
+
 #### Direction-Aware Log-Space Integrators
 
 Two single-panel log-space GL quadrature variants handle the exponentially
@@ -357,7 +406,11 @@ overlap_hi = clamp(b, Ep_lo, Ep_hi)
 ```
 
 - If `overlap_lo >= overlap_hi`: the group is **far** (no overlap with peak).
-  Uses single-panel linear GL with the far rule (lower order).
+  Uses single-panel **log or rlog** GL with the far rule: `log_legendre_integrate`
+  when the peak is below the group ($E'_\text{peak} \le E'_\text{lo}$), and
+  `rlog_legendre_integrate` otherwise.  The log-space mapping concentrates
+  nodes at the group edge closest to the peak, which is critical when the
+  kernel decays rapidly across the group width.
 - Otherwise the group is split into up to three sub-intervals:
   - `[Ep_lo, overlap_lo]` **left tail**: single-panel reflected-log GL (nodes near peak boundary).
   - `[overlap_lo, overlap_hi]` **peak**: adaptive GL with tight tolerance.
@@ -391,14 +444,13 @@ GL with their respective coordinate mappings:
 |--------|-------|------------|----------|
 | Peak   | `base_order` | linear GL | Yes (configurable depth) |
 | Tail   | `tail_order` (default: `base_order`) | log/rlog GL | No |
-| Far    | `far_order` (default: `base_order`) | linear GL | No |
+| Far    | `far_order` (default: `base_order`) | log/rlog GL | No |
 
-The tail integrand is smooth (exponentially decaying away from the peak
-boundary), so the log-space change of variable already concentrates nodes
-where the integrand is largest; no adaptive refinement is needed.
-The far region carries negligible mass and needs only a single low-order
-GL panel.
-
+The tail and far integrands decay exponentially away from the peak boundary.
+The log-space change of variable concentrates nodes where the integrand is
+largest, making adaptive refinement unnecessary.  For far groups the mapping
+direction is chosen so that nodes cluster at the group edge closest to the
+peak (log for groups above the peak, rlog for groups below).
 
 ### Outward-from-Peak Group Cutoff
 
@@ -438,10 +490,52 @@ All kernel evaluations return a `ComptonResult` containing `value` and
 
 - **Quadrature:** Richardson-style comparison of order $N_L$ vs $N_L/2$:
   `rel_err = |I_hi - I_lo| / (|I_hi| + 1e-300)`.
-- **Power series:** `max(last_term_magnitude, N * eps_mach * max(|P+|, |P-|))`
-  normalized by the result.
-- **Asymptotic series:** magnitude of the smallest term (at optimal truncation)
-  divided by the accumulated sum.
+- **Power series:** cascaded cancellation condition number:
+  $\varepsilon_\text{round} = N \cdot \varepsilon_\text{mach} \cdot C_P \cdot C_\Psi$,
+  where $C_P = (|P_+| + |P_-|) / |P_+ - P_-|$ measures cancellation in the
+  $P_+ - P_-$ subtraction and $C_\Psi = (|\Psi| + |P_+ - P_-|) / |\Psi + P_+ - P_-|$
+  measures cancellation in the final sum.  For the derivative, $C_\Psi$ is replaced
+  by a three-term condition number accounting for $d\Psi$, $dP_+ - dP_-$, and the
+  $d\ln\Sigma_0 \cdot (\Psi + \text{diff})$ propagation term.
+  The final error is `max(truncation, round)`.
+- **Asymptotic series:** dual-metric tracking (see below).
+
+**Why the original power series error formula was wrong.**  The prior formula
+used $N \cdot \varepsilon_\text{mach} \cdot \max(|P_+|, |P_-|) / |\text{result}|$,
+which only accounts for one stage of cancellation.  When both $P_+ \approx P_-$
+*and* $\Psi \approx -(P_+ - P_-)$, the actual condition number is the product of
+two large ratios.  At ultra-low $\gamma$ and extreme forward scattering, the old
+formula reported self-errors of $\sim 10^{-7}$ when the true error was 17% or
+worse, causing the solver to trust catastrophically wrong DD power series results.
+
+**Why the original asymptotic series error formula was wrong.**  After the
+rearranged accumulation was introduced (see above), the convergence tracker
+still used $|T_n^+| + |T_n^-|$ — the magnitude of the *original* un-cancelled
+terms.  These are $\sim 10^{18}\times$ larger than the actual contribution
+$|T_n^+ + T_n^-|$ after analytical cancellation of the $G$ terms.  The
+self-reported error was therefore massively inflated, causing the solver to
+reject correct asymptotic results and dispatch to the (broken) power series.
+The fix adds a parallel `combined_mag` tracking path that reports the true
+error of the rearranged sum.
+
+**Cross-validation boundary factor.**  The `0.4 * threshold` factor in the
+cross-validation guard (step 1b) limits cross-validation to the upper 60% of
+the asymptotic regime's $\tau\alpha$ range.  Deep inside the asymptotic regime
+($\tau\alpha \ll \text{threshold}$), cross-validation is skipped because the
+asymptotic series is highly accurate there and the power series may not be
+viable (Poisson underflow).  As the threshold was raised from 0.025 to 0.04,
+the absolute boundary moved from 0.01 to 0.016.  This factor may need
+re-tuning if further threshold changes shift the dispatch boundary into
+regimes where ultra-low $\gamma$ cross-validation is needed deeper in.
+
+**PS_dd fallback with error gate.**  The final fallback (step 4/5) wraps the
+DD power series call in a `try/catch` block because `power_series_dd_` can
+throw on Poisson weight underflow or non-convergence at extreme parameters.
+If PS_dd succeeds but its (now-honest) self-error exceeds tolerance, the solver
+attempts DD asymptotic as a last resort — even beyond the $\tau\alpha$ threshold —
+because a poorly-converged asymptotic result is vastly more accurate than a
+catastrophically cancellation-corrupted power series.  If both fail, a
+`runtime_error` is thrown.
 
 Tests anchor accuracy against Q256 post-IBP Gauss–Laguerre as the numerical
 ground truth.  Multigroup accuracy is validated against the CMMC Monte Carlo

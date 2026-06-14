@@ -336,18 +336,34 @@ private:
 };
 
 /**
+ * @brief Thermal Doppler half-width of the Compton kernel at energy E.
+ *
+ *     dE = E * sqrt(2 k_B T / m_e c^2)
+ *
+ * Below COLD_TEMPERATURE_THRESHOLD a 5x multiplier is applied to ensure
+ * the extremely narrow recoil band is fully captured.
+ *
+ * @param E  Photon energy [erg].
+ * @param T  Electron temperature [K].
+ * @return   Thermal half-width [erg].
+ */
+inline double thermal_half_width(double const E, double const T)
+{
+    double const tau = T * units::k_boltz / units::me_c2;
+    double dE = E * std::sqrt(2.0 * tau);
+    if (T < constants::COLD_TEMPERATURE_THRESHOLD)
+        dE *= 5.0;
+    return dE;
+}
+
+/**
  * @brief E' limits for peak-aware quadrature in an angle bin [mu_lo, mu_hi].
  *
  * Starts from the cold-electron recoil band:
  *
  *     E'(mu) = E / (1 + gamma * (1 - mu)),    gamma = E / (m_e c^2)
  *
- * and extends each edge by the thermal Doppler width
- *
- *     dE = E * sqrt(2 k_B T / m_e c^2)
- *
- * so that the peak-aware E' quadrature captures the kernel peak even when
- * E sits right at a group boundary.
+ * and extends each edge by thermal_half_width(E, T).
  *
  * @param E     Incoming photon energy [erg].
  * @param mu_lo Lower edge of the mu bin.
@@ -362,12 +378,9 @@ inline std::pair<double, double> peak_limits(
     double const T)
 {
     double const gamma = E / units::me_c2;
-    double const tau = T * units::k_boltz / units::me_c2;
-    double thermal_dE = E * std::sqrt(2.0 * tau);
-    if (T < constants::COLD_TEMPERATURE_THRESHOLD)
-        thermal_dE *= 5.0;
-    return {E / (1.0 + gamma * (1.0 - mu_lo)) - thermal_dE,
-            E / (1.0 + gamma * (1.0 - mu_hi)) + thermal_dE};
+    double const dE = thermal_half_width(E, T);
+    return {E / (1.0 + gamma * (1.0 - mu_lo)) - dE,
+            E / (1.0 + gamma * (1.0 - mu_hi)) + dE};
 }
 
 } // namespace compton
