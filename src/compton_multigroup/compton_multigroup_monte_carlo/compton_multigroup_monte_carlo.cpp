@@ -3,7 +3,9 @@
 #include "utilities/units.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <ctime>
 #include <numbers>
 #include <stdexcept>
@@ -86,6 +88,18 @@ double ComptonMonteCarloKernel::sample_gamma(double const theta) const {
     return 1.0 - theta * std::log(r1);
 }
 
+namespace {
+
+void log_ts(std::FILE* f) {
+    auto const now = std::chrono::system_clock::now();
+    auto const t = std::chrono::system_clock::to_time_t(now);
+    auto const* tm = std::localtime(&t);
+    std::fprintf(f, "%02d:%02d:%02d",
+        tm->tm_hour, tm->tm_min, tm->tm_sec);
+}
+
+} // anonymous namespace
+
 // ── Core MC integration ──────────────────────────────────────────────────
 
 template<typename MultiplierFn>
@@ -109,7 +123,28 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
     double sum_beta = 0.0;
     std::vector<double> weight_sum(G, 0.0);
 
+    auto const wall_t0 = std::chrono::steady_clock::now();
+    std::FILE* log_file = std::fopen("compton_multigroup.log", "a");
+    if (log_file) {
+        log_ts(log_file);
+        std::fprintf(log_file,
+            " [compton] monte_carlo: N=%zu, G=%d, angle_bins=%d,"
+            " T=%.4g keV, theta=%.2e\n",
+            num_samples_, G, num_angle_bins, T / units::kev_kelvin, theta);
+        std::fflush(log_file);
+    }
+    std::size_t const log_interval = std::max(num_samples_ / 10, std::size_t{1});
+
     for (std::size_t sample_i = 0; sample_i < num_samples_; ++sample_i) {
+
+        if (log_file && sample_i > 0 && sample_i % log_interval == 0) {
+            int const pct = static_cast<int>(100 * sample_i / num_samples_);
+            log_ts(log_file);
+            std::fprintf(log_file,
+                " [compton] monte_carlo: %d%% %zu/%zu\n",
+                pct, sample_i, num_samples_);
+            std::fflush(log_file);
+        }
 
         // Step 1: sample electron Lorentz factor from Maxwell-Jüttner
         double const lam = sample_gamma(theta);
@@ -218,6 +253,16 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
                     static_cast<std::size_t>(gp) * num_angle_bins + a;
                 result[idx] *= norm;
             }
+    }
+
+    if (log_file) {
+        auto const wall_t1 = std::chrono::steady_clock::now();
+        double const elapsed =
+            std::chrono::duration<double>(wall_t1 - wall_t0).count();
+        log_ts(log_file);
+        std::fprintf(log_file,
+            " [compton] monte_carlo: done in %.1f s\n", elapsed);
+        std::fclose(log_file);
     }
 
     return result;

@@ -2,7 +2,10 @@
 #include "compton_common/compton_common.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <ctime>
 #include <numbers>
 #include <stdexcept>
 
@@ -93,6 +96,14 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
 // ── E' sub-interval integration helpers ─────────────────────────────────
 
 namespace {
+
+void log_ts(std::FILE* f) {
+    auto const now = std::chrono::system_clock::now();
+    auto const t = std::chrono::system_clock::to_time_t(now);
+    auto const* tm = std::localtime(&t);
+    std::fprintf(f, "%02d:%02d:%02d",
+        tm->tm_hour, tm->tm_min, tm->tm_sec);
+}
 
 template<typename F>
 double integrate_Ep_peak(
@@ -418,6 +429,18 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     GaussLegendreRule const& active_rule = is_cold ? cold_rule_ : base_rule_;
     GaussLegendreRule const& active_mu_rule = is_cold ? mu_cold_rule_ : mu_rule_;
 
+    auto const wall_t0 = std::chrono::steady_clock::now();
+    std::FILE* log_file = std::fopen("compton_multigroup.log", "a");
+    if (log_file) {
+        log_ts(log_file);
+        std::fprintf(log_file,
+            " [compton] deterministic: G=%d, angle_bins=%d, T=%.4g keV, mode=%s\n",
+            G, num_angle_bins, T / units::kev_kelvin, is_cold ? "cold" : "hot");
+        std::fflush(log_file);
+    }
+    int g_width = 1;
+    { int tmp = G; while (tmp >= 10) { ++g_width; tmp /= 10; } }
+
     // --- Main loop over incoming groups g ---
     for (int g = 0; g < G; ++g) {
         double const inv_denom = 1.0 / denominators[g];
@@ -441,17 +464,51 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
         gp_peak = std::clamp(gp_peak, 0, G - 1);
 
         // Evaluate the peak group first to establish the reference magnitude.
+        auto const peak_t0 = std::chrono::steady_clock::now();
         double const peak_sum = do_group(gp_peak);
+        auto const peak_t1 = std::chrono::steady_clock::now();
+        double const peak_secs =
+            std::chrono::duration<double>(peak_t1 - peak_t0).count();
+
+        if (log_file) {
+            log_ts(log_file);
+            std::fprintf(log_file,
+                " [compton] group %*d/%d: peak (gp=%d) done in %.2fs\n",
+                g_width, g + 1, G, gp_peak, peak_secs);
+            std::fflush(log_file);
+        }
+
         double const cutoff = group_cutoff_ratio_ * peak_sum;
+        int groups_evaluated = 1;
 
         // Expand rightward (higher E' groups) until below cutoff.
         for (int gp = gp_peak + 1; gp < G; ++gp) {
+            ++groups_evaluated;
             if (do_group(gp) < cutoff) break;
         }
         // Expand leftward (lower E' groups) until below cutoff.
         for (int gp = gp_peak - 1; gp >= 0; --gp) {
+            ++groups_evaluated;
             if (do_group(gp) < cutoff) break;
         }
+
+        if (log_file) {
+            log_ts(log_file);
+            std::fprintf(log_file,
+                " [compton] group %*d/%d: %d target groups evaluated\n",
+                g_width, g + 1, G, groups_evaluated);
+            std::fflush(log_file);
+        }
+    }
+
+    if (log_file) {
+        auto const wall_t1 = std::chrono::steady_clock::now();
+        double const elapsed =
+            std::chrono::duration<double>(wall_t1 - wall_t0).count();
+        log_ts(log_file);
+        std::fprintf(log_file,
+            " [compton] deterministic: done in %.1f s\n", elapsed);
+        std::fclose(log_file);
     }
 
     return result;
