@@ -1,5 +1,7 @@
 CompileFlags:
   CompilationDatabase: build/
   Add:
+    - -I./src
+    - -I./external/CMMC/src
     - -I./build/_deps/doubledouble-src/include
     - -I./build/_deps/planck_integral-src
