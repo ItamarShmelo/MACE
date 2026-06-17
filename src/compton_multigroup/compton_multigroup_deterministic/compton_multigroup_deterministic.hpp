@@ -157,6 +157,34 @@ struct MGIntegrationConfig {
 
     /** @brief Effective μ GL order (mu_order if set, otherwise base_order). */
     int effective_mu_order() const { return mu_order.value_or(base_order); }
+
+    /**
+     * @brief High-accuracy adaptive config for cold temperatures (T < 0.1 keV).
+     *
+     * bo=192, pd=9, mu_order=192, mu_peak_k=10, tol=1e-8.
+     * Achieves < 1e-4 row-sum accuracy (MC-noise limited at N=1e9).
+     * Runtime: ~600-1300s per matrix depending on temperature.
+     */
+    static MGIntegrationConfig cold_adaptive() {
+        return MGIntegrationConfig(
+            192, 1e-8, 1e-12, 9, 192,
+            192, 192, 512, 10.0, std::nullopt);
+    }
+
+    /**
+     * @brief High-accuracy flat E' config for warm temperatures (T >= 0.1 keV).
+     *
+     * bo=96, mu_order=96, mu_peak_k=10, flat_ep(d=512, ppd, max=8192).
+     * flat_E=false, flat_mu=false (keeps boundary layers and peak-focused mu).
+     * Achieves < 1e-4 row-sum accuracy at T >= 1 keV.
+     * Runtime: ~30-120s per matrix depending on temperature.
+     */
+    static MGIntegrationConfig warm_flat() {
+        FlatEpConfig flat{512.0, 8, 8192, FlatEpDensityMode::points_per_decade, false, false};
+        return MGIntegrationConfig(
+            96, 1e-6, 1e-12, 7, 96,
+            96, 96, 96, 10.0, flat);
+    }
 };
 
 /**

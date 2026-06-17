@@ -73,7 +73,11 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .def_readwrite("flat_ep",                 &MGIntegrationConfig::flat_ep)
         .def("effective_tail_order", &MGIntegrationConfig::effective_tail_order)
         .def("effective_far_order",  &MGIntegrationConfig::effective_far_order)
-        .def("effective_mu_order",   &MGIntegrationConfig::effective_mu_order);
+        .def("effective_mu_order",   &MGIntegrationConfig::effective_mu_order)
+        .def_static("cold_adaptive", &MGIntegrationConfig::cold_adaptive,
+            "High-accuracy adaptive config for T < 0.1 keV (bo=192, pd=9, mu=512)")
+        .def_static("warm_flat", &MGIntegrationConfig::warm_flat,
+            "High-accuracy flat E' config for T >= 0.1 keV (bo=96, d=512, mu=96)");
 
     py::class_<ComptonMultigroupKernel>(m, "ComptonMultigroupKernel")
         .def(py::init<std::vector<double> const&,

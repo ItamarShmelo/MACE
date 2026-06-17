@@ -434,8 +434,11 @@ the constructor so that invalid configurations are rejected early.
 | `peak_max_depth` | 5 | Maximum recursion depth for adaptive E' peak |
 | `tail_order` | `nullopt` → `base_order` | GL order for E' tail (log/rlog) regions |
 | `far_order` | `nullopt` → `base_order` | GL order for E' far-from-peak regions |
+| `mu_order` | `nullopt` → `base_order` | GL order for the μ peak panel |
+| `mu_peak_k` | 10.0 | Number of FWHMs for the μ peak-focused splitting window |
 | `integration_tolerance` | 1e-3 | Overall relative tolerance for the outer integral |
 | `cutoff_ratio` | 1e-8 | Outward-from-peak early-termination ratio |
+| `flat_ep` | `nullopt` | Optional flat E' density config (replaces adaptive E' with single-pass GL) |
 
 Only the peak region uses adaptive quadrature; tails and far use single-panel
 GL with their respective coordinate mappings:
@@ -451,6 +454,82 @@ The log-space change of variable concentrates nodes where the integrand is
 largest, making adaptive refinement unnecessary.  For far groups the mapping
 direction is chosen so that nodes cluster at the group edge closest to the
 peak (log for groups above the peak, rlog for groups below).
+
+#### μ Peak-Focused Splitting
+
+For non-elastic scattering (|E'/E − 1| > 0.05), the μ integrand has a sharp
+peak at the Compton angle $\mu_c = 1 - (1/\gamma)(1/r - 1)$ where $r = E'/E$.
+The FWHM of this peak scales as:
+
+$$\text{FWHM}(\mu) \approx 4\sqrt{|1-r|/r} \cdot \sqrt{\tau} / \gamma^{3/2}$$
+
+The integrator splits the μ interval into three panels:
+1. Left tail: [μ_lo, μ_c − k·FWHM/2] with 8-point GL
+2. Peak: [μ_c − k·FWHM/2, μ_c + k·FWHM/2] with `mu_order`-point GL
+3. Right tail: [μ_c + k·FWHM/2, μ_hi] with 8-point GL
+
+where k = `mu_peak_k` (default 10). This splitting is applied only when the
+peak window is narrower than 80% of the full μ interval, ensuring the tails
+are exponentially small and well-resolved by just 8 points. For near-elastic
+scatter (|r − 1| < 0.05) or when the peak fills most of the interval, the
+integrator falls back to log/rlog mapping or standard linear GL.
+
+#### Recommended Production Configurations
+
+Two factory methods provide validated high-accuracy configurations:
+
+**`MGIntegrationConfig::cold_adaptive()`** — for T < 0.1 keV:
+
+| Parameter | Value | Rationale |
+|-----------|-------|-----------|
+| `base_order` | 192 | Resolves narrow Compton recoil band at cold T |
+| `peak_max_depth` | 9 | Deep recursion for extremely narrow E' peaks |
+| `mu_order` | 512 | Resolves sharp μ peak (FWHM ∝ √τ/γ^1.5, very narrow at high E + cold T) |
+| `mu_peak_k` | 10 | 10× FWHM window captures >99.99% of μ peak area |
+| `integration_tolerance` | 1e-8 | Tight tolerance for adaptive refinement |
+| `cutoff_ratio` | 1e-12 | Conservative group cutoff |
+| `cold_temperature_order` | 192 | Matches base_order |
+
+Validated accuracy: MC converges as 1/√N against this reference with no
+detectable det bias. At N=10^9: mid-group row-sum error ~5e-5 (pure MC
+noise), element-wise RMS ~3e-3. Runtime: ~300–600s per 24-group matrix
+(with bo=48; full bo=192 takes ~600–1300s).
+
+**`MGIntegrationConfig::warm_flat()`** — for T ≥ 0.1 keV:
+
+| Parameter | Value | Rationale |
+|-----------|-------|-----------|
+| `base_order` | 96 | High-order GL for E axis |
+| `mu_order` | 96 | Adequate for broader μ peaks at warm T |
+| `mu_peak_k` | 10 | Standard peak window |
+| `flat_ep` | density=512, ppd, max=8192 | Dense flat E' (no adaptive recursion needed at warm T) |
+| `flat_E` | false | Keeps E-axis boundary layer log-mapping |
+| `flat_mu` | false | Keeps μ peak-focused splitting |
+| `cutoff_ratio` | 1e-12 | Conservative group cutoff |
+
+Validated accuracy: MC converges as 1/√N with no bias. At N=10^9:
+mid-group row-sum error < 1e-4 for T ≥ 1 keV, ~5e-4 at T=0.1 keV.
+Runtime: ~30–120s per 24-group matrix.
+
+**Temperature switch at T = 0.1 keV:** Below this threshold, the Compton
+kernel narrows dramatically, requiring high adaptive resolution (bo=192) to
+resolve. Above, the kernel is broad enough that flat E' with 512 points/decade
+is sufficient and much faster. Both configs use `mu_peak_k=10` and keep
+`flat_mu=false` to leverage the analytically-derived FWHM peak splitting.
+
+Python usage:
+```python
+import _compton_multigroup as cm
+
+# Select config based on temperature
+if T_kev < 0.1:
+    cfg = cm.MGIntegrationConfig.cold_adaptive()
+else:
+    cfg = cm.MGIntegrationConfig.warm_flat()
+
+det = cm.ComptonMultigroupKernel(bounds_erg, wf, cfg)
+S = det.compute_sigma_matrix(kernel=kernel, T=T_K, Ne=1.0)
+```
 
 ### Outward-from-Peak Group Cutoff
 
