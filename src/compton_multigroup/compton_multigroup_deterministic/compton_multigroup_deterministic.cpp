@@ -8,6 +8,7 @@
 #include <ctime>
 #include <numbers>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace compton {
 
@@ -27,7 +28,7 @@ MGIntegrationConfig::MGIntegrationConfig(
     int const cold_temperature_order,
     std::optional<int> const tail_order,
     std::optional<int> const far_order,
-    std::optional<int> const mu_order)
+    std::optional<FlatEpConfig> const flat_ep)
     : base_order(base_order)
     , cold_temperature_order(cold_temperature_order)
     , peak_max_depth(peak_max_depth)
@@ -53,6 +54,14 @@ MGIntegrationConfig::MGIntegrationConfig(
         throw std::invalid_argument("far_order must be >= 1");
     if (mu_order.has_value() && mu_order.value() < 1)
         throw std::invalid_argument("mu_order must be >= 1");
+    if (flat_ep.has_value()) {
+        if (!(flat_ep->density > 0.0))
+            throw std::invalid_argument("flat_ep.density must be > 0");
+        if (flat_ep->min_points < 2)
+            throw std::invalid_argument("flat_ep.min_points must be >= 2");
+        if (flat_ep->max_points < flat_ep->min_points)
+            throw std::invalid_argument("flat_ep.max_points must be >= min_points");
+    }
 }
 
 ComptonMultigroupKernel::ComptonMultigroupKernel(
@@ -91,6 +100,44 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
     for (int g = 0; g < G; ++g) {
         group_centers_[g] = std::sqrt(group_boundaries_[g] * group_boundaries_[g + 1]);
     }
+
+    // Build per-group GL rules for flat E' mode.
+    if (config.flat_ep.has_value()) {
+        auto const& cfg = *config.flat_ep;
+        flat_E_ = cfg.flat_E;
+        flat_mu_ = cfg.flat_mu;
+        double const E_ref = std::sqrt(
+            group_boundaries_.front() * group_boundaries_.back());
+
+        std::unordered_map<int, GaussLegendreRule> rule_cache;
+        flat_ep_rules_.resize(G);
+
+        for (int gp = 0; gp < G; ++gp) {
+            double const Ep_lo = group_boundaries_[gp];
+            double const Ep_hi = group_boundaries_[gp + 1];
+
+            double raw = 0.0;
+            switch (cfg.mode) {
+            case FlatEpDensityMode::log_proportional:
+                raw = cfg.density * std::log(Ep_hi / Ep_lo);
+                break;
+            case FlatEpDensityMode::linear_proportional:
+                raw = cfg.density * (Ep_hi - Ep_lo) / E_ref;
+                break;
+            case FlatEpDensityMode::points_per_decade:
+                raw = cfg.density * std::log10(Ep_hi / Ep_lo);
+                break;
+            }
+            int const N = std::clamp(static_cast<int>(std::round(raw)),
+                                     cfg.min_points, cfg.max_points);
+
+            auto it = rule_cache.find(N);
+            if (it == rule_cache.end()) {
+                it = rule_cache.emplace(N, compute_gauss_legendre(N)).first;
+            }
+            flat_ep_rules_[gp] = it->second;
+        }
+    }
 }
 
 // ── E' sub-interval integration helpers ─────────────────────────────────
@@ -100,9 +147,10 @@ namespace {
 void log_ts(std::FILE* f) {
     auto const now = std::chrono::system_clock::now();
     auto const t = std::chrono::system_clock::to_time_t(now);
-    auto const* tm = std::localtime(&t);
+    std::tm tm_buf{};
+    localtime_r(&t, &tm_buf);
     std::fprintf(f, "%02d:%02d:%02d",
-        tm->tm_hour, tm->tm_min, tm->tm_sec);
+        tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec);
 }
 
 template<typename F>
@@ -259,8 +307,9 @@ double ComptonMultigroupKernel::compute_group_entry(
                     return multiplier(E_in, Ep, mu, T, Ne) *
                            (kernel.*eval)(E_in, Ep, mu, T, Ne).value;
                 };
-                double const ratio = Ep / E_in;
-                if (ratio > constants::LOG_MU_EP_RATIO_THRESHOLD) {
+                if (flat_mu_) {
+                    return legendre_integrate(f, active_mu_rule, mu_lo, mu_hi);
+                }
                     double const dmu_span = mu_hi - mu_lo;
                     double const eps = dmu_span * 1e-14;
                     return log_legendre_integrate(
@@ -277,70 +326,90 @@ double ComptonMultigroupKernel::compute_group_entry(
                 return legendre_integrate(f, active_mu_rule, mu_lo, mu_hi);
             };
 
-            double const inner = integrate_Ep_group(
-                [&](double const Ep) {
+            double inner;
+            if (!flat_ep_rules_.empty()) {
+                auto ep_integrand = [&](double const Ep) {
                     return mu_integrand(E, Ep);
-                },
-                Ep_lo, Ep_hi, band_lo, band_hi,
-                active_rule, peak_tol, peak_max_depth_,
-                tail_rule_,
-                far_rule_);
+                };
+                GaussLegendreRule const& ep_rule = flat_ep_rules_[gp];
+                if (band_hi <= Ep_lo) {
+                    inner = log_legendre_integrate(ep_integrand, ep_rule, Ep_lo, Ep_hi);
+                } else if (band_lo >= Ep_hi) {
+                    inner = rlog_legendre_integrate(ep_integrand, ep_rule, Ep_lo, Ep_hi);
+                } else {
+                    inner = legendre_integrate(ep_integrand, ep_rule, Ep_lo, Ep_hi);
+                }
+            } else {
+                inner = integrate_Ep_group(
+                    [&](double const Ep) {
+                        return mu_integrand(E, Ep);
+                    },
+                    Ep_lo, Ep_hi, band_lo, band_hi,
+                    active_rule, peak_tol, peak_max_depth_,
+                    tail_rule_,
+                    far_rule_);
+            }
 
             return w * inner;
         };
 
-        // --- E-axis boundary sub-panels ---
-        //
-        // The Compton kernel near a group boundary has a thermal peak of
-        // width ~thermal_half_width(E, T).  At cold T this width can be
-        // much smaller than the GL node spacing, causing the quadrature
-        // to miss the boundary-straddling contribution entirely.
-        //
-        // Split the E integral into up to three sub-panels:
-        //   [E_lo, E_lo + delta_lo]             -- left boundary  (linear GL)
-        //   [E_lo + delta_lo, E_hi - delta_hi]  -- interior       (existing mapping)
-        //   [E_hi - delta_hi, E_hi]             -- right boundary (linear GL)
-
-        double const span = E_hi - E_lo;
-        double const delta_lo = std::min(
-            constants::E_BOUNDARY_LAYER_MULTIPLIER * thermal_half_width(E_lo, T),
-            0.4 * span);
-        double const delta_hi = std::min(
-            constants::E_BOUNDARY_LAYER_MULTIPLIER * thermal_half_width(E_hi, T),
-            0.4 * span);
-
         double numerator = 0.0;
 
-        // Left boundary layer.
-        if (delta_lo > 1e-14 * span) {
-            numerator += legendre_integrate(
-                E_integrand, active_rule, E_lo, E_lo + delta_lo);
-        }
+        if (flat_E_) {
+            // Flat E mode: single GL pass over [E_lo, E_hi], no boundary layers.
+            numerator = legendre_integrate(E_integrand, active_rule, E_lo, E_hi);
+        } else {
+            // --- E-axis boundary sub-panels ---
+            //
+            // The Compton kernel near a group boundary has a thermal peak of
+            // width ~thermal_half_width(E, T).  At cold T this width can be
+            // much smaller than the GL node spacing, causing the quadrature
+            // to miss the boundary-straddling contribution entirely.
+            //
+            // Split the E integral into up to three sub-panels:
+            //   [E_lo, E_lo + delta_lo]             -- left boundary  (linear GL)
+            //   [E_lo + delta_lo, E_hi - delta_hi]  -- interior       (existing mapping)
+            //   [E_hi - delta_hi, E_hi]             -- right boundary (linear GL)
 
-        // Interior: existing mapping logic on the reduced interval.
-        double const E_int_lo = E_lo + delta_lo;
-        double const E_int_hi = E_hi - delta_hi;
-        if (E_int_hi > E_int_lo) {
-            if (E_int_hi / E_int_lo > constants::LOG_E_RATIO_THRESHOLD) {
-                double const w_lo = weight_func_->weight(E_int_lo, T);
-                double const w_hi = weight_func_->weight(E_int_hi, T);
-                if (w_lo >= w_hi) {
-                    numerator += log_legendre_integrate(
-                        E_integrand, active_rule, E_int_lo, E_int_hi);
+            double const span = E_hi - E_lo;
+            double const delta_lo = std::min(
+                constants::E_BOUNDARY_LAYER_MULTIPLIER * thermal_half_width(E_lo, T),
+                0.4 * span);
+            double const delta_hi = std::min(
+                constants::E_BOUNDARY_LAYER_MULTIPLIER * thermal_half_width(E_hi, T),
+                0.4 * span);
+
+            // Left boundary layer.
+            if (delta_lo > 1e-14 * span) {
+                numerator += legendre_integrate(
+                    E_integrand, active_rule, E_lo, E_lo + delta_lo);
+            }
+
+            // Interior: existing mapping logic on the reduced interval.
+            double const E_int_lo = E_lo + delta_lo;
+            double const E_int_hi = E_hi - delta_hi;
+            if (E_int_hi > E_int_lo) {
+                if (E_int_hi / E_int_lo > constants::LOG_E_RATIO_THRESHOLD) {
+                    double const w_lo = weight_func_->weight(E_int_lo, T);
+                    double const w_hi = weight_func_->weight(E_int_hi, T);
+                    if (w_lo >= w_hi) {
+                        numerator += log_legendre_integrate(
+                            E_integrand, active_rule, E_int_lo, E_int_hi);
+                    } else {
+                        numerator += rlog_legendre_integrate(
+                            E_integrand, active_rule, E_int_lo, E_int_hi);
+                    }
                 } else {
-                    numerator += rlog_legendre_integrate(
+                    numerator += legendre_integrate(
                         E_integrand, active_rule, E_int_lo, E_int_hi);
                 }
-            } else {
-                numerator += legendre_integrate(
-                    E_integrand, active_rule, E_int_lo, E_int_hi);
             }
-        }
 
-        // Right boundary layer.
-        if (delta_hi > 1e-14 * span) {
-            numerator += legendre_integrate(
-                E_integrand, active_rule, E_hi - delta_hi, E_hi);
+            // Right boundary layer.
+            if (delta_hi > 1e-14 * span) {
+                numerator += legendre_integrate(
+                    E_integrand, active_rule, E_hi - delta_hi, E_hi);
+            }
         }
 
         // Store the final matrix element:
@@ -464,40 +533,17 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
         gp_peak = std::clamp(gp_peak, 0, G - 1);
 
         // Evaluate the peak group first to establish the reference magnitude.
-        auto const peak_t0 = std::chrono::steady_clock::now();
         double const peak_sum = do_group(gp_peak);
-        auto const peak_t1 = std::chrono::steady_clock::now();
-        double const peak_secs =
-            std::chrono::duration<double>(peak_t1 - peak_t0).count();
-
-        if (log_file) {
-            log_ts(log_file);
-            std::fprintf(log_file,
-                " [compton] group %*d/%d: peak (gp=%d) done in %.2fs\n",
-                g_width, g + 1, G, gp_peak, peak_secs);
-            std::fflush(log_file);
-        }
 
         double const cutoff = group_cutoff_ratio_ * peak_sum;
-        int groups_evaluated = 1;
 
         // Expand rightward (higher E' groups) until below cutoff.
         for (int gp = gp_peak + 1; gp < G; ++gp) {
-            ++groups_evaluated;
             if (do_group(gp) < cutoff) break;
         }
         // Expand leftward (lower E' groups) until below cutoff.
         for (int gp = gp_peak - 1; gp >= 0; --gp) {
-            ++groups_evaluated;
             if (do_group(gp) < cutoff) break;
-        }
-
-        if (log_file) {
-            log_ts(log_file);
-            std::fprintf(log_file,
-                " [compton] group %*d/%d: %d target groups evaluated\n",
-                g_width, g + 1, G, groups_evaluated);
-            std::fflush(log_file);
         }
     }
 

@@ -73,6 +73,35 @@ namespace constants {
 constexpr double COLD_TEMPERATURE_THRESHOLD = 0.005 * units::kev_kelvin;
 } // namespace constants
 
+/// Density scaling strategy for the flat E' integration mode.
+enum class FlatEpDensityMode { log_proportional, linear_proportional, points_per_decade };
+
+/**
+ * @brief Configuration for the density-based flat E' integration mode.
+ *
+ * When attached to MGIntegrationConfig, replaces the adaptive peak/tail/far
+ * E' recursion with a single GL rule per target group whose order is
+ * proportional to the group's width.
+ */
+struct FlatEpConfig {
+    double density;
+    int min_points;
+    int max_points;
+    FlatEpDensityMode mode;
+    bool flat_E;
+    bool flat_mu;
+
+    FlatEpConfig(double density = 64.0,
+                 int min_points = 8,
+                 int max_points = 1024,
+                 FlatEpDensityMode mode = FlatEpDensityMode::points_per_decade,
+                 bool flat_E = true,
+                 bool flat_mu = true)
+        : density(density), min_points(min_points),
+          max_points(max_points), mode(mode),
+          flat_E(flat_E), flat_mu(flat_mu) {}
+};
+
 /**
  * @brief Consolidated configuration for multigroup integration.
  *
@@ -90,6 +119,7 @@ struct MGIntegrationConfig {
     std::optional<int> mu_order;
     double integration_tolerance;
     double cutoff_ratio;
+    std::optional<FlatEpConfig> flat_ep;
 
     /**
      * @brief Construct with validated defaults.
@@ -102,6 +132,7 @@ struct MGIntegrationConfig {
      * @param tail_order              GL order for E' tail regions (defaults to base_order).
      * @param far_order               GL order for E' far-from-peak regions (defaults to base_order).
      * @param mu_order                GL order for the μ axis (defaults to base_order).
+     * @param flat_ep                 Optional flat E' density config (disables adaptive E' recursion).
      * @throws std::invalid_argument on invalid parameters.
      */
     MGIntegrationConfig(
@@ -112,7 +143,7 @@ struct MGIntegrationConfig {
         int cold_temperature_order = 48,
         std::optional<int> tail_order = std::nullopt,
         std::optional<int> far_order = std::nullopt,
-        std::optional<int> mu_order = std::nullopt);
+        std::optional<FlatEpConfig> flat_ep = std::nullopt);
 
     /** @brief Effective tail GL order (tail_order if set, otherwise base_order). */
     int effective_tail_order() const { return tail_order.value_or(base_order); }
@@ -329,6 +360,11 @@ private:
     GaussLegendreRule mu_rule_;
     /// GL rule for μ when T < COLD_TEMPERATURE_THRESHOLD.
     GaussLegendreRule mu_cold_rule_;
+
+    /// Per-group GL rules for flat E' mode (empty when adaptive mode is active).
+    std::vector<GaussLegendreRule> flat_ep_rules_;
+    bool flat_E_ = false;
+    bool flat_mu_ = false;
 
     double integration_tolerance_;
     int peak_max_depth_;

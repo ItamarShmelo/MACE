@@ -26,10 +26,31 @@ PYBIND11_MODULE(_compton_multigroup, m) {
     py::class_<ConstantMultiplier, KernelMultiplier>(m, "ConstantMultiplier")
         .def(py::init<>());
 
+    py::enum_<FlatEpDensityMode>(m, "FlatEpDensityMode")
+        .value("log_proportional", FlatEpDensityMode::log_proportional)
+        .value("linear_proportional", FlatEpDensityMode::linear_proportional)
+        .value("points_per_decade", FlatEpDensityMode::points_per_decade);
+
+    py::class_<FlatEpConfig>(m, "FlatEpConfig")
+        .def(py::init<double, int, int, FlatEpDensityMode, bool, bool>(),
+             "density"_a = 64.0,
+             "min_points"_a = 8,
+             "max_points"_a = 1024,
+             "mode"_a = FlatEpDensityMode::points_per_decade,
+             "flat_E"_a = true,
+             "flat_mu"_a = true)
+        .def_readwrite("density",    &FlatEpConfig::density)
+        .def_readwrite("min_points", &FlatEpConfig::min_points)
+        .def_readwrite("max_points", &FlatEpConfig::max_points)
+        .def_readwrite("mode",       &FlatEpConfig::mode)
+        .def_readwrite("flat_E",     &FlatEpConfig::flat_E)
+        .def_readwrite("flat_mu",    &FlatEpConfig::flat_mu);
+
     py::class_<MGIntegrationConfig>(m, "MGIntegrationConfig")
         .def(py::init<int, double, double, int, int,
                        std::optional<int>, std::optional<int>,
-                       std::optional<int>>(),
+                       std::optional<int>, double,
+                       std::optional<FlatEpConfig>>(),
              "base_order"_a = 24,
              "integration_tolerance"_a = 1e-3,
              "cutoff_ratio"_a = 1e-8,
@@ -37,7 +58,7 @@ PYBIND11_MODULE(_compton_multigroup, m) {
              "cold_temperature_order"_a = 48,
              "tail_order"_a = std::nullopt,
              "far_order"_a = std::nullopt,
-             "mu_order"_a = std::nullopt)
+             "flat_ep"_a = std::nullopt)
         .def_readwrite("base_order",              &MGIntegrationConfig::base_order)
         .def_readwrite("cold_temperature_order",  &MGIntegrationConfig::cold_temperature_order)
         .def_readwrite("peak_max_depth",          &MGIntegrationConfig::peak_max_depth)
@@ -46,6 +67,7 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .def_readwrite("mu_order",                &MGIntegrationConfig::mu_order)
         .def_readwrite("integration_tolerance",   &MGIntegrationConfig::integration_tolerance)
         .def_readwrite("cutoff_ratio",            &MGIntegrationConfig::cutoff_ratio)
+        .def_readwrite("flat_ep",                 &MGIntegrationConfig::flat_ep)
         .def("effective_tail_order", &MGIntegrationConfig::effective_tail_order)
         .def("effective_far_order",  &MGIntegrationConfig::effective_far_order)
         .def("effective_mu_order",   &MGIntegrationConfig::effective_mu_order);
