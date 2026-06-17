@@ -68,20 +68,28 @@ ComptonMonteCarloKernel::ComptonMonteCarloKernel(
 // ── Maxwell-Jüttner sampling ────────────────────────────────────────────
 
 double ComptonMonteCarloKernel::sample_gamma(double const theta) const {
+    return sample_gamma(theta, rng_, uniform_dist_);
+}
+
+double ComptonMonteCarloKernel::sample_gamma(
+    double const theta,
+    boost::random::mt19937_64& rng,
+    boost::random::uniform_01<>& dist)
+{
     double const sum_1_bt = 1.0 + 1.0 / theta;
     double const Sb = sum_1_bt + 0.5 / (theta * theta);
 
-    double const r0Sb = uniform_dist_(rng_) * Sb;
-    double const r1 = uniform_dist_(rng_);
+    double const r0Sb = dist(rng) * Sb;
+    double const r1 = dist(rng);
 
     if (r0Sb <= 1.0) {
-        double const r2 = uniform_dist_(rng_);
-        double const r3 = uniform_dist_(rng_);
+        double const r2 = dist(rng);
+        double const r3 = dist(rng);
         return 1.0 - theta * std::log(r1 * r2 * r3);
     }
 
     if (r0Sb <= sum_1_bt) {
-        double const r2 = uniform_dist_(rng_);
+        double const r2 = dist(rng);
         return 1.0 - theta * std::log(r1 * r2);
     }
 
@@ -93,9 +101,10 @@ namespace {
 void log_ts(std::FILE* f) {
     auto const now = std::chrono::system_clock::now();
     auto const t = std::chrono::system_clock::to_time_t(now);
-    auto const* tm = std::localtime(&t);
+    std::tm tm_buf{};
+    localtime_r(&t, &tm_buf);
     std::fprintf(f, "%02d:%02d:%02d",
-        tm->tm_hour, tm->tm_min, tm->tm_sec);
+        tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec);
 }
 
 } // anonymous namespace
@@ -133,26 +142,38 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
             num_samples_, G, num_angle_bins, T / units::kev_kelvin, theta);
         std::fflush(log_file);
     }
-    std::size_t const log_interval = std::max(num_samples_ / 10, std::size_t{1});
 
+    std::uint64_t const base_seed = rng_();
+
+    double* result_ptr = result.data();
+    double* ws_ptr = weight_sum.data();
+
+#ifdef _OPENMP
+    #pragma omp parallel reduction(+:sum_beta) \
+        reduction(+:result_ptr[:total]) reduction(+:ws_ptr[:G])
+    {
+    int const tid = omp_get_thread_num();
+    boost::random::mt19937_64 local_rng(
+        base_seed + static_cast<std::uint64_t>(tid) * 6364136223846793005ULL);
+    boost::random::uniform_01<> local_dist;
+    auto& rng = local_rng;
+    auto& dist = local_dist;
+#else
+    auto& rng = rng_;
+    auto& dist = uniform_dist_;
+    {
+#endif
+
+    #pragma omp for schedule(static)
     for (std::size_t sample_i = 0; sample_i < num_samples_; ++sample_i) {
 
-        if (log_file && sample_i > 0 && sample_i % log_interval == 0) {
-            int const pct = static_cast<int>(100 * sample_i / num_samples_);
-            log_ts(log_file);
-            std::fprintf(log_file,
-                " [compton] monte_carlo: %d%% %zu/%zu\n",
-                pct, sample_i, num_samples_);
-            std::fflush(log_file);
-        }
-
         // Step 1: sample electron Lorentz factor from Maxwell-Jüttner
-        double const lam = sample_gamma(theta);
+        double const lam = sample_gamma(theta, rng, dist);
         double const beta = std::sqrt(1.0 - 1.0 / (lam * lam));
         sum_beta += beta;
 
         // Step 2: sample isotropic electron direction
-        double const mu_e = 1.0 - 2.0 * uniform_dist_(rng_);
+        double const mu_e = 1.0 - 2.0 * dist(rng);
         double const sin_e = std::sqrt(1.0 - mu_e * mu_e);
 
         // Step 3: incoming-photon Doppler factor
@@ -165,9 +186,9 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
         double const sin_0_tag = std::sqrt(1.0 - mu_0_tag * mu_0_tag);
 
         // Step 5: sample isotropic scattering in electron rest frame
-        double const mu_p_tag = 1.0 - 2.0 * uniform_dist_(rng_);
+        double const mu_p_tag = 1.0 - 2.0 * dist(rng);
         double const sin_p_tag = std::sqrt(1.0 - mu_p_tag * mu_p_tag);
-        double const psi_p_tag = uniform_dist_(rng_) * 2.0 * std::numbers::pi;
+        double const psi_p_tag = dist(rng) * 2.0 * std::numbers::pi;
         double const cos_psi = std::cos(psi_p_tag);
 
         // Step 6: rotate scattered direction by -theta_0 into electron frame
@@ -177,7 +198,6 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
             sin_0_tag * sin_p_tag * cos_psi + mu_0_tag * mu_p_tag;
 
         // Step 7: outgoing Doppler factor and lab-frame scattering cosine
-        // (y-component not needed: electron lies in x-z plane)
         double const dot_Omega_tag_e =
             Omega_tag_x * sin_e + Omega_tag_z * mu_e;
         double const D_tag = lam * (1.0 + beta * dot_Omega_tag_e);
@@ -193,14 +213,14 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
             num_angle_bins - 1);
 
         // Step 8: loop over incoming energy groups
-        double const interp = uniform_dist_(rng_);
+        double const interp = dist(rng);
 
         for (int g0 = 0; g0 < G; ++g0) {
             double const E0 =
                 group_boundaries_[g0] + interp * group_widths_[g0];
 
             double const w_E0 = weight_func_->weight(E0, T);
-            weight_sum[g0] += w_E0;
+            ws_ptr[g0] += w_E0;
 
             // Lorentz transform: lab → electron rest → scatter → lab
             double const E0_tag = D0 * E0;
@@ -226,14 +246,17 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
                 (A + 1.0 / A - sin_p_tag * sin_p_tag) *
                 w_E0 * beta;
 
-            double const mult = multiplier_fn(E0, E, mu_scat_lab, T, Ne, lam);
+            double const mult =
+                multiplier_fn(E0, E, mu_scat_lab, T, Ne, lam);
 
             std::size_t const idx =
                 static_cast<std::size_t>(g0) * G * num_angle_bins +
                 static_cast<std::size_t>(g) * num_angle_bins +
                 angle_bin;
-            result[idx] += sigma * mult;
+            result_ptr[idx] += sigma * mult;
         }
+    }
+
     }
 
     // Normalization

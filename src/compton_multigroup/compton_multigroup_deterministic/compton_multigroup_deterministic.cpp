@@ -551,10 +551,9 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
             G, num_angle_bins, T / units::kev_kelvin, is_cold ? "cold" : "hot");
         std::fflush(log_file);
     }
-    int g_width = 1;
-    { int tmp = G; while (tmp >= 10) { ++g_width; tmp /= 10; } }
 
     // --- Main loop over incoming groups g ---
+    #pragma omp parallel for schedule(dynamic)
     for (int g = 0; g < G; ++g) {
         double const inv_denom = 1.0 / denominators[g];
 

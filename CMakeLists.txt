@@ -7,6 +7,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(pybind11 REQUIRED)
 find_package(Boost REQUIRED)
 
+option(COMPTON_ENABLE_OMP "Enable OpenMP parallelization" ON)
+if(COMPTON_ENABLE_OMP)
+    find_package(OpenMP REQUIRED)
+endif()
+
 include(FetchContent)
 FetchContent_Declare(
   doubledouble
@@ -83,6 +88,9 @@ pybind11_add_module(_compton_multigroup
 target_compile_options(_compton_multigroup PRIVATE
     -O3 -Wall -Wextra -Wpedantic
 )
+if(COMPTON_ENABLE_OMP)
+    target_link_libraries(_compton_multigroup PRIVATE OpenMP::OpenMP_CXX)
+endif()
 set_target_properties(_compton_multigroup PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
 )

@@ -39,7 +39,12 @@
 
 #include <boost/random.hpp>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -72,6 +77,12 @@ struct MCIntegrationConfig {
  *
  * Construct once with the energy group structure, weight function,
  * and MC config; then call compute_sigma_matrix at any temperature.
+ *
+ * Thread safety: compute methods are safe to call from one thread at a time.
+ * With OpenMP enabled, the internal MC loop is parallelized automatically.
+ * Same (seed, OMP_NUM_THREADS) pair produces statistically identical results;
+ * bitwise identity is not guaranteed due to implementation-defined reduction
+ * merge order.
  */
 class ComptonMonteCarloKernel {
 public:
@@ -170,6 +181,12 @@ private:
      *        Maxwell-Jüttner distribution via three-branch inverse CDF.
      */
     double sample_gamma(double theta) const;
+
+    /** @brief Thread-safe overload accepting external RNG state. */
+    static double sample_gamma(
+        double theta,
+        boost::random::mt19937_64& rng,
+        boost::random::uniform_01<>& dist);
 
     std::vector<double> group_boundaries_;
     std::vector<double> group_centers_;
