@@ -58,6 +58,8 @@ PYBIND11_MODULE(_compton_multigroup, m) {
              "cold_temperature_order"_a = 48,
              "tail_order"_a = std::nullopt,
              "far_order"_a = std::nullopt,
+             "mu_order"_a = std::nullopt,
+             "mu_peak_k"_a = 10.0,
              "flat_ep"_a = std::nullopt)
         .def_readwrite("base_order",              &MGIntegrationConfig::base_order)
         .def_readwrite("cold_temperature_order",  &MGIntegrationConfig::cold_temperature_order)
@@ -67,6 +69,7 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .def_readwrite("mu_order",                &MGIntegrationConfig::mu_order)
         .def_readwrite("integration_tolerance",   &MGIntegrationConfig::integration_tolerance)
         .def_readwrite("cutoff_ratio",            &MGIntegrationConfig::cutoff_ratio)
+        .def_readwrite("mu_peak_k",              &MGIntegrationConfig::mu_peak_k)
         .def_readwrite("flat_ep",                 &MGIntegrationConfig::flat_ep)
         .def("effective_tail_order", &MGIntegrationConfig::effective_tail_order)
         .def("effective_far_order",  &MGIntegrationConfig::effective_far_order)

@@ -16,6 +16,7 @@ namespace constants {
 static constexpr double LOG_E_RATIO_THRESHOLD = 10.0;
 static constexpr double LOG_MU_EP_RATIO_THRESHOLD = 1.5;
 static constexpr double E_BOUNDARY_LAYER_MULTIPLIER = 10.0;
+static constexpr double MU_PEAK_RATIO_THRESHOLD = 0.05;
 } // namespace constants
 
 // ── MGIntegrationConfig ─────────────────────────────────────────────────
@@ -28,6 +29,8 @@ MGIntegrationConfig::MGIntegrationConfig(
     int const cold_temperature_order,
     std::optional<int> const tail_order,
     std::optional<int> const far_order,
+    std::optional<int> const mu_order,
+    double const mu_peak_k,
     std::optional<FlatEpConfig> const flat_ep)
     : base_order(base_order)
     , cold_temperature_order(cold_temperature_order)
@@ -37,6 +40,8 @@ MGIntegrationConfig::MGIntegrationConfig(
     , mu_order(mu_order)
     , integration_tolerance(integration_tolerance)
     , cutoff_ratio(cutoff_ratio)
+    , mu_peak_k(mu_peak_k)
+    , flat_ep(flat_ep)
 {
     if (base_order < 1)
         throw std::invalid_argument("base_order must be >= 1");
@@ -54,6 +59,8 @@ MGIntegrationConfig::MGIntegrationConfig(
         throw std::invalid_argument("far_order must be >= 1");
     if (mu_order.has_value() && mu_order.value() < 1)
         throw std::invalid_argument("mu_order must be >= 1");
+    if (!(mu_peak_k > 0.0))
+        throw std::invalid_argument("mu_peak_k must be > 0");
     if (flat_ep.has_value()) {
         if (!(flat_ep->density > 0.0))
             throw std::invalid_argument("flat_ep.density must be > 0");
@@ -77,7 +84,9 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
     , mu_rule_(compute_gauss_legendre(config.effective_mu_order()))
     , mu_cold_rule_(compute_gauss_legendre(
           std::max(config.cold_temperature_order, config.effective_mu_order())))
+    , mu_tail_rule_(compute_gauss_legendre(8))
     , integration_tolerance_(config.integration_tolerance)
+    , mu_peak_k_(config.mu_peak_k)
     , peak_max_depth_(config.peak_max_depth)
     , group_cutoff_ratio_(config.cutoff_ratio)
 {
@@ -310,19 +319,54 @@ double ComptonMultigroupKernel::compute_group_entry(
                 if (flat_mu_) {
                     return legendre_integrate(f, active_mu_rule, mu_lo, mu_hi);
                 }
+
+                double const r = Ep / E_in;
+
+                // Peak-focused splitting: for non-elastic scatter, compute
+                // the Compton peak location and FWHM. If the peak is narrow
+                // relative to the mu interval, concentrate quadrature there.
+                if (std::abs(r - 1.0) > constants::MU_PEAK_RATIO_THRESHOLD) {
+                    double const gamma = E_in / units::me_c2;
+                    double const tau = T * units::k_boltz / units::me_c2;
+                    double const mu_c_raw = 1.0 - (1.0 / gamma) * (1.0 / r - 1.0);
+                    double const mu_c = std::clamp(mu_c_raw, mu_lo, mu_hi);
+                    double const fwhm = 4.0 * std::sqrt(std::abs(1.0 - r) / r)
+                                      * std::sqrt(tau) / std::pow(gamma, 1.5);
+                    double const half_w = mu_peak_k_ * fwhm;
+
+                    double const peak_lo = std::max(mu_lo, mu_c - half_w);
+                    double const peak_hi = std::min(mu_hi, mu_c + half_w);
+
+                    if (peak_hi > peak_lo &&
+                        (peak_hi - peak_lo) < 0.8 * (mu_hi - mu_lo)) {
+                        double result = legendre_integrate(
+                            f, active_mu_rule, peak_lo, peak_hi);
+                        if (peak_lo > mu_lo)
+                            result += legendre_integrate(
+                                f, mu_tail_rule_, mu_lo, peak_lo);
+                        if (peak_hi < mu_hi)
+                            result += legendre_integrate(
+                                f, mu_tail_rule_, peak_hi, mu_hi);
+                        return result;
+                    }
+                }
+
+                // Fallback: log/rlog mapping for boundary-peaked cases
+                if (r > constants::LOG_MU_EP_RATIO_THRESHOLD) {
                     double const dmu_span = mu_hi - mu_lo;
                     double const eps = dmu_span * 1e-14;
                     return log_legendre_integrate(
                         [&](double const s) { return f(mu_lo + s); },
                         active_mu_rule, eps, dmu_span);
                 }
-                if (ratio < 1.0 / constants::LOG_MU_EP_RATIO_THRESHOLD) {
+                if (r < 1.0 / constants::LOG_MU_EP_RATIO_THRESHOLD) {
                     double const dmu_span = mu_hi - mu_lo;
                     double const eps = dmu_span * 1e-14;
                     return log_legendre_integrate(
                         [&](double const s) { return f(mu_hi - s); },
                         active_mu_rule, eps, dmu_span);
                 }
+
                 return legendre_integrate(f, active_mu_rule, mu_lo, mu_hi);
             };
 

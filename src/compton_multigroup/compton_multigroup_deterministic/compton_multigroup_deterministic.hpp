@@ -119,6 +119,7 @@ struct MGIntegrationConfig {
     std::optional<int> mu_order;
     double integration_tolerance;
     double cutoff_ratio;
+    double mu_peak_k;
     std::optional<FlatEpConfig> flat_ep;
 
     /**
@@ -132,6 +133,7 @@ struct MGIntegrationConfig {
      * @param tail_order              GL order for E' tail regions (defaults to base_order).
      * @param far_order               GL order for E' far-from-peak regions (defaults to base_order).
      * @param mu_order                GL order for the μ axis (defaults to base_order).
+     * @param mu_peak_k               Number of FWHMs for mu peak-focused splitting window.
      * @param flat_ep                 Optional flat E' density config (disables adaptive E' recursion).
      * @throws std::invalid_argument on invalid parameters.
      */
@@ -143,6 +145,8 @@ struct MGIntegrationConfig {
         int cold_temperature_order = 48,
         std::optional<int> tail_order = std::nullopt,
         std::optional<int> far_order = std::nullopt,
+        std::optional<int> mu_order = std::nullopt,
+        double mu_peak_k = 10.0,
         std::optional<FlatEpConfig> flat_ep = std::nullopt);
 
     /** @brief Effective tail GL order (tail_order if set, otherwise base_order). */
@@ -360,6 +364,8 @@ private:
     GaussLegendreRule mu_rule_;
     /// GL rule for μ when T < COLD_TEMPERATURE_THRESHOLD.
     GaussLegendreRule mu_cold_rule_;
+    /// GL rule for μ tails in peak-focused splitting (low order, tails are exponentially small).
+    GaussLegendreRule mu_tail_rule_;
 
     /// Per-group GL rules for flat E' mode (empty when adaptive mode is active).
     std::vector<GaussLegendreRule> flat_ep_rules_;
@@ -367,6 +373,7 @@ private:
     bool flat_mu_ = false;
 
     double integration_tolerance_;
+    double mu_peak_k_;
     int peak_max_depth_;
     double group_cutoff_ratio_;
 };
