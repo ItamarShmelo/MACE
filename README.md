@@ -23,6 +23,8 @@ at each phase-space point based on the scattering kinematics.
 | [pybind11](https://pybind11.readthedocs.io/) | Python bindings |
 | [Boost](https://www.boost.org/) | Modified Bessel functions ($K_1$, $K_2$) |
 | [doubledouble](https://github.com/WarrenWeckesser/doubledouble) | ~31-digit arithmetic for HP power series (fetched automatically by CMake) |
+| [planck_integral](https://github.com/menahemkrief/planck_integral) | Planck integral for weight-function denominators (fetched automatically by CMake) |
+| OpenMP (optional) | Parallel multigroup integration (enabled by default via `COMPTON_ENABLE_OMP`) |
 
 **Python** (for tests and usage): `numpy`, `scipy`, `pytest`.
 
@@ -117,6 +119,16 @@ S = mg.compute_sigma_matrix(kernel, T=10*kev_kelvin, Ne=1.0)
 # Multiangle G x G x N_angles tensor
 S_angle = mg.compute_sigma_matrix(kernel, num_angle_bins=8, T=10*kev_kelvin, Ne=1.0)
 ```
+
+### Monte Carlo multigroup kernel
+
+The same module also provides `ComptonMonteCarloKernel`, which computes the
+multigroup matrix by direct Klein-Nishina thermal sampling rather than
+deterministic quadrature of the point-wise kernel. It does not require a
+`ComptonKernelSolver` instance.
+
+- **Constructor**: `ComptonMonteCarloKernel(energy_group_boundaries, weight_function, config=MCIntegrationConfig())` -- same boundary and weight-function conventions as the deterministic kernel. `MCIntegrationConfig` controls `num_samples` (default 1,000,000), `seed` (default -1 for time-based), and `discard_out_of_grid` (default `True`).
+- **`compute_sigma_matrix`** / **`compute_dsigma_dT_matrix`** -- same overloads as the deterministic kernel (angle-resolved and angle-integrated).
 
 ## Equations
 
@@ -259,7 +271,7 @@ $$
 $$
 
 where $x_i$ and $w_i$ are Gauss-Laguerre nodes and weights.
-Supported quadrature orders are $N_L=64,128,256$.
+Supported quadrature orders are $N_L=32,64,128,256$.
 The estimated error is obtained by comparing the selected order with
 $N_L/2$.
 
@@ -433,37 +445,38 @@ term-magnitude increases.
 tau_alpha_max = tau * max(alpha_plus, alpha_minus)
 gamma_min     = min(gamma, gamma_prime)
 
-1. if tau_alpha_max < 0.04:                       # cold regime
+1. if tau_alpha_max < 0.04:                        # cold regime
      if gamma_min < 0.002:
          result = AsymptoticSeries (DD)
      else:
          result = AsymptoticSeries (double)
-     if result.rel_error < 1e-3:                  # self-tolerance gate
+     if result.rel_error < 1e-3:                   # self-tolerance gate
          if gamma_min < 1e-4 and tau_alpha_max > 0.4 * threshold:
-             cross-validate against DD PowerSeries # guard silent misses
+             cross-validate against DD PowerSeries  # guard silent misses
          accept
      else: fall through
 
-2. if gamma_min >= 0.02:
-     return PowerSeries (double)
+2. if tau_alpha_max >= 0.04:                        # outside asymptotic regime
+     try double PowerSeries (speculative)
+     accept if rel_error < 1e-6 and (dsigma_dT or value >= 0)
 
-3. result = Q64 quadrature
-   if result.rel_error < 1e-6: accept
+3. if tau_alpha_max < 0.15:                         # quadrature useful range
+     result = Q64 quadrature
+     if result.rel_error < 1e-6: accept
 
-4. try DD PowerSeries
-   if ok and rel_error < 1e-6: accept
-
-5. try DD AsymptoticSeries as last resort
-   pick best remaining result, or raise
+4. DD fallback:
+     try DD PowerSeries; viable if rel_error < 1.0
+     if not clearly trustworthy:
+         also try DD AsymptoticSeries (viable if rel_error < 1.0)
+     pick better viable result, or best available; raise if all failed
 ```
 
 The thresholds are configurable at construction time (defaults from `compton_kernel_solver.hpp`):
 
 - `asymp_tau_alpha_threshold = 0.04` -- below this, the asymptotic series
   reaches its optimal truncation with few terms.
-- `gamma_double_precision_safe = 0.02` -- above this, the $P_+-P_-$
-  cancellation is mild enough for double precision.
-- `quadrature_self_tol = 1e-6` -- accept Q64 when its self-reported
+- `quadrature_self_tol = 1e-6` -- accept any non-asymptotic result
+  (speculative double PS, Q64, DD cross-validation) when its self-reported
   relative error is below this tolerance.
 - `asymp_gamma_dd_threshold = 0.002` -- within the asymptotic regime, switch
   to DD arithmetic below this photon energy.
@@ -471,6 +484,8 @@ The thresholds are configurable at construction time (defaults from `compton_ker
   self-reported error exceeds this; falls through to Q64 / DD power series.
 - `asymp_gamma_dd_cross_val_threshold = 1e-4` -- at ultra-low gamma near
   the dispatch boundary, cross-validate DD asymptotic against DD power series.
+- `quadrature_useful_threshold = 0.15` -- skip Q64 when `tau_alpha_max`
+  exceeds this value (Q64 cannot converge in this regime at low gamma).
 
 ## Tests
 
@@ -478,11 +493,24 @@ The thresholds are configurable at construction time (defaults from `compton_ker
 pytest tests/
 ```
 
-The test suite validates `ComptonPowerSeries` (double and DD),
-`ComptonKernelAsymptoticSeries`, and `ComptonKernelSolver` against the Q256
-Gauss-Laguerre quadrature reference across a grid of photon energies,
-scattering angles, and temperatures spanning both the hot-plasma (power series)
-and cold-plasma (asymptotic) regimes.
+The suite covers point-wise kernels, multigroup integration, and utilities:
+
+- **`test_series_vs_quadrature`** -- `ComptonPowerSeries` (double and DD),
+  `ComptonKernelAsymptoticSeries`, and `ComptonKernelSolver` against Q256
+  Gauss-Laguerre reference across hot-plasma and cold-plasma regimes.
+- **`test_kernel_solver`** -- adaptive dispatch regime selection, custom
+  thresholds, and `sigma_E_vec` / `dsigma_E_dT_vec` vectorized APIs.
+- **`test_multigroup`** -- deterministic `ComptonMultigroupKernel`, Planck
+  denominator sanity, adaptive tolerance convergence, and optional CMMC
+  cross-validation.
+- **`test_monte_carlo`** -- `ComptonMonteCarloKernel`, seed reproducibility,
+  weight-function invariance, and optional CMMC parity checks.
+- **`test_weight_function`** -- `PlanckWeightFunction`, `UniformWeightFunction`,
+  `WienWeightFunction` against analytic formulae and SciPy quadrature.
+- **`test_integration_functions`** -- Gauss-Legendre and Gauss-Laguerre node/weight
+  properties, polynomial exactness, and adaptive integrators vs SciPy.
+- **`test_openmp`** -- OpenMP bitwise reproducibility (deterministic) and
+  statistical consistency (Monte Carlo) across thread counts.
 
 ## Reference
 
