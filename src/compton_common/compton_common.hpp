@@ -189,7 +189,7 @@ inline T ehat_series(T const& x, double const tol) {
     // Recurrence: term_{k+1} = term_k * (-x) * k / ((k+1)^2)
     T term(x);
     T S = term;
-    for (int k = 1; k <= 60; ++k) {
+    for (int k = 1; k <= 80; ++k) {
         term = term * (-x) * T(static_cast<double>(k))
              / T(static_cast<double>((k + 1) * (k + 1)));
         S = S + term;
@@ -224,7 +224,7 @@ inline T ehat(
         throw std::invalid_argument("ehat requires m >= 1");
     }
 
-    if (m == 1 && x < T(1.0)) {
+    if (m == 1 && x < T(4.0)) {
         return ehat_series(x, cf_tol);
     }
 

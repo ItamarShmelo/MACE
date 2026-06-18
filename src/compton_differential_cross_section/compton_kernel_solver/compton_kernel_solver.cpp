@@ -6,17 +6,17 @@ namespace compton {
 
 ComptonKernelSolver::ComptonKernelSolver(
     double const asymp_tau_alpha_threshold,
-    double const gamma_double_precision_safe,
     double const quadrature_self_tol,
     double const asymp_gamma_dd_threshold,
     double const asymp_self_tol,
-    double const asymp_gamma_dd_cross_val_threshold)
+    double const asymp_gamma_dd_cross_val_threshold,
+    double const quadrature_useful_threshold)
     : asymp_tau_alpha_threshold_(asymp_tau_alpha_threshold)
-    , gamma_double_precision_safe_(gamma_double_precision_safe)
     , quadrature_self_tol_(quadrature_self_tol)
     , asymp_gamma_dd_threshold_(asymp_gamma_dd_threshold)
     , asymp_self_tol_(asymp_self_tol)
     , asymp_gamma_dd_cross_val_threshold_(asymp_gamma_dd_cross_val_threshold)
+    , quadrature_useful_threshold_(quadrature_useful_threshold)
     , asymp_series_(false)
     , asymp_series_dd_(true)
     , power_series_(false)
@@ -91,13 +91,31 @@ ComptonResult ComptonKernelSolver::dispatch(
       } catch (...) {}
     }
 
-    if (gamma_min >= gamma_double_precision_safe_)
-        return eval_kernel<Op>(power_series_, E, E_prime, xi, T, Ne);
+    // Step 1: Speculatively try double PS first.  Accept if self-error
+    // is below tolerance and (for sigma_E) the result is non-negative.
+    // Only attempted outside the asymptotic regime -- inside that regime
+    // (small tau_alpha_max), PS can produce catastrophically wrong values
+    // at near-forward angles while reporting tiny self-error.
+    if (tau_alpha_max >= asymp_tau_alpha_threshold_) {
+        try {
+            auto const ps_dbl = eval_kernel<Op>(power_series_, E, E_prime, xi, T, Ne);
+            bool const accept =
+                ps_dbl.estimated_rel_error < quadrature_self_tol_
+                && (Op == KernelOp::dsigma_dT || ps_dbl.value >= 0.0);
+            if (accept)
+                return ps_dbl;
+        } catch (...) {}
+    }
 
-    auto const q_result = eval_kernel<Op>(quadrature_, E, E_prime, xi, T, Ne);
-    if (q_result.estimated_rel_error < quadrature_self_tol_)
-        return q_result;
+    // Step 2: Try Q64 only when tau_alpha_max is low enough for
+    // quadrature to have a chance of converging at this gamma.
+    if (tau_alpha_max < quadrature_useful_threshold_) {
+        auto const q_result = eval_kernel<Op>(quadrature_, E, E_prime, xi, T, Ne);
+        if (q_result.estimated_rel_error < quadrature_self_tol_)
+            return q_result;
+    }
 
+    // Step 3: DD fallback with conditional cross-validation.
     ComptonResult ps_result;
     bool ps_ok = false;
     try {
@@ -105,16 +123,22 @@ ComptonResult ComptonKernelSolver::dispatch(
         ps_ok = ps_result.estimated_rel_error < 1.0;
     } catch (...) {}
 
-    // Always try asymp-DD as a competing estimate.  At ultra-low gamma
-    // and large tau*alpha the PS-DD error estimator can underreport,
-    // passing the tolerance gate with a wrong-sign result while
-    // asymp-DD carries the correct answer with even lower self-error.
+    // Skip Asymp-DD cross-validation only when PS-DD is clearly
+    // trustworthy: self-error well below tolerance and (for sigma_E)
+    // result is non-negative.
+    bool const ps_clearly_good =
+        ps_ok
+        && ps_result.estimated_rel_error < 0.1 * quadrature_self_tol_
+        && (Op == KernelOp::dsigma_dT || ps_result.value >= 0.0);
+
     ComptonResult a_last;
     bool a_ok = false;
-    try {
-        a_last = eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T, Ne);
-        a_ok = a_last.estimated_rel_error < 1.0;
-    } catch (...) {}
+    if (!ps_clearly_good) {
+        try {
+            a_last = eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T, Ne);
+            a_ok = a_last.estimated_rel_error < 1.0;
+        } catch (...) {}
+    }
 
     if (ps_ok && a_ok) {
         auto const& better = (a_last.estimated_rel_error <= ps_result.estimated_rel_error)
