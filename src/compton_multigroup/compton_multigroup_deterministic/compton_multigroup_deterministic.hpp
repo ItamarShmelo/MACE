@@ -161,7 +161,7 @@ struct MGIntegrationConfig {
     /**
      * @brief High-accuracy adaptive config for cold temperatures (T < 0.1 keV).
      *
-     * bo=192, pd=9, mu_order=192, mu_peak_k=10, tol=1e-8.
+     * bo=192, pd=9, mu_order=512, mu_peak_k=10, tol=1e-8.
      * Achieves < 1e-4 row-sum accuracy (MC-noise limited at N=1e9).
      * Runtime: ~600-1300s per matrix depending on temperature.
      */

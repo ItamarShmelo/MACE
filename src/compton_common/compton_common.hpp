@@ -176,9 +176,10 @@ struct EulerMascheroni<DD> {
  * Uses E_1(x) = -gamma - ln(x) + sum_{k=1}^N (-1)^{k+1} x^k / (k * k!)
  * then Ehat_1(x) = exp(x) * E_1(x).
  *
- * The series converges for all x > 0 but is used only for x < 1 where
- * the continued fraction is prohibitively slow.  For x < 1 the sum
- * -gamma - ln(x) + S(x) has no cancellation (all terms positive).
+ * The series converges for all x > 0 but is used only for x < 4 where
+ * the continued fraction is slow.  For x < 1 the sum has no cancellation
+ * (all terms positive); in [1, 4) mild cancellation is well within double
+ * precision (~2 digits lost at x = 4).
  */
 template<typename T>
 inline T ehat_series(T const& x, double const tol) {

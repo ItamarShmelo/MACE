@@ -21,7 +21,7 @@ normalization).  Three complementary methods evaluate $\mathcal{M}$.
 The integral over electron momentum has the form
 $\int_0^\infty f(x)\, e^{-x}\, dx$ after the substitution $\rho = \tau x + \rho_+$,
 which maps the Maxwell–Jüttner tail onto the standard Laguerre weight.
-Gauss–Laguerre rules of order 64, 128, or 256 are computed at construction via
+Gauss–Laguerre rules of order 16, 32, 64, 128, or 256 are computed at construction via
 the Golub–Welsch algorithm (implicit QL diagonalization of the Laguerre Jacobi
 matrix).
 
@@ -114,8 +114,7 @@ The implementation avoids this by grouping the $G$ contribution analytically:
 $$T_n^+ + T_n^- = \bigl(G - (n{+}1)/a\bigr)\, n!\, D_n + (n{+}1)!\, F_{n+1}$$
 
 where $D_n = (-\tau\alpha_-)^{n+1} P_n(\zeta_-) - (-\tau\alpha_+)^{n+1} P_n(\zeta_+)$
-and $F_{n+1}$ groups the $\eta_\pm$ Legendre terms (see
-`docs/asymptotic_rearrangement_derivation.md` for the full derivation).
+and $F_{n+1}$ groups the $\eta_\pm$ Legendre terms.
 $D_n$ involves an $O(\gamma)$ subtraction that loses $\sim 8$ digits,
 so the combined formula preserves $\sim 15$ good digits in DD---a gain
 of $\sim 8$ digits over the original two-accumulator approach.
@@ -151,16 +150,26 @@ gamma_min     = min(gamma, gamma')
         accept only if self-reported rel_error < 1e-3;
         when accepted AND gamma_min < 1e-4 AND tau_alpha_max > 0.4 * 0.04,
         cross-validate against DD power series (prefer DD power series
-        if it succeeds with tight self-error); otherwise fall through
-        to steps 2-4.
-2.  elif gamma_min >= 0.02         --> Power series (double)
-3.  else try Q64 Gauss-Laguerre:
-        if self-error < 1e-6       --> Accept Q64
-4.      else try Power series (double-double):
-        if self-error < 1e-6       --> Accept PS_dd
-5.      else try Asymptotic series (DD) as last resort
-        (even beyond the tau_alpha threshold);
-        prefer whichever of PS_dd or Asymp_dd has lower self-error.
+        if it succeeds with tight self-error AND lower self-error than
+        asymptotic); otherwise fall through to steps 2-4.
+2.  if tau_alpha_max >= 0.04:
+        speculatively try Power series (double);
+        accept if self-error < 1e-6 AND (dsigma_dT or value >= 0).
+        Only attempted outside the asymptotic regime because double PS
+        can produce catastrophically wrong values at near-forward angles
+        inside it while reporting tiny self-error.
+3.  if tau_alpha_max < 0.15:
+        try Q64 Gauss-Laguerre;
+        accept if self-error < 1e-6.
+        Skipped when tau_alpha_max >= 0.15 because Q64 cannot converge
+        at these parameters.
+4.  DD fallback:
+        try PS-DD (accept if self-error < 1.0);
+        if PS-DD is "clearly good" (self-error < 1e-7 AND non-negative),
+            skip Asymp-DD and return PS-DD;
+        otherwise also try Asymp-DD (accept if self-error < 1.0);
+        return whichever of PS-DD / Asymp-DD has lower self-error
+            (even if above 1e-6 -- best available).
         If both fail/throw, throw runtime_error.
 ```
 
@@ -171,12 +180,12 @@ keV), it crosses the 0.04 threshold, causing the solver to switch from DD
 power series to DD asymptotic.  Just past the boundary the asymptotic series
 reports self-errors $10^4 \times$ larger than the value, producing garbage that
 corrupts the multigroup angular integral.  The quality gate detects this and
-falls through to the DD power series path (via Q64 rejection).  The entire
+falls through to steps 2--4.  The entire
 asymptotic branch (step 1) is wrapped in a `try/catch` because the series can
 throw "failed to converge" near the dispatch boundary when factorial overflow
 occurs before the optimal truncation point is reached.
 
-**Cross-validation at ultra-low $\gamma$ (step 1b).**  Even when the DD
+**Cross-validation at ultra-low $\gamma$ (step 1).**  Even when the DD
 asymptotic self-error passes the gate, its error estimate can silently
 underreport the true error at extreme forward scattering ($\xi > 0.99$) with
 ultra-low $\gamma$ ($< 10^{-4}$).  In this regime the DD asymptotic can return
@@ -193,8 +202,8 @@ The thresholds are empirically validated:
 |----------|-------|-----------|
 | `ASYMP_TAU_ALPHA_THRESHOLD` | 0.04 | Numerical sweep shows max verified error < 5e-8 for tau_alpha in [0.025, 0.04); extends asymptotic coverage to T ~ 20 keV |
 | `ASYMP_GAMMA_DD_THRESHOLD` | 0.002 (~1 keV) | Worst-case double vs DD asymptotic error is 7e-7 at this boundary |
-| `GAMMA_DOUBLE_PRECISION_SAFE` | 0.02 (~10 keV) | Worst-case double vs DD power-series error is 3.15e-7 at this boundary |
-| `quadrature_self_tol` | 1e-6 | Accepts Q64 only when its Richardson error estimate is tight |
+| `QUADRATURE_USEFUL_THRESHOLD` | 0.15 | Skip Q64 when tau_alpha_max exceeds this value; Q64 cannot converge in this regime at low gamma |
+| `quadrature_self_tol` | 1e-6 | Accepts Q64 or speculative double PS only when self-reported error is tight |
 | `asymp_self_tol` | 1e-3 | Rejects asymptotic when self-reported error exceeds 0.1%; guards dispatch boundary |
 | `asymp_gamma_dd_cross_val_threshold` | 1e-4 (~0.05 keV) | Cross-validate DD asymptotic against DD power series below this $\gamma$ |
 
@@ -263,19 +272,20 @@ error.
 **Taylor series fallback for small $x$ (m=1).**  The CF converges slowly for
 small $x$: at $x \approx 0.05$ it requires $>5000$ iterations (the partial
 quotient ratio $|a_j|/b_j \approx j/2$ grows without bound).  For $m = 1$ and
-$x < 1$, the function is evaluated via the Taylor series instead:
+$x < 4$, the function is evaluated via the Taylor series instead:
 
 $$E_1(x) = -\gamma - \ln x + \sum_{k=1}^{N} \frac{(-x)^k}{k \cdot k!}$$
 
 $$\hat{E}_1(x) = e^x \cdot E_1(x)$$
 
-The crossover at $x = 1$ is the classic threshold (Numerical Recipes §6.3): at
-$x = 1$ both methods cost ~25 iterations; below $x = 1$ the series is strictly
-cheaper (5 terms at $x = 0.05$, 17 terms at $x = 1$ for double; 25 for DD).
-For $x < 1$ the sum $-\gamma - \ln x + S(x)$ has no cancellation since all
-terms are positive, so double precision is safe.  Only $m = 1$ needs the
-fallback; higher-order $\hat{E}_{n+1}$ are computed via the forward recurrence
-which is stable for $x < 1$ (amplitude factor $x/(n+1) < 1$).
+The crossover at $x = 4$ was chosen because the Taylor series remains cheaper
+than the CF up to this point (approximately 30 terms at $x = 4$ for double,
+~55 for DD, while the CF still needs $>50$ iterations).  For $x < 1$ the sum
+$-\gamma - \ln x + S(x)$ has no cancellation since all terms are positive; in
+$[1, 4)$ the alternating series introduces mild cancellation that is well
+within double precision (~2 digits lost at $x = 4$).  Only $m = 1$ needs the
+fallback; higher-order $\hat{E}_{n+1}$ are computed via the downward recurrence
+which is stable for small $x$ (amplitude factor $x/(n+1) < 1$).
 
 
 ## Multigroup Integration
@@ -598,7 +608,7 @@ The fix adds a parallel `combined_mag` tracking path that reports the true
 error of the rearranged sum.
 
 **Cross-validation boundary factor.**  The `0.4 * threshold` factor in the
-cross-validation guard (step 1b) limits cross-validation to the upper 60% of
+cross-validation guard (step 1) limits cross-validation to the upper 60% of
 the asymptotic regime's $\tau\alpha$ range.  Deep inside the asymptotic regime
 ($\tau\alpha \ll \text{threshold}$), cross-validation is skipped because the
 asymptotic series is highly accurate there and the power series may not be
@@ -607,14 +617,15 @@ the absolute boundary moved from 0.01 to 0.016.  This factor may need
 re-tuning if further threshold changes shift the dispatch boundary into
 regimes where ultra-low $\gamma$ cross-validation is needed deeper in.
 
-**PS_dd fallback with error gate.**  The final fallback (step 4/5) wraps the
-DD power series call in a `try/catch` block because `power_series_dd_` can
-throw on Poisson weight underflow or non-convergence at extreme parameters.
-If PS_dd succeeds but its (now-honest) self-error exceeds tolerance, the solver
-attempts DD asymptotic as a last resort — even beyond the $\tau\alpha$ threshold —
-because a poorly-converged asymptotic result is vastly more accurate than a
-catastrophically cancellation-corrupted power series.  If both fail, a
-`runtime_error` is thrown.
+**DD fallback with best-available return (step 4).**  The DD fallback wraps
+both `power_series_dd_` and `asymp_series_dd_` in `try/catch` blocks because
+either can throw on underflow or non-convergence at extreme parameters.  When
+PS-DD is "clearly good" (self-error well below tolerance and non-negative),
+Asymp-DD is skipped entirely to avoid unnecessary computation.  Otherwise the
+solver tries both and returns whichever reports lower self-error — even if that
+error exceeds `quadrature_self_tol` — because a poorly-converged result is
+vastly more accurate than returning nothing.  Only when both backends fail
+entirely (throw or self-error $\geq 1$) does the solver throw `runtime_error`.
 
 Tests anchor accuracy against Q256 post-IBP Gauss–Laguerre as the numerical
 ground truth.  Multigroup accuracy is validated against the CMMC Monte Carlo
