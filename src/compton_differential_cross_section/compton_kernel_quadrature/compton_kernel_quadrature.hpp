@@ -65,7 +65,7 @@ enum class QuadratureForm {
 class ComptonKernelQuadrature {
 public:
     /**
-     * @param NL    Number of Gauss-Laguerre nodes (64, 128, or 256).
+     * @param NL    Number of Gauss-Laguerre nodes (32, 64, 128, or 256).
      * @param form  Which integral representation to evaluate.
      */
     ComptonKernelQuadrature(int NL,
