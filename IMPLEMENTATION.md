@@ -247,7 +247,8 @@ The prefactor $\Sigma_0$ contains $K_2(1/\tau)$ which overflows for small $\tau$
   which avoids computing $e^x$ and $K_\nu$ separately.
 
 The crossover at $x = 50$ is chosen so that the 5-term Hankel expansion has
-relative error below $10^{-15}$.
+relative error below $2 \times 10^{-9}$ (first neglected term $\sim 1.6 \times
+10^{-9}$ for $K_2$, $\sim 8.8 \times 10^{-10}$ for $K_1$).
 
 The ratio $\kappa(\tau) = K_1(1/\tau)/K_2(1/\tau)$ appears in temperature
 derivatives and is computed from the scaled forms (the exponentials cancel).
