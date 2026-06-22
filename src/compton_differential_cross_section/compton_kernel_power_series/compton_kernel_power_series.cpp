@@ -73,21 +73,19 @@ ComptonResult ComptonPowerSeries::power_series(
     T amp_plus(1.0);
     T amp_minus(1.0);
 
+    T const two_over_a = T(2.0) / p.a;
+    T coeff_inc_plus  = p.A_plus;
+    T coeff_inc_minus = p.A_minus;
+
     for (int n = 0; n <= n_max_; ++n) {
-        T const coeff_plus  = p.A_plus + T(2.0 * n) / p.a;
-        T const coeff_minus = p.A_minus + T(2.0 * n) / p.a;
+        T const t_plus  = w_plus * coeff_inc_plus * ehat_plus;
+        T const t_minus = w_minus * coeff_inc_minus * ehat_minus;
 
-        T const t_plus  = w_plus * coeff_plus * ehat_plus;
-        T const t_minus = w_minus * coeff_minus * ehat_minus;
-
-        T const prev_diff = P_plus - P_minus;
         P_plus  = P_plus + t_plus;
         P_minus = P_minus + t_minus;
-        T const curr_diff = P_plus - P_minus;
-        last_diff_change = param_abs(curr_diff - prev_diff);
+        last_diff_change = param_abs(t_plus - t_minus);
 
-        T const term_mag = param_abs(t_plus) + param_abs(t_minus);
-        last_term_mag = term_mag;
+        last_term_mag = param_abs(t_plus) + param_abs(t_minus);
         terms_used = n + 1;
 
         if (n >= n_min_ &&
@@ -95,24 +93,29 @@ ComptonResult ComptonPowerSeries::power_series(
             break;
 
         if (n < n_max_) {
-            w_plus  = w_plus * y_plus / (n + 1.0);
-            w_minus = w_minus * y_minus / (n + 1.0);
+            T const inv_np1 = T(1.0) / T(n + 1.0);
 
-            amp_plus = amp_plus * (x_plus / (n + 1.0));
+            w_plus  = w_plus * y_plus * inv_np1;
+            w_minus = w_minus * y_minus * inv_np1;
+
+            amp_plus = amp_plus * x_plus * inv_np1;
             if (amp_plus < EhatAmpBudget<T>::value) {
-                ehat_plus = (T(1.0) - x_plus * ehat_plus) / (n + 1.0);
+                ehat_plus = (T(1.0) - x_plus * ehat_plus) * inv_np1;
             } else {
                 ehat_plus = ehat(n + 2, x_plus);
                 amp_plus = T(1.0);
             }
 
-            amp_minus = amp_minus * (x_minus / (n + 1.0));
+            amp_minus = amp_minus * x_minus * inv_np1;
             if (amp_minus < EhatAmpBudget<T>::value) {
-                ehat_minus = (T(1.0) - x_minus * ehat_minus) / (n + 1.0);
+                ehat_minus = (T(1.0) - x_minus * ehat_minus) * inv_np1;
             } else {
                 ehat_minus = ehat(n + 2, x_minus);
                 amp_minus = T(1.0);
             }
+
+            coeff_inc_plus  = coeff_inc_plus + two_over_a;
+            coeff_inc_minus = coeff_inc_minus + two_over_a;
         }
     }
 
@@ -207,68 +210,75 @@ ComptonResult ComptonPowerSeries::power_series_derivative(
     T const lk = T(to_double(p.lambda_plus)) - T(kappa_val);
     T const s_over_tau2_a2 = p.s / (tau_t * tau_t * p.a * p.a);
 
-    for (int n = 0; n <= n_max_; ++n) {
-        T const coeff_plus  = p.A_plus + T(2.0 * n) / p.a;
-        T const coeff_minus = p.A_minus + T(2.0 * n) / p.a;
+    T const two_over_a = T(2.0) / p.a;
+    T coeff_inc_plus  = p.A_plus;
+    T coeff_inc_minus = p.A_minus;
+    T const tau2 = tau_t * tau_t;
+    T const rho_p_over_tau2 = p.rho_plus / tau2;
+    T const rho_m_over_tau2 = p.rho_minus / tau2;
+    T const inv_tau = T(1.0) / tau_t;
+    T const x_plus_over_tau  = x_plus * inv_tau;
+    T const x_minus_over_tau = x_minus * inv_tau;
+    T const dPsi_const = T(2.0 * gamma * gamma_p) / p.q;
+    T const dlnSig0 = lk / tau2 - T(3.0) * inv_tau;
 
-        T const t_plus  = w_plus * coeff_plus * ehat_plus;
-        T const t_minus = w_minus * coeff_minus * ehat_minus;
+    for (int n = 0; n <= n_max_; ++n) {
+        T const t_plus  = w_plus * coeff_inc_plus * ehat_plus;
+        T const t_minus = w_minus * coeff_inc_minus * ehat_minus;
 
         P_plus  = P_plus + t_plus;
         P_minus = P_minus + t_minus;
-        T const rho_p_over_tau2 = p.rho_plus / (tau_t * tau_t);
-        T const rho_m_over_tau2 = p.rho_minus / (tau_t * tau_t);
-        T const n_over_tau = T(static_cast<double>(n)) / tau_t;
 
-        T const dcoeff_plus_ehat = (s_over_tau2_a2 - (rho_p_over_tau2 + n_over_tau) * coeff_plus) * ehat_plus
-                                 + (x_plus / tau_t) * coeff_plus * ehat_prev_plus;
-        T const dcoeff_minus_ehat = (-s_over_tau2_a2 - (rho_m_over_tau2 + n_over_tau) * coeff_minus) * ehat_minus
-                                  + (x_minus / tau_t) * coeff_minus * ehat_prev_minus;
+        T const n_over_tau = T(static_cast<double>(n)) * inv_tau;
+
+        T const dcoeff_plus_ehat = (s_over_tau2_a2 - (rho_p_over_tau2 + n_over_tau) * coeff_inc_plus) * ehat_plus
+                                 + x_plus_over_tau * coeff_inc_plus * ehat_prev_plus;
+        T const dcoeff_minus_ehat = (-s_over_tau2_a2 - (rho_m_over_tau2 + n_over_tau) * coeff_inc_minus) * ehat_minus
+                                  + x_minus_over_tau * coeff_inc_minus * ehat_prev_minus;
 
         T const dt_plus  = w_plus * dcoeff_plus_ehat;
         T const dt_minus = w_minus * dcoeff_minus_ehat;
 
-        T const prev_deriv_diff = dP_plus - dP_minus;
         dP_plus  = dP_plus + dt_plus;
         dP_minus = dP_minus + dt_minus;
-        T const curr_deriv_diff = dP_plus - dP_minus;
-        last_deriv_diff_change = param_abs(curr_deriv_diff - prev_deriv_diff);
+        last_deriv_diff_change = param_abs(dt_plus - dt_minus);
 
-        T const deriv_term_mag = param_abs(dt_plus) + param_abs(dt_minus);
-        last_deriv_term_mag = deriv_term_mag;
+        last_deriv_term_mag = param_abs(dt_plus) + param_abs(dt_minus);
         terms_used = n + 1;
 
-        T const dPsi = T(2.0 * gamma * gamma_p) / p.q;
-        T const dlnSig0 = lk / (tau_t * tau_t) - T(3.0) / tau_t;
-        T const curr_diff = P_plus - P_minus;
-        T const deriv_normalized = dPsi + (dP_plus - dP_minus) + dlnSig0 * (p.Psi + curr_diff);
+        T const deriv_normalized = dPsi_const + (dP_plus - dP_minus) + dlnSig0 * (p.Psi + (P_plus - P_minus));
 
         if (n >= n_min_ &&
             last_deriv_diff_change / (param_abs(deriv_normalized) + eps_tiny) < eps_rel_)
             break;
 
         if (n < n_max_) {
-            w_plus  = w_plus * y_plus / (n + 1.0);
-            w_minus = w_minus * y_minus / (n + 1.0);
+            T const inv_np1 = T(1.0) / T(n + 1.0);
+
+            w_plus  = w_plus * y_plus * inv_np1;
+            w_minus = w_minus * y_minus * inv_np1;
 
             ehat_prev_plus = ehat_plus;
             ehat_prev_minus = ehat_minus;
 
-            amp_plus = amp_plus * (x_plus / (n + 1.0));
+            amp_plus = amp_plus * x_plus * inv_np1;
             if (amp_plus < EhatAmpBudget<T>::value) {
-                ehat_plus = (T(1.0) - x_plus * ehat_plus) / (n + 1.0);
+                ehat_plus = (T(1.0) - x_plus * ehat_plus) * inv_np1;
             } else {
                 ehat_plus = ehat(n + 2, x_plus);
                 amp_plus = T(1.0);
             }
 
-            amp_minus = amp_minus * (x_minus / (n + 1.0));
+            amp_minus = amp_minus * x_minus * inv_np1;
             if (amp_minus < EhatAmpBudget<T>::value) {
-                ehat_minus = (T(1.0) - x_minus * ehat_minus) / (n + 1.0);
+                ehat_minus = (T(1.0) - x_minus * ehat_minus) * inv_np1;
             } else {
                 ehat_minus = ehat(n + 2, x_minus);
                 amp_minus = T(1.0);
             }
+
+            coeff_inc_plus  = coeff_inc_plus + two_over_a;
+            coeff_inc_minus = coeff_inc_minus + two_over_a;
         }
     }
 
@@ -276,12 +286,10 @@ ComptonResult ComptonPowerSeries::power_series_derivative(
         throw std::runtime_error("power series derivative failed to converge");
     }
 
-    T const dPsi = T(2.0 * gamma * gamma_p) / p.q;
-    T const dlnSig0 = lk / (tau_t * tau_t) - T(3.0) / tau_t;
     T const diff = P_plus - P_minus;
     T const ddiff = dP_plus - dP_minus;
     T const sigma_term = dlnSig0 * (p.Psi + diff);
-    T const deriv_normalized = dPsi + ddiff + sigma_term;
+    T const deriv_normalized = dPsi_const + ddiff + sigma_term;
     T const value = sigma0 * deriv_normalized;
 
     constexpr double T_EPS = details::MachineEps<T>::value;
@@ -289,7 +297,7 @@ ComptonResult ComptonPowerSeries::power_series_derivative(
 
     T const cancel_dP = (param_abs(dP_plus) + param_abs(dP_minus))
                       / (param_abs(ddiff) + T(eps_tiny));
-    T const all_terms = param_abs(dPsi) + param_abs(ddiff) + param_abs(sigma_term);
+    T const all_terms = param_abs(dPsi_const) + param_abs(ddiff) + param_abs(sigma_term);
     T const cancel_deriv = all_terms / (param_abs(deriv_normalized) + T(eps_tiny));
 
     T const trunc_rel = last_deriv_term_mag / norm_abs;

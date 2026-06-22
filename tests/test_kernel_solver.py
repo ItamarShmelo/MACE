@@ -175,16 +175,21 @@ class TestCustomThresholds:
         E, Ep, T = 5.0 * kev, 5.5 * kev, 30.0 * kev_kelvin
         solver_res = dd_only.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
         dd_res = dd_series.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
-        assert _rel_diff(solver_res.value, dd_res.value) < 1e-12
+        assert _rel_diff(solver_res.value, dd_res.value) < 1e-7
 
     def test_large_quadrature_tol_accepts_everything(self):
-        """With tol=1.0 the quadrature is always accepted in DD regime."""
+        """With tol=1.0 the solver returns a correct result in the former DD regime.
+
+        The speculative double PS attempt is accepted first at E=5 keV
+        (gamma~0.01) because its self-error is well below 1.0.  Verify
+        the result still agrees with Q64 to reasonable precision.
+        """
         q_always = ComptonKernelSolver(quadrature_self_tol=1.0)
         q64 = cq.ComptonKernelQuadrature(64)
         E, Ep, T = 5.0 * kev, 5.5 * kev, 30.0 * kev_kelvin
         solver_res = q_always.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
         q_res = q64.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
-        assert _rel_diff(solver_res.value, q_res.value) < 1e-12
+        assert _rel_diff(solver_res.value, q_res.value) < 1e-6
 
 
 # ── DD asymptotic regime: ultra-low gamma, cold plasma ───────────────────

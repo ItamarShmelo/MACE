@@ -142,7 +142,7 @@ struct EhatCfConfig<double> {
 
 template<>
 struct EhatCfConfig<DD> {
-    static constexpr double cf_tol = 1e-25;
+    static constexpr double cf_tol = 1e-20;
     static constexpr int max_iter = 2000;
 };
 
@@ -155,7 +155,7 @@ struct EhatAmpBudget<double> {
 
 template<>
 struct EhatAmpBudget<DD> {
-    static constexpr double value = 1e10;
+    static constexpr double value = 1e15;
 };
 
 template<typename T> struct EulerMascheroni;
@@ -188,11 +188,13 @@ inline T ehat_series(T const& x, double const tol) {
 
     // S = sum_{k=1}^N (-1)^{k+1} x^k / (k * k!)
     // Recurrence: term_{k+1} = term_k * (-x) * k / ((k+1)^2)
+    T const neg_x = -x;
     T term(x);
     T S = term;
     for (int k = 1; k <= 80; ++k) {
-        term = term * (-x) * T(static_cast<double>(k))
-             / T(static_cast<double>((k + 1) * (k + 1)));
+        double const recur_factor =
+            static_cast<double>(k) / static_cast<double>((k + 1) * (k + 1));
+        term = term * neg_x * T(recur_factor);
         S = S + term;
         if (param_abs(term) < tol * param_abs(S))
             break;

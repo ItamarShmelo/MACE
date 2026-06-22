@@ -10,3 +10,6 @@ tests/output/
 **__pycache__**
 references/
 cpp_modules/
+
+benchmarks
+experiments

@@ -9,19 +9,16 @@ ComptonKernelSolver::ComptonKernelSolver(
     double const quadrature_self_tol,
     double const asymp_gamma_dd_threshold,
     double const asymp_self_tol,
-    double const asymp_gamma_dd_cross_val_threshold,
-    double const quadrature_useful_threshold)
+    double const asymp_gamma_dd_cross_val_threshold)
     : asymp_tau_alpha_threshold_(asymp_tau_alpha_threshold)
     , quadrature_self_tol_(quadrature_self_tol)
     , asymp_gamma_dd_threshold_(asymp_gamma_dd_threshold)
     , asymp_self_tol_(asymp_self_tol)
     , asymp_gamma_dd_cross_val_threshold_(asymp_gamma_dd_cross_val_threshold)
-    , quadrature_useful_threshold_(quadrature_useful_threshold)
     , asymp_series_(false)
     , asymp_series_dd_(true)
     , power_series_(false)
-    , power_series_dd_(true)
-    , quadrature_(64)
+    , power_series_dd_(true, /*eps_rel=*/ 1e-9)
 {}
 
 namespace {
@@ -107,15 +104,7 @@ ComptonResult ComptonKernelSolver::dispatch(
         } catch (...) {}
     }
 
-    // Step 2: Try Q64 only when tau_alpha_max is low enough for
-    // quadrature to have a chance of converging at this gamma.
-    if (tau_alpha_max < quadrature_useful_threshold_) {
-        auto const q_result = eval_kernel<Op>(quadrature_, E, E_prime, xi, T, Ne);
-        if (q_result.estimated_rel_error < quadrature_self_tol_)
-            return q_result;
-    }
-
-    // Step 3: DD fallback with conditional cross-validation.
+    // Step 2: DD fallback with conditional cross-validation.
     ComptonResult ps_result;
     bool ps_ok = false;
     try {

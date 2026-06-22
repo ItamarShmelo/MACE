@@ -60,7 +60,7 @@ quad = cds.ComptonKernelQuadrature(256, cds.QuadratureForm.PostIBP)
 r = quad.sigma_E(1*kev, 2*kev, 0.0, kev_kelvin, 1.0)
 print(f"quadrature: {r.value:.6e}  (rel_err ~ {r.estimated_rel_error:.1e})")
 
-# Solver (adaptive dispatch: asymptotic / power series / Q64)
+# Solver (adaptive dispatch: asymptotic / power series / DD fallback)
 solver = cds.ComptonKernelSolver()
 r = solver.sigma_E(1*kev, 2*kev, 0.0, 1*kev_kelvin, 1.0)
 print(f"solver:     {r.value:.6e}  (rel_err ~ {r.estimated_rel_error:.1e})")
@@ -382,7 +382,9 @@ kinematics.
 where the two terms can be individually much larger than their difference.
 At low photon energies ($\gamma<0.02$, roughly $E<10$ keV), the power-series
 calculation is promoted to double-double arithmetic using the `doubledouble`
-library. The Auto dispatch selects this path automatically.
+library.  The solver dispatch selects this path automatically.  The DD
+fallback in the solver uses a relaxed convergence tolerance (`eps_rel = 1e-9`)
+since the solver only requires ~1e-7 accuracy to bypass cross-validation.
 
 ### Asymptotic series
 
@@ -460,12 +462,8 @@ gamma_min     = min(gamma, gamma_prime)
      try double PowerSeries (speculative)
      accept if rel_error < 1e-6 and (dsigma_dT or value >= 0)
 
-3. if tau_alpha_max < 0.15:                         # quadrature useful range
-     result = Q64 quadrature
-     if result.rel_error < 1e-6: accept
-
-4. DD fallback:
-     try DD PowerSeries; viable if rel_error < 1.0
+3. DD fallback:
+     try DD PowerSeries (eps_rel=1e-9); viable if rel_error < 1.0
      if not clearly trustworthy:
          also try DD AsymptoticSeries (viable if rel_error < 1.0)
      pick better viable result, or best available; raise if all failed
@@ -476,16 +474,14 @@ The thresholds are configurable at construction time (defaults from `compton_ker
 - `asymp_tau_alpha_threshold = 0.04` -- below this, the asymptotic series
   reaches its optimal truncation with few terms.
 - `quadrature_self_tol = 1e-6` -- accept any non-asymptotic result
-  (speculative double PS, Q64, DD cross-validation) when its self-reported
+  (speculative double PS, DD cross-validation) when its self-reported
   relative error is below this tolerance.
 - `asymp_gamma_dd_threshold = 0.002` -- within the asymptotic regime, switch
   to DD arithmetic below this photon energy.
 - `asymp_self_tol = 1e-3` -- reject the asymptotic result when its
-  self-reported error exceeds this; falls through to Q64 / DD power series.
+  self-reported error exceeds this; falls through to DD power series.
 - `asymp_gamma_dd_cross_val_threshold = 1e-4` -- at ultra-low gamma near
   the dispatch boundary, cross-validate DD asymptotic against DD power series.
-- `quadrature_useful_threshold = 0.15` -- skip Q64 when `tau_alpha_max`
-  exceeds this value (Q64 cannot converge in this regime at low gamma).
 
 ## Tests
 

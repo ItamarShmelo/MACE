@@ -151,20 +151,15 @@ gamma_min     = min(gamma, gamma')
         when accepted AND gamma_min < 1e-4 AND tau_alpha_max > 0.4 * 0.04,
         cross-validate against DD power series (prefer DD power series
         if it succeeds with tight self-error AND lower self-error than
-        asymptotic); otherwise fall through to steps 2-4.
+        asymptotic); otherwise fall through to steps 2-3.
 2.  if tau_alpha_max >= 0.04:
         speculatively try Power series (double);
         accept if self-error < 1e-6 AND (dsigma_dT or value >= 0).
         Only attempted outside the asymptotic regime because double PS
         can produce catastrophically wrong values at near-forward angles
         inside it while reporting tiny self-error.
-3.  if tau_alpha_max < 0.15:
-        try Q64 Gauss-Laguerre;
-        accept if self-error < 1e-6.
-        Skipped when tau_alpha_max >= 0.15 because Q64 cannot converge
-        at these parameters.
-4.  DD fallback:
-        try PS-DD (accept if self-error < 1.0);
+3.  DD fallback:
+        try PS-DD with eps_rel=1e-9 (accept if self-error < 1.0);
         if PS-DD is "clearly good" (self-error < 1e-7 AND non-negative),
             skip Asymp-DD and return PS-DD;
         otherwise also try Asymp-DD (accept if self-error < 1.0);
@@ -202,8 +197,7 @@ The thresholds are empirically validated:
 |----------|-------|-----------|
 | `ASYMP_TAU_ALPHA_THRESHOLD` | 0.04 | Numerical sweep shows max verified error < 5e-8 for tau_alpha in [0.025, 0.04); extends asymptotic coverage to T ~ 20 keV |
 | `ASYMP_GAMMA_DD_THRESHOLD` | 0.002 (~1 keV) | Worst-case double vs DD asymptotic error is 7e-7 at this boundary |
-| `QUADRATURE_USEFUL_THRESHOLD` | 0.15 | Skip Q64 when tau_alpha_max exceeds this value; Q64 cannot converge in this regime at low gamma |
-| `quadrature_self_tol` | 1e-6 | Accepts Q64 or speculative double PS only when self-reported error is tight |
+| `quadrature_self_tol` | 1e-6 | Accepts speculative double PS only when self-reported error is tight |
 | `asymp_self_tol` | 1e-3 | Rejects asymptotic when self-reported error exceeds 0.1%; guards dispatch boundary |
 | `asymp_gamma_dd_cross_val_threshold` | 1e-4 (~0.05 keV) | Cross-validate DD asymptotic against DD power series below this $\gamma$ |
 
@@ -221,9 +215,10 @@ remain `double` in all cases.
 **Power series:** computes $P_+ - P_-$, a difference of two nearly equal
 quantities at low photon energies.  When $\gamma \ll 1$ (say E < 10 keV), up to
 15 significant digits cancel, making double precision (~15 digits) inadequate.
-The solver uses Q64 as a fast first attempt in the DD regime; only when the
-quadrature's self-reported error exceeds $10^{-6}$ does it fall through to the
-expensive DD power series.
+The solver falls through to DD power series (with relaxed `eps_rel = 1e-9`)
+when the speculative double PS fails.  The DD inner loop uses precomputed
+reciprocals and strength-reduced coefficient updates to minimize per-iteration
+cost (~18-21 µs per call at typical red-zone points).
 
 **Asymptotic series:** the factorial/power accumulation $\sum_n (-\tau\alpha_\pm)^{n+1}$
 is similarly susceptible to cancellation at ultra-low $\gamma$ (< 1e-3), where
@@ -260,15 +255,16 @@ fraction (DLMF 8.9.2):
 
 $$\hat{E}_m(x) = \cfrac{1}{x + m - \cfrac{m \cdot 1}{x + m + 2 - \cfrac{(m+1) \cdot 2}{x + m + 4 - \cdots}}}$$
 
-Convergence tolerances: $10^{-14}$ (double), $10^{-25}$ (DD), with maximum
+Convergence tolerances: $10^{-14}$ (double), $10^{-20}$ (DD), with maximum
 1000 / 2000 iterations respectively.
 
 When successive $\hat{E}_{n+1}$ values are needed, a **downward recurrence**
 $\hat{E}_{n+1} = (1 - x\hat{E}_n)/n$ is cheaper than restarting the CF at
 every order.  However the recurrence amplifies errors; it is used only while the
 accumulated amplification stays below an **amplitude budget**: $10^3$ for double,
-$10^{10}$ for DD.  Once the budget is exceeded the CF is restarted to reset
-error.
+$10^{15}$ for DD.  Once the budget is exceeded the CF is restarted to reset
+error.  The DD budget is set high because DD has ~31 digits of precision; even
+after 15 orders of magnitude of amplification, ~16 significant digits remain.
 
 **Taylor series fallback for small $x$ (m=1).**  The CF converges slowly for
 small $x$: at $x \approx 0.05$ it requires $>5000$ iterations (the partial
