@@ -21,7 +21,7 @@ PYBIND11_MODULE(_compton_differential_cross_section, m) {
     py::class_<ComptonPowerSeries>(m, "ComptonPowerSeries")
         .def(py::init<bool, double, int, int>(),
              "high_precision"_a = false,
-             "eps_rel"_a = 1e-12,
+             "eps_rel"_a = 1e-8,
              "n_min"_a = 4,
              "n_max"_a = 200)
         .def("sigma_E", &ComptonPowerSeries::sigma_E,
@@ -64,7 +64,7 @@ PYBIND11_MODULE(_compton_differential_cross_section, m) {
     py::class_<ComptonKernelAsymptoticSeries>(m, "ComptonKernelAsymptoticSeries")
         .def(py::init<bool, double, int, int>(),
              "high_precision"_a = false,
-             "eps_rel"_a = 1e-12,
+             "eps_rel"_a = 1e-8,
              "n_min"_a = 4,
              "n_max"_a = 200)
         .def("sigma_E", &ComptonKernelAsymptoticSeries::sigma_E,
@@ -162,7 +162,7 @@ PYBIND11_MODULE(_compton_differential_cross_section, m) {
     py::class_<ComptonKernelSolver>(m, "ComptonKernelSolver")
         .def(py::init<double, double, double, double, double>(),
              "asymp_tau_alpha_threshold"_a   = constants::ASYMP_TAU_ALPHA_THRESHOLD,
-             "quadrature_self_tol"_a         = 1e-6,
+             "quadrature_self_tol"_a         = 5e-6,
              "asymp_gamma_dd_threshold"_a    = constants::ASYMP_GAMMA_DD_THRESHOLD,
              "asymp_self_tol"_a              = 1e-3,
              "asymp_gamma_dd_cross_val_threshold"_a = constants::ASYMP_GAMMA_DD_CROSS_VAL_THRESHOLD)

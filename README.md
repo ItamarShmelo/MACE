@@ -382,9 +382,10 @@ kinematics.
 where the two terms can be individually much larger than their difference.
 At low photon energies ($\gamma<0.02$, roughly $E<10$ keV), the power-series
 calculation is promoted to double-double arithmetic using the `doubledouble`
-library.  The solver dispatch selects this path automatically.  The DD
-fallback in the solver uses a relaxed convergence tolerance (`eps_rel = 1e-9`)
-since the solver only requires ~1e-7 accuracy to bypass cross-validation.
+library.  The solver dispatch selects this path automatically.  Both double
+and DD backends use `eps_rel = 1e-8`; DD's value is the 31-digit intermediate
+precision that prevents cancellation catastrophe, not a tighter convergence
+criterion.
 
 ### Asymptotic series
 
@@ -447,7 +448,7 @@ term-magnitude increases.
 tau_alpha_max = tau * max(alpha_plus, alpha_minus)
 gamma_min     = min(gamma, gamma_prime)
 
-1. if tau_alpha_max < 0.04:                        # cold regime
+1. if tau_alpha_max < 0.02:                        # cold regime
      if gamma_min < 0.002:
          result = AsymptoticSeries (DD)
      else:
@@ -458,12 +459,12 @@ gamma_min     = min(gamma, gamma_prime)
          accept
      else: fall through
 
-2. if tau_alpha_max >= 0.04:                        # outside asymptotic regime
+2. if tau_alpha_max >= 0.02:                        # outside asymptotic regime
      try double PowerSeries (speculative)
-     accept if rel_error < 1e-6 and (dsigma_dT or value >= 0)
+     accept if rel_error < 5e-6 and (dsigma_dT or value >= 0)
 
 3. DD fallback:
-     try DD PowerSeries (eps_rel=1e-9); viable if rel_error < 1.0
+     try DD PowerSeries; viable if rel_error < 1.0
      if not clearly trustworthy:
          also try DD AsymptoticSeries (viable if rel_error < 1.0)
      pick better viable result, or best available; raise if all failed
@@ -471,11 +472,12 @@ gamma_min     = min(gamma, gamma_prime)
 
 The thresholds are configurable at construction time (defaults from `compton_kernel_solver.hpp`):
 
-- `asymp_tau_alpha_threshold = 0.04` -- below this, the asymptotic series
+- `asymp_tau_alpha_threshold = 0.02` -- below this, the asymptotic series
   reaches its optimal truncation with few terms.
-- `quadrature_self_tol = 1e-6` -- accept any non-asymptotic result
+- `quadrature_self_tol = 5e-6` -- accept any non-asymptotic result
   (speculative double PS, DD cross-validation) when its self-reported
-  relative error is below this tolerance.
+  relative error is below this tolerance.  Raised from 1e-6 to accommodate
+  the relaxed series convergence threshold (`eps_rel = 1e-8`).
 - `asymp_gamma_dd_threshold = 0.002` -- within the asymptotic regime, switch
   to DD arithmetic below this photon energy.
 - `asymp_self_tol = 1e-3` -- reject the asymptotic result when its

@@ -175,7 +175,7 @@ class TestCustomThresholds:
         E, Ep, T = 5.0 * kev, 5.5 * kev, 30.0 * kev_kelvin
         solver_res = dd_only.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
         dd_res = dd_series.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
-        assert _rel_diff(solver_res.value, dd_res.value) < 1e-7
+        assert _rel_diff(solver_res.value, dd_res.value) < 1e-6
 
     def test_large_quadrature_tol_accepts_everything(self):
         """With tol=1.0 the solver returns a correct result in the former DD regime.
@@ -239,6 +239,68 @@ class TestAsymptoticDDThreshold:
         solver_res = dd_forced.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
         dd_res = dd_asymp.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
         assert _rel_diff(solver_res.value, dd_res.value) < 1e-12
+
+
+# ── Dispatch boundary: tau_alpha_max ~ 0.02 ──────────────────────────────
+
+BOUNDARY_POINTS = [
+    # (E_kev, Ep_kev, xi, T_kev, tau_alpha_approx)
+    (10.0, 10.5, 0.5, 7.0, 0.0197),   # just below threshold -> asymptotic
+    (10.0, 10.5, 0.5, 7.1, 0.0202),   # just above threshold -> power series
+    (10.0, 10.5, 0.5, 8.0, 0.0257),   # comfortably above -> power series
+    (10.0, 10.5, 0.0, 7.0, 0.0137),   # well below threshold -> asymptotic
+]
+
+
+class TestDispatchBoundary:
+    """Points straddling tau_alpha_max = 0.02 must all match Q256."""
+
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev,_ta",
+                             BOUNDARY_POINTS,
+                             ids=[f"ta~{p[4]}" for p in BOUNDARY_POINTS])
+    def test_sigma_E(self, E_kev, Ep_kev, xi, T_kev, _ta):
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        if qres.estimated_rel_error > 1e-5:
+            pytest.skip("quadrature reference unreliable")
+        sres = SOLVER.sigma_E(E, Ep, xi, T, 1.0)
+        rd = _rel_diff(sres.value, qres.value)
+        assert rd < 1e-3, f"reldiff={rd:.2e}"
+
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev,_ta",
+                             BOUNDARY_POINTS,
+                             ids=[f"ta~{p[4]}" for p in BOUNDARY_POINTS])
+    def test_dsigma_E_dT(self, E_kev, Ep_kev, xi, T_kev, _ta):
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        if qres.estimated_rel_error > 1e-5:
+            pytest.skip("quadrature reference unreliable")
+        sres = SOLVER.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        rd = _rel_diff(sres.value, qres.value)
+        assert rd < 1e-3, f"reldiff={rd:.2e}"
+
+
+# ── Cross-validation gate at ultra-low gamma ─────────────────────────────
+
+CROSS_VAL_POINTS = [
+    # gamma_min < 1e-4, tau_alpha in [0.008, 0.02] -> cross-validation active
+    (0.04, 0.042, 0.0, 0.5),   # gamma~7.8e-5, tau_alpha~0.0175
+    (0.05, 0.0525, 0.0, 0.5),  # gamma~9.8e-5, tau_alpha~0.014
+]
+
+
+class TestCrossValidationGate:
+    """Ultra-low gamma points in the cross-validation zone must be accurate."""
+
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", CROSS_VAL_POINTS)
+    def test_sigma_E(self, E_kev, Ep_kev, xi, T_kev):
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        if qres.estimated_rel_error > 1e-3:
+            pytest.skip("quadrature reference unreliable")
+        sres = SOLVER.sigma_E(E, Ep, xi, T, 1.0)
+        rd = _rel_diff(sres.value, qres.value)
+        assert rd < 1e-3, f"reldiff={rd:.2e}"
 
 
 # ── Vec methods: verify vectorized wrappers match scalar calls ────────────

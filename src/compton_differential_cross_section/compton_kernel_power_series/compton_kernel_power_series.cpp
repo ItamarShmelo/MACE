@@ -196,6 +196,8 @@ ComptonResult ComptonPowerSeries::power_series_derivative(
     constexpr double eps_tiny = 1e-300;
     T last_deriv_diff_change(0.0);
     T last_deriv_term_mag(0.0);
+    T last_P_diff_change(0.0);
+    T last_P_term_mag(0.0);
     int terms_used = 0;
 
     T ehat_plus  = ehat(1, x_plus);
@@ -222,6 +224,7 @@ ComptonResult ComptonPowerSeries::power_series_derivative(
     T const x_minus_over_tau = x_minus * inv_tau;
     T const dPsi_const = T(2.0 * gamma * gamma_p) / p.q;
     T const dlnSig0 = lk / tau2 - T(3.0) * inv_tau;
+    T const abs_dlnSig0 = param_abs(dlnSig0);
 
     for (int n = 0; n <= n_max_; ++n) {
         T const t_plus  = w_plus * coeff_inc_plus * ehat_plus;
@@ -229,6 +232,8 @@ ComptonResult ComptonPowerSeries::power_series_derivative(
 
         P_plus  = P_plus + t_plus;
         P_minus = P_minus + t_minus;
+        last_P_diff_change = param_abs(t_plus - t_minus);
+        last_P_term_mag = param_abs(t_plus) + param_abs(t_minus);
 
         T const n_over_tau = T(static_cast<double>(n)) * inv_tau;
 
@@ -249,8 +254,9 @@ ComptonResult ComptonPowerSeries::power_series_derivative(
 
         T const deriv_normalized = dPsi_const + (dP_plus - dP_minus) + dlnSig0 * (p.Psi + (P_plus - P_minus));
 
+        T const total_trunc_est = last_deriv_diff_change + abs_dlnSig0 * last_P_diff_change;
         if (n >= n_min_ &&
-            last_deriv_diff_change / (param_abs(deriv_normalized) + eps_tiny) < eps_rel_)
+            total_trunc_est / (param_abs(deriv_normalized) + eps_tiny) < eps_rel_)
             break;
 
         if (n < n_max_) {
@@ -296,13 +302,24 @@ ComptonResult ComptonPowerSeries::power_series_derivative(
     constexpr double T_EPS = details::MachineEps<T>::value;
     T const norm_abs = param_abs(deriv_normalized) + eps_tiny;
 
+    T const dPsi_plus_ddiff = dPsi_const + ddiff;
+
     T const cancel_dP = (param_abs(dP_plus) + param_abs(dP_minus))
                       / (param_abs(ddiff) + T(eps_tiny));
-    T const all_terms = param_abs(dPsi_const) + param_abs(ddiff) + param_abs(sigma_term);
-    T const cancel_deriv = all_terms / (param_abs(deriv_normalized) + T(eps_tiny));
+    T const cancel_dPsi = (param_abs(dPsi_const) + param_abs(ddiff))
+                        / (param_abs(dPsi_plus_ddiff) + T(eps_tiny));
 
-    T const trunc_rel = last_deriv_term_mag / norm_abs;
-    T const round_rel = T(terms_used) * T_EPS * cancel_dP * cancel_deriv;
+    T const cancel_P = (param_abs(P_plus) + param_abs(P_minus))
+                     / (param_abs(diff) + T(eps_tiny));
+    T const cancel_Psi = (param_abs(p.Psi) + param_abs(diff))
+                       / (param_abs(p.Psi + diff) + T(eps_tiny));
+
+    T const abs_err_dP_path = param_abs(dPsi_plus_ddiff) * cancel_dP * cancel_dPsi;
+    T const abs_err_P_path  = param_abs(sigma_term) * cancel_P * cancel_Psi;
+
+    T const trunc_rel = (last_deriv_term_mag + abs_dlnSig0 * last_P_term_mag) / norm_abs;
+    T const round_rel = T(terms_used) * T_EPS * (abs_err_dP_path + abs_err_P_path)
+                      / (param_abs(deriv_normalized) + T(eps_tiny));
     T const rel_error = std::max(trunc_rel, round_rel);
     T const abs_error = rel_error * param_abs(value);
 

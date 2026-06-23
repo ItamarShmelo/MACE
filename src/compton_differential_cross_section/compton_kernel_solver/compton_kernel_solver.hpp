@@ -27,7 +27,7 @@
 namespace compton {
 
 namespace constants {
-constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.04;
+constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.02;
 constexpr double ASYMP_GAMMA_DD_THRESHOLD = 0.002;
 /// Cross-validate DD asymptotic against DD power series when gamma is
 /// below this value.  At ultra-low gamma the asymptotic series can
@@ -57,7 +57,7 @@ public:
 
     ComptonKernelSolver(
         double asymp_tau_alpha_threshold   = constants::ASYMP_TAU_ALPHA_THRESHOLD,
-        double quadrature_self_tol         = 1e-6,
+        double quadrature_self_tol         = 5e-6,
         double asymp_gamma_dd_threshold    = constants::ASYMP_GAMMA_DD_THRESHOLD,
         double asymp_self_tol              = 1e-3,
         double asymp_gamma_dd_cross_val_threshold

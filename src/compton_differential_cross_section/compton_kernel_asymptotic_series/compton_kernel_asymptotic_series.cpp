@@ -1,6 +1,7 @@
 #include "compton_differential_cross_section/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.hpp"
 #include "compton_common/compton_common.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -55,6 +56,10 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
 
     T S_combined = static_cast<T>(0.0);
 
+    constexpr double EPS_T = details::MachineEps<T>::value;
+    double roundoff_sum = 0.0;
+    double best_roundoff_sum = 0.0;
+
     double smallest_term_mag = std::numeric_limits<double>::infinity();
     T best_S = static_cast<T>(0.0);
     int increase_count = 0;
@@ -86,6 +91,12 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
         // Rearranged accumulation: groups the G contribution so that
         // the massive G*n! terms cancel analytically rather than
         // numerically.  See docs/asymptotic_rearrangement_derivation.md.
+        double const d_plus_mag  = std::abs(to_double(power_plus * Pp_n));
+        double const d_minus_mag = std::abs(to_double(power_minus * Pm_n));
+
+        double const f_plus_mag  = std::abs(to_double(eta_plus * power_plus * Pp_n1));
+        double const f_minus_mag = std::abs(to_double(eta_minus * power_minus * Pm_n1));
+
         T const D_n = power_minus * Pm_n - power_plus * Pp_n;
         T const F_n1 = eta_minus * power_minus * Pm_n1
                      - eta_plus * power_plus * Pp_n1;
@@ -93,20 +104,30 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
             (p.G - static_cast<T>(n + 1) / a) * factorial_n * D_n
             + factorial_n1 * F_n1;
 
+        double const coeff_D_mag = std::abs(to_double(
+            (p.G - static_cast<T>(n + 1) / a) * factorial_n));
+        double const D_roundoff = EPS_T * (d_plus_mag + d_minus_mag);
+        double const F_roundoff = EPS_T * (f_plus_mag + f_minus_mag);
+        double const term_roundoff = coeff_D_mag * D_roundoff
+                                   + std::abs(to_double(factorial_n1)) * F_roundoff;
+        roundoff_sum += term_roundoff;
+
         S_combined += combined;
         double const combined_mag = to_double(param_abs(combined));
 
         if (combined_mag < smallest_term_mag) {
             smallest_term_mag = combined_mag;
             best_S = S_combined;
+            best_roundoff_sum = roundoff_sum;
         }
 
         double const norm_so_far = to_double(param_abs(base_term + S_combined));
 
         if (n >= n_min_ && combined_mag / (norm_so_far + constants::REL_ERROR_TINY_SCALE) < eps_rel_) {
             double const normalized = to_double(base_term + S_combined);
+            double const norm_abs_error = std::max(combined_mag, roundoff_sum);
             double const value = sigma0 * normalized;
-            double const abs_error = std::abs(sigma0) * combined_mag;
+            double const abs_error = std::abs(sigma0) * norm_abs_error;
             double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
             return ComptonResult{value, abs_error, rel_error, n + 1};
         }
@@ -115,8 +136,9 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
             ++increase_count;
             if (increase_count >= 2) {
                 double const normalized = to_double(base_term + best_S);
+                double const norm_abs_error = std::max(smallest_term_mag, best_roundoff_sum);
                 double const value = sigma0 * normalized;
-                double const abs_error = std::abs(sigma0) * smallest_term_mag;
+                double const abs_error = std::abs(sigma0) * norm_abs_error;
                 double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
                 return ComptonResult{value, abs_error, rel_error, n + 1};
             }
@@ -189,6 +211,10 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
 
     T dS_combined = static_cast<T>(0.0);
 
+    constexpr double EPS_T = details::MachineEps<T>::value;
+    double roundoff_sum = 0.0;
+    double best_roundoff_sum = 0.0;
+
     double smallest_dterm_mag = std::numeric_limits<double>::infinity();
     T best_dS = static_cast<T>(0.0);
     int increase_count = 0;
@@ -219,6 +245,12 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
 
         T const weight = lk / (tau_t * tau_t) + (static_cast<T>(n) - static_cast<T>(2.0)) / tau_t;
 
+        double const d_plus_mag  = std::abs(to_double(power_plus * Pp_n));
+        double const d_minus_mag = std::abs(to_double(power_minus * Pm_n));
+
+        double const f_plus_mag  = std::abs(to_double(eta_plus * power_plus * Pp_n1));
+        double const f_minus_mag = std::abs(to_double(eta_minus * power_minus * Pm_n1));
+
         T const D_n = power_minus * Pm_n - power_plus * Pp_n;
         T const F_n1 = eta_minus * power_minus * Pm_n1
                      - eta_plus * power_plus * Pp_n1;
@@ -226,20 +258,32 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
             weight * ((p.G - static_cast<T>(n + 1) / a) * factorial_n * D_n
                       + factorial_n1 * F_n1);
 
+        double const coeff_D_mag = std::abs(to_double(
+            (p.G - static_cast<T>(n + 1) / a) * factorial_n));
+        double const D_roundoff = EPS_T * (d_plus_mag + d_minus_mag);
+        double const F_roundoff = EPS_T * (f_plus_mag + f_minus_mag);
+        double const weight_mag = std::abs(to_double(weight));
+        double const term_roundoff = weight_mag
+            * (coeff_D_mag * D_roundoff
+               + std::abs(to_double(factorial_n1)) * F_roundoff);
+        roundoff_sum += term_roundoff;
+
         dS_combined += combined;
         double const dcombined_mag = to_double(param_abs(combined));
 
         if (dcombined_mag < smallest_dterm_mag) {
             smallest_dterm_mag = dcombined_mag;
             best_dS = dS_combined;
+            best_roundoff_sum = roundoff_sum;
         }
 
         double const norm_so_far = to_double(param_abs(base_deriv + dS_combined));
 
         if (n >= n_min_ && dcombined_mag / (norm_so_far + constants::REL_ERROR_TINY_SCALE) < eps_rel_) {
             double const normalized = to_double(base_deriv + dS_combined);
+            double const norm_abs_error = std::max(dcombined_mag, roundoff_sum);
             double const value = sigma0 * normalized;
-            double const abs_error = std::abs(sigma0) * dcombined_mag;
+            double const abs_error = std::abs(sigma0) * norm_abs_error;
             double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
             return ComptonResult{value, abs_error, rel_error, n + 1};
         }
@@ -248,8 +292,9 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
             ++increase_count;
             if (increase_count >= 2) {
                 double const normalized = to_double(base_deriv + best_dS);
+                double const norm_abs_error = std::max(smallest_dterm_mag, best_roundoff_sum);
                 double const value = sigma0 * normalized;
-                double const abs_error = std::abs(sigma0) * smallest_dterm_mag;
+                double const abs_error = std::abs(sigma0) * norm_abs_error;
                 double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
                 return ComptonResult{value, abs_error, rel_error, n + 1};
             }
