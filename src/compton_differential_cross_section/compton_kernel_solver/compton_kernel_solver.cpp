@@ -18,7 +18,7 @@ ComptonKernelSolver::ComptonKernelSolver(
     , asymp_series_(false)
     , asymp_series_dd_(true)
     , power_series_(false)
-    , power_series_dd_(true, /*eps_rel=*/ 1e-9)
+    , power_series_dd_(true)
 {}
 
 namespace {

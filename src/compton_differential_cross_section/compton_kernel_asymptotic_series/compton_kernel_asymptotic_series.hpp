@@ -35,7 +35,7 @@ public:
      */
     ComptonKernelAsymptoticSeries(
         bool high_precision = false,
-        double eps_rel = 1e-12,
+        double eps_rel = 1e-8,
         int n_min = 4,
         int n_max = 200);
 

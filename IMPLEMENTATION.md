@@ -150,17 +150,17 @@ gamma_min     = min(gamma, gamma')
         asymptotic); otherwise fall through to steps 2-3.
 2.  if tau_alpha_max >= 0.02:
         speculatively try Power series (double);
-        accept if self-error < 1e-6 AND (dsigma_dT or value >= 0).
+        accept if self-error < 5e-6 AND (dsigma_dT or value >= 0).
         Only attempted outside the asymptotic regime because double PS
         can produce catastrophically wrong values at near-forward angles
         inside it while reporting tiny self-error.
 3.  DD fallback:
-        try PS-DD with eps_rel=1e-9 (accept if self-error < 1.0);
-        if PS-DD is "clearly good" (self-error < 1e-7 AND non-negative),
+        try PS-DD (accept if self-error < 1.0);
+        if PS-DD is "clearly good" (self-error < 5e-7 AND non-negative),
             skip Asymp-DD and return PS-DD;
         otherwise also try Asymp-DD (accept if self-error < 1.0);
         return whichever of PS-DD / Asymp-DD has lower self-error
-            (even if above 1e-6 -- best available).
+            (even if above 5e-6 -- best available).
         If both fail/throw, throw runtime_error.
 ```
 
@@ -193,7 +193,7 @@ The thresholds are empirically validated:
 |----------|-------|-----------|
 | `ASYMP_TAU_ALPHA_THRESHOLD` | 0.02 | Lowered from 0.04 to restrict asymptotic regime to where the series converges most reliably; power series handles [0.02, 0.04) safely via the DD fallback path |
 | `ASYMP_GAMMA_DD_THRESHOLD` | 0.002 (~1 keV) | Worst-case double vs DD asymptotic error is 7e-7 at this boundary |
-| `quadrature_self_tol` | 1e-6 | Accepts speculative double PS only when self-reported error is tight |
+| `quadrature_self_tol` | 5e-6 | Raised from 1e-6 to accommodate the relaxed series `eps_rel = 1e-8`; the power series error estimator reports `trunc_rel` up to ~100x larger than `eps_rel` due to amplification from t_plus/t_minus partial cancellation |
 | `asymp_self_tol` | 1e-3 | Rejects asymptotic when self-reported error exceeds 0.1%; guards dispatch boundary |
 | `asymp_gamma_dd_cross_val_threshold` | 1e-4 (~0.05 keV) | Cross-validate DD asymptotic against DD power series below this $\gamma$ |
 
@@ -211,8 +211,8 @@ remain `double` in all cases.
 **Power series:** computes $P_+ - P_-$, a difference of two nearly equal
 quantities at low photon energies.  When $\gamma \ll 1$ (say E < 10 keV), up to
 15 significant digits cancel, making double precision (~15 digits) inadequate.
-The solver falls through to DD power series (with relaxed `eps_rel = 1e-9`)
-when the speculative double PS fails.  The DD inner loop uses precomputed
+The solver falls through to DD power series when the speculative double PS
+fails.  The DD inner loop uses precomputed
 reciprocals and strength-reduced coefficient updates to minimize per-iteration
 cost (~18-21 µs per call at typical red-zone points).
 
@@ -591,7 +591,21 @@ All kernel evaluations return a `ComptonResult` containing `value` and
   also accounts for the P-series tail propagated through $d\ln\Sigma_0$:
   $\varepsilon_\text{trunc} = (|dt_\pm^\text{last}| + |d\ln\Sigma_0| \cdot |t_\pm^\text{last}|) / |\text{deriv}|$.
   The final error is `max(truncation, round)`.
-- **Asymptotic series:** dual-metric tracking (see below).
+- **Asymptotic series:** `max(truncation, roundoff)`.  The truncation
+  component is the smallest rearranged term magnitude `combined_mag` at optimal
+  truncation (see above).  The roundoff component accumulates per-term
+  floating-point cancellation from the $D_n$ and $F_{n+1}$ subtractions:
+  $$\varepsilon_\text{roundoff} = \sum_n \left( |c_{D,n}| \cdot \varepsilon_T (|d_n^+| + |d_n^-|) + |c_{F,n}| \cdot \varepsilon_T (|f_n^+| + |f_n^-|) \right)$$
+  where $d_n^\pm$ are the subtraction operands of $D_n$, $f_n^\pm$ those of
+  $F_{n+1}$, $c_{D,n} = (G - (n+1)/a) \cdot n!$ and $c_{F,n} = (n+1)!$ are the
+  amplifying coefficients, and $\varepsilon_T$ is the unit roundoff for the
+  arithmetic type ($\sim 1.1 \times 10^{-16}$ for double, $\sim 1.2 \times 10^{-32}$
+  for DD via `MachineEps<T>`).  For the derivative, each term's roundoff is
+  additionally multiplied by $|w_n|$ (the derivative weight).
+  The convergence gate (`combined_mag / norm < eps_rel`) intentionally does not
+  consider roundoff --- continuing to iterate cannot reduce accumulated roundoff,
+  so stopping when additional terms are negligible is correct.  The roundoff
+  is captured only at the return site via `max(truncation, roundoff)`.
 
 **Why the original power series error formula was wrong.**  The prior formula
 used $N \cdot \varepsilon_\text{mach} \cdot \max(|P_+|, |P_-|) / |\text{result}|$,
@@ -612,6 +626,22 @@ The fix switched the convergence tracker to use `combined_mag` $= |T_n^+ + T_n^-
 which reports the true error of the rearranged sum.  The original `term_mag`
 tracking was subsequently removed as dead code (since `combined_mag` $\leq$
 `term_mag` always, the `term_mag` path could never be selected).
+
+**Roundoff-aware asymptotic error.**  The `combined_mag` truncation metric
+tracks series convergence but is blind to floating-point cancellation in the
+$D_n = d_n^- - d_n^+$ and $F_{n+1} = f_n^- - f_n^+$ subtractions.  At
+ultra-low $\gamma$ (< 0.002), $\alpha_+$ and $\alpha_-$ are nearly equal, so
+$d_n^+$ and $d_n^-$ differ by $\sim 10^{-8}$ relative to their magnitude.  The
+subtraction loses $\sim 8$ digits, and the large $G$ coefficient ($\sim 10^8$
+at $\gamma \sim 10^{-4}$) then amplifies this roundoff, exhausting double
+precision.  The series converges to a wrong answer with a falsely small
+`combined_mag`.  Empirically, at $\gamma \sim 2 \times 10^{-5}$ the actual
+double-vs-DD error is $\sim 3\%$ while `combined_mag` reports $\sim 5 \times 10^{-14}$
+--- an under-report by $\sim 10^{11}$.  The per-term roundoff accumulator
+(`roundoff_sum`) tracks the cancellation-amplified roundoff from each $D_n$ and
+$F_{n+1}$ subtraction, and the final error is `max(truncation, roundoff)`.
+In DD arithmetic, $\varepsilon_T \sim 10^{-32}$ makes the roundoff contribution
+negligible even after $G$-amplification, so DD results are unaffected.
 
 **Cross-validation boundary factor.**  The `0.4 * threshold` factor in the
 cross-validation guard (step 1) limits cross-validation to the upper 60% of

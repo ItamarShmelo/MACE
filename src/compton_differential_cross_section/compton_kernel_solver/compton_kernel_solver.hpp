@@ -57,7 +57,7 @@ public:
 
     ComptonKernelSolver(
         double asymp_tau_alpha_threshold   = constants::ASYMP_TAU_ALPHA_THRESHOLD,
-        double quadrature_self_tol         = 1e-6,
+        double quadrature_self_tol         = 5e-6,
         double asymp_gamma_dd_threshold    = constants::ASYMP_GAMMA_DD_THRESHOLD,
         double asymp_self_tol              = 1e-3,
         double asymp_gamma_dd_cross_val_threshold
