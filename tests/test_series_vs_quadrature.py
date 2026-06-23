@@ -12,6 +12,7 @@ Also validates the temperature derivative dsigma_E_dT for each method
 against the same quadrature reference.
 """
 
+import math
 import sys
 
 import pytest
@@ -238,5 +239,53 @@ class TestSolverDerivativeVsQuadrature:
         solver = ComptonKernelSolver()
         sres = solver.dsigma_E_dT(E, Ep, xi, T, 1.0)
 
+        rd = _rel_diff(sres.value, qres.value)
+        assert rd < 1e-3, f"reldiff={rd:.2e}"
+
+
+class TestAsymptoticDivergenceExit:
+    """Force divergence-only termination (eps_rel=0) and verify results.
+
+    With eps_rel=0 the convergence exit is disabled, so the series can only
+    terminate via the divergence detector (2 consecutive combined_mag
+    increases).  Points where the series converges too well for divergence
+    to trigger within n_max terms will throw RuntimeError -- skip those.
+    """
+
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi", TEST_POINTS)
+    @pytest.mark.parametrize("T_kev", TEMPS_COLD_KEV)
+    def test_sigma_E(self, E_kev, Ep_kev, xi, T_kev):
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
+            pytest.skip("quadrature reference unreliable")
+
+        series = ComptonKernelAsymptoticSeries(eps_rel=0.0)
+        try:
+            sres = series.sigma_E(E, Ep, xi, T, 1.0)
+        except RuntimeError:
+            pytest.skip("series converged without triggering divergence exit")
+
+        assert math.isfinite(sres.value)
+        rd = _rel_diff(sres.value, qres.value)
+        assert rd < 1e-3, f"reldiff={rd:.2e}"
+
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi", TEST_POINTS)
+    @pytest.mark.parametrize("T_kev", TEMPS_COLD_KEV)
+    def test_dsigma_E_dT(self, E_kev, Ep_kev, xi, T_kev):
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
+            pytest.skip("quadrature reference unreliable")
+
+        series = ComptonKernelAsymptoticSeries(eps_rel=0.0)
+        try:
+            sres = series.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        except RuntimeError:
+            pytest.skip("series converged without triggering divergence exit")
+
+        assert math.isfinite(sres.value)
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"

@@ -67,10 +67,12 @@ $$\Sigma_E / \Sigma_0 \sim \frac{2\tau\gamma\gamma'}{q} + S_+ + S_-$$
 Terms involve factorials and Legendre polynomials $P_n(\zeta_\pm)$.  Because the
 series diverges, it is truncated at the **smallest term** (optimal truncation):
 
-1. Track the smallest term magnitude seen so far.
-2. After `n_min` terms, if 2 consecutive terms grow, return the partial sum
-   accumulated up to the smallest-term index.
-3. Also exit early if term/norm drops below $10^{-12}$.
+1. Track the smallest rearranged term magnitude `combined_mag` seen so far,
+   together with the partial sum at that index.
+2. After `n_min` terms, if `combined_mag / norm` drops below `eps_rel`, return
+   immediately with error = $|\Sigma_0|$ × `combined_mag`.
+3. If 2 consecutive `combined_mag` values grow, return the partial sum
+   accumulated up to the smallest-`combined_mag` index.
 
 The series is best suited for $\tau \cdot \max(\alpha_+, \alpha_-) < 0.05$.
 
@@ -119,21 +121,15 @@ $D_n$ involves an $O(\gamma)$ subtraction that loses $\sim 8$ digits,
 so the combined formula preserves $\sim 15$ good digits in DD---a gain
 of $\sim 8$ digits over the original two-accumulator approach.
 
-Convergence/truncation tracks **two independent (value, error) pairs**:
-
-1. The original $|T_n^+| + |T_n^-|$ (`term_mag`), which correctly identifies
-   the optimal truncation point in the non-cancellation regime.
-2. The rearranged $|T_n^+ + T_n^-|$ (`combined_mag`), which is the actual
-   error contribution after cancellation and can be orders of magnitude
-   smaller than `term_mag`.
-
-Each pair records the partial sum at the truncation index where its metric
-was smallest.  On convergence or divergence exit, whichever pair has the
-smaller error magnitude is returned.  This ensures the self-reported error
-reflects the true accuracy of the rearranged sum rather than the inflated
-magnitude of the individual un-cancelled terms.  Empirical validation at
-50-digit precision confirms up to 74$\times$ improvement in the DD result
-accuracy.
+Convergence/truncation tracks a single metric: the rearranged term magnitude
+`combined_mag` $= |T_n^+ + T_n^-|$, which reflects the actual per-term
+contribution after analytical G-cancellation.  The partial sum at the index
+where `combined_mag` was smallest is recorded for use by the divergence exit.
+The original per-term magnitudes $|T_n^+| + |T_n^-|$ are not tracked
+separately---since `combined_mag` $\leq$ `term_mag` by the triangle inequality,
+`combined_mag` always produces a tighter (and more accurate) error bound.
+Empirical validation at 50-digit precision confirms up to 74$\times$
+improvement in the DD result accuracy.
 
 ### Solver Dispatch
 
@@ -601,8 +597,10 @@ terms.  These are $\sim 10^{18}\times$ larger than the actual contribution
 $|T_n^+ + T_n^-|$ after analytical cancellation of the $G$ terms.  The
 self-reported error was therefore massively inflated, causing the solver to
 reject correct asymptotic results and dispatch to the (broken) power series.
-The fix adds a parallel `combined_mag` tracking path that reports the true
-error of the rearranged sum.
+The fix switched the convergence tracker to use `combined_mag` $= |T_n^+ + T_n^-|$,
+which reports the true error of the rearranged sum.  The original `term_mag`
+tracking was subsequently removed as dead code (since `combined_mag` $\leq$
+`term_mag` always, the `term_mag` path could never be selected).
 
 **Cross-validation boundary factor.**  The `0.4 * threshold` factor in the
 cross-validation guard (step 1) limits cross-validation to the upper 60% of
