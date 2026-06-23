@@ -576,9 +576,20 @@ All kernel evaluations return a `ComptonResult` containing `value` and
   $\varepsilon_\text{round} = N \cdot \varepsilon_\text{mach} \cdot C_P \cdot C_\Psi$,
   where $C_P = (|P_+| + |P_-|) / |P_+ - P_-|$ measures cancellation in the
   $P_+ - P_-$ subtraction and $C_\Psi = (|\Psi| + |P_+ - P_-|) / |\Psi + P_+ - P_-|$
-  measures cancellation in the final sum.  For the derivative, $C_\Psi$ is replaced
-  by a three-term condition number accounting for $d\Psi$, $dP_+ - dP_-$, and the
-  $d\ln\Sigma_0 \cdot (\Psi + \text{diff})$ propagation term.
+  measures cancellation in the final sum.  For the derivative, the result has
+  two parallel computational paths that combine:
+  $\text{deriv} = (d\Psi + dP_+ - dP_-) + d\ln\Sigma_0 \cdot (\Psi + P_+ - P_-)$.
+  Each path carries a two-stage cancellation chain: the **dP path** has
+  $C_{dP} \cdot C_{d\Psi}$ (subtraction then addition with $d\Psi$), and the
+  **P path** (inside $\sigma_\text{term}$) has $C_P \cdot C_\Psi$ (same as
+  non-derivative).  The rounding error is weighted by each path's magnitude:
+  $\varepsilon_\text{round} = N \varepsilon_\text{mach}
+  (|d\Psi + \text{ddiff}| \cdot C_{dP} C_{d\Psi} + |\sigma_\text{term}| \cdot C_P C_\Psi)
+  / |\text{deriv}|$.
+  This avoids the over-conservative `max` pathology where a negligible path with
+  high internal cancellation would inflate the estimate.  The truncation error
+  also accounts for the P-series tail propagated through $d\ln\Sigma_0$:
+  $\varepsilon_\text{trunc} = (|dt_\pm^\text{last}| + |d\ln\Sigma_0| \cdot |t_\pm^\text{last}|) / |\text{deriv}|$.
   The final error is `max(truncation, round)`.
 - **Asymptotic series:** dual-metric tracking (see below).
 
