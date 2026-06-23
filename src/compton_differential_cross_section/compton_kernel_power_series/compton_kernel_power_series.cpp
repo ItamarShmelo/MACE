@@ -143,7 +143,8 @@ ComptonResult ComptonPowerSeries::power_series(
     return ComptonResult{
         to_double(value),
         to_double(abs_error),
-        to_double(rel_error)};
+        to_double(rel_error),
+        terms_used};
 }
 
 template ComptonResult ComptonPowerSeries::power_series<double>(
@@ -308,7 +309,8 @@ ComptonResult ComptonPowerSeries::power_series_derivative(
     return ComptonResult{
         to_double(value),
         to_double(abs_error),
-        to_double(rel_error)};
+        to_double(rel_error),
+        terms_used};
 }
 
 template ComptonResult ComptonPowerSeries::power_series_derivative<double>(
@@ -375,7 +377,8 @@ ComptonResult ComptonPowerSeries::dsigma_E_dT(
     return ComptonResult{
         dtau_result.value * dtau_dT,
         dtau_result.estimated_abs_error * dtau_dT,
-        dtau_result.estimated_rel_error};
+        dtau_result.estimated_rel_error,
+        dtau_result.terms_used};
 }
 
 double ComptonPowerSeries::dsigma_E_dT_precision_check(

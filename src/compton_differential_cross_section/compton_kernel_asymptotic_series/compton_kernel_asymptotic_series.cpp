@@ -108,7 +108,7 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
             double const value = sigma0 * normalized;
             double const abs_error = std::abs(sigma0) * combined_mag;
             double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
-            return ComptonResult{value, abs_error, rel_error};
+            return ComptonResult{value, abs_error, rel_error, n + 1};
         }
 
         if (n >= n_min_ && combined_mag > prev_combined_mag) {
@@ -118,7 +118,7 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
                 double const value = sigma0 * normalized;
                 double const abs_error = std::abs(sigma0) * smallest_term_mag;
                 double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
-                return ComptonResult{value, abs_error, rel_error};
+                return ComptonResult{value, abs_error, rel_error, n + 1};
             }
         } else {
             increase_count = 0;
@@ -241,7 +241,7 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
             double const value = sigma0 * normalized;
             double const abs_error = std::abs(sigma0) * dcombined_mag;
             double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
-            return ComptonResult{value, abs_error, rel_error};
+            return ComptonResult{value, abs_error, rel_error, n + 1};
         }
 
         if (n >= n_min_ && dcombined_mag > prev_dcombined_mag) {
@@ -251,7 +251,7 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
                 double const value = sigma0 * normalized;
                 double const abs_error = std::abs(sigma0) * smallest_dterm_mag;
                 double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
-                return ComptonResult{value, abs_error, rel_error};
+                return ComptonResult{value, abs_error, rel_error, n + 1};
             }
         } else {
             increase_count = 0;
@@ -341,7 +341,8 @@ ComptonResult ComptonKernelAsymptoticSeries::dsigma_E_dT(
     return ComptonResult{
         dtau_result.value * dtau_dT,
         dtau_result.estimated_abs_error * dtau_dT,
-        dtau_result.estimated_rel_error};
+        dtau_result.estimated_rel_error,
+        dtau_result.terms_used};
 }
 
 double ComptonKernelAsymptoticSeries::dsigma_E_dT_precision_check(

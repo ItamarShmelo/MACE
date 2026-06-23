@@ -11,5 +11,6 @@ PYBIND11_MODULE(_compton_common, m) {
     py::class_<ComptonResult>(m, "ComptonResult")
         .def_readonly("value", &ComptonResult::value)
         .def_readonly("estimated_abs_error", &ComptonResult::estimated_abs_error)
-        .def_readonly("estimated_rel_error", &ComptonResult::estimated_rel_error);
+        .def_readonly("estimated_rel_error", &ComptonResult::estimated_rel_error)
+        .def_readonly("terms_used", &ComptonResult::terms_used);
 }
