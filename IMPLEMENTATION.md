@@ -97,11 +97,11 @@ cancellation.  Empirical measurement shows double vs DD relative error rising to
 $\sim 10^{-4}$ at $\gamma = 10^{-4}$ across all cold temperatures tested
 (0.01--5 keV), whereas at $\gamma > 0.01$ the two agree to $< 10^{-9}$.
 
-The solver dispatch (see below) now includes a DD asymptotic path: when the
-asymptotic regime is active *and* $\min(\gamma, \gamma') < 0.002$ (~1 keV),
-the solver automatically switches to DD arithmetic.  The threshold of 0.002 is
-chosen so double-vs-DD error stays below $10^{-6}$ with margin (empirically
-$7 \times 10^{-7}$ at $\gamma = 10^{-3}$, $10^{-9}$ at $\gamma = 10^{-2}$).
+The solver dispatch (see below) includes a DD asymptotic path: when the
+double-precision asymptotic series reports a self-error above the tolerance
+(driven by the roundoff-aware error estimator detecting cancellation), the
+solver automatically escalates to DD arithmetic.  This is purely error-driven
+and requires no hard-coded $\gamma$ threshold.
 
 **Rearranged accumulation for G-cancellation.**
 At ultra-low $\gamma$ the kinematic parameter
@@ -134,68 +134,64 @@ improvement in the DD result accuracy.
 ### Solver Dispatch
 
 `ComptonKernelSolver` selects the fastest accurate method at each phase-space
-point:
+point via a purely error-driven cascade:
 
 ```
 tau_alpha_max = tau * max(alpha_+, alpha_-)
-gamma_min     = min(gamma, gamma')
 
-1.  if tau_alpha_max < 0.02:
-        (a) gamma_min >= 0.002  --> try Asymptotic series (double)
-        (b) gamma_min <  0.002  --> try Asymptotic series (double-double)
-        accept only if self-reported rel_error < 1e-3;
-        when accepted AND gamma_min < 1e-4 AND tau_alpha_max > 0.4 * 0.02,
-        cross-validate against DD power series (prefer DD power series
-        if it succeeds with tight self-error AND lower self-error than
-        asymptotic); otherwise fall through to steps 2-3.
-2.  if tau_alpha_max >= 0.02:
-        speculatively try Power series (double);
-        accept if self-error < 5e-6 AND (dsigma_dT or value >= 0).
-        Only attempted outside the asymptotic regime because double PS
-        can produce catastrophically wrong values at near-forward angles
-        inside it while reporting tiny self-error.
-3.  DD fallback:
-        try PS-DD (accept if self-error < 1.0);
-        if PS-DD is "clearly good" (self-error < 5e-7 AND non-negative),
-            skip Asymp-DD and return PS-DD;
-        otherwise also try Asymp-DD (accept if self-error < 1.0);
-        return whichever of PS-DD / Asymp-DD has lower self-error
-            (even if above 5e-6 -- best available).
-        If both fail/throw, throw runtime_error.
+Asymptotic regime (tau_alpha_max < 0.035):
+    A1: try Asymptotic series (double)
+        accept if self-error < asymp_self_tol (1e-3).
+        The roundoff-aware error estimator naturally flags cancellation
+        at ultra-low gamma, triggering escalation to DD.
+    A2: try Asymptotic series (DD)
+        accept if self-error < asymp_self_tol.
+    Fall through to power series on failure.
+
+Power series regime (tau_alpha_max >= 0.035, or fallthrough):
+    P1: try Power series (double) -- only outside asymptotic regime
+        accept if self-error < quadrature_self_tol (5e-6)
+        AND (dsigma_dT or value >= 0).
+    P2: try Power series (DD)
+        accept if self-error < quadrature_self_tol
+        AND (dsigma_dT or value >= 0).
+    P3: try Asymptotic DD (last resort) -- skip if already tried in A2.
+
+Return best-seen result if error < 1.0; throw otherwise.
 ```
 
-**Asymptotic quality gate (step 1).**  At high temperature and ultra-low
-photon energy ($\gamma \ll 1$), the quantity $\tau \cdot \max(\alpha_+, \alpha_-)$
-depends on the scattering angle $\xi$.  Near $\xi \approx 0.96$ (for $T = 100$
-keV), it crosses the 0.04 threshold, causing the solver to switch from DD
-power series to DD asymptotic.  Just past the boundary the asymptotic series
-reports self-errors $10^4 \times$ larger than the value, producing garbage that
-corrupts the multigroup angular integral.  The quality gate detects this and
-falls through to steps 2--4.  The entire
-asymptotic branch (step 1) is wrapped in a `try/catch` because the series can
-throw "failed to converge" near the dispatch boundary when factorial overflow
-occurs before the optimal truncation point is reached.
+**Error-driven DD escalation.**  The previous dispatch used a hard-coded
+$\gamma_{\min}$ threshold to decide when DD arithmetic was needed in the
+asymptotic regime.  This was fragile: the threshold was empirically tuned and
+couldn't adapt to the actual cancellation at each point.  The roundoff-aware
+error estimator (see Error Estimation below) now tracks per-term
+floating-point cancellation in the $D_n$ and $F_{n+1}$ subtractions and
+reports it as part of the self-error.  When cancellation exhausts double
+precision, the reported error exceeds `asymp_self_tol`, and the cascade
+naturally escalates to DD where the roundoff contribution is negligible.
 
-**Cross-validation at ultra-low $\gamma$ (step 1).**  Even when the DD
-asymptotic self-error passes the gate, its error estimate can silently
-underreport the true error at extreme forward scattering ($\xi > 0.99$) with
-ultra-low $\gamma$ ($< 10^{-4}$).  In this regime the DD asymptotic can return
-values orders of magnitude wrong while claiming relative errors of $10^{-13}$.
-To catch this, when $\gamma_{\min} < 10^{-4}$, the solver cross-validates the
-DD asymptotic result against DD power series.  If DD power series succeeds with
-self-reported error below $10^{-6}$, its result is preferred; otherwise the DD
-asymptotic result is returned (e.g., in cold-plasma regimes where DD power
-series may not be viable).
+**Asymptotic quality gate.**  At high temperature and ultra-low
+photon energy ($\gamma \ll 1$), the quantity $\tau \cdot \max(\alpha_+, \alpha_-)$
+depends on the scattering angle $\xi$.  Near the dispatch boundary the
+asymptotic series can report self-errors much larger than the value, producing
+garbage that corrupts the multigroup angular integral.  The quality gate
+detects this (self-error > `asymp_self_tol`) and falls through to the power
+series.  The entire asymptotic branch is wrapped in `try/catch` because the
+series can throw "failed to converge" near the dispatch boundary when factorial
+overflow occurs before the optimal truncation point is reached.
+
+**Non-negative check (P1/P2).**  For `sigma_E`, the power series result is
+accepted only if non-negative.  A negative value indicates catastrophic
+cancellation at the $\Psi + P_+ - P_-$ level, and the solver escalates to a
+higher-precision method.
 
 The thresholds are empirically validated:
 
 | Constant | Value | Rationale |
 |----------|-------|-----------|
-| `ASYMP_TAU_ALPHA_THRESHOLD` | 0.02 | Lowered from 0.04 to restrict asymptotic regime to where the series converges most reliably; power series handles [0.02, 0.04) safely via the DD fallback path |
-| `ASYMP_GAMMA_DD_THRESHOLD` | 0.002 (~1 keV) | Worst-case double vs DD asymptotic error is 7e-7 at this boundary |
+| `ASYMP_TAU_ALPHA_THRESHOLD` | 0.035 | Widened from 0.02; the asymptotic series is highly reliable in this range and the power series (via DD) safely handles points above the threshold |
 | `quadrature_self_tol` | 5e-6 | Raised from 1e-6 to accommodate the relaxed series `eps_rel = 1e-8`; the power series error estimator reports `trunc_rel` up to ~100x larger than `eps_rel` due to amplification from t_plus/t_minus partial cancellation |
-| `asymp_self_tol` | 1e-3 | Rejects asymptotic when self-reported error exceeds 0.1%; guards dispatch boundary |
-| `asymp_gamma_dd_cross_val_threshold` | 1e-4 (~0.05 keV) | Cross-validate DD asymptotic against DD power series below this $\gamma$ |
+| `asymp_self_tol` | 1e-3 | Rejects asymptotic when self-reported error exceeds 0.1%; guards dispatch boundary and triggers DD escalation for roundoff-dominated points |
 
 
 ## Precision Strategy
@@ -643,23 +639,14 @@ $F_{n+1}$ subtraction, and the final error is `max(truncation, roundoff)`.
 In DD arithmetic, $\varepsilon_T \sim 10^{-32}$ makes the roundoff contribution
 negligible even after $G$-amplification, so DD results are unaffected.
 
-**Cross-validation boundary factor.**  The `0.4 * threshold` factor in the
-cross-validation guard (step 1) limits cross-validation to the upper 60% of
-the asymptotic regime's $\tau\alpha$ range.  Deep inside the asymptotic regime
-($\tau\alpha \ll \text{threshold}$), cross-validation is skipped because the
-asymptotic series is highly accurate there and the power series may not be
-viable (Poisson underflow).  With the threshold at 0.02, cross-validation
-activates when $\tau\alpha > 0.008$.
-
-**DD fallback with best-available return (step 4).**  The DD fallback wraps
-both `power_series_dd_` and `asymp_series_dd_` in `try/catch` blocks because
-either can throw on underflow or non-convergence at extreme parameters.  When
-PS-DD is "clearly good" (self-error well below tolerance and non-negative),
-Asymp-DD is skipped entirely to avoid unnecessary computation.  Otherwise the
-solver tries both and returns whichever reports lower self-error — even if that
-error exceeds `quadrature_self_tol` — because a poorly-converged result is
-vastly more accurate than returning nothing.  Only when both backends fail
-entirely (throw or self-error $\geq 1$) does the solver throw `runtime_error`.
+**Best-available return.**  Each step in the cascade is wrapped in
+`try/catch` because any backend can throw on underflow or non-convergence at
+extreme parameters.  The solver tracks the best result seen so far (lowest
+self-error).  If no step's self-error falls below its respective acceptance
+threshold but the best-seen error is below 1.0, the best result is returned
+--- a poorly-converged result is vastly more accurate than returning nothing.
+Only when all backends fail entirely (throw or self-error $\geq 1$) does the
+solver throw `runtime_error`.
 
 Tests anchor accuracy against Q256 post-IBP Gauss–Laguerre as the numerical
 ground truth.  Multigroup accuracy is validated against the CMMC Monte Carlo

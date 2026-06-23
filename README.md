@@ -446,44 +446,32 @@ term-magnitude increases.
 
 ```
 tau_alpha_max = tau * max(alpha_plus, alpha_minus)
-gamma_min     = min(gamma, gamma_prime)
 
-1. if tau_alpha_max < 0.02:                        # cold regime
-     if gamma_min < 0.002:
-         result = AsymptoticSeries (DD)
-     else:
-         result = AsymptoticSeries (double)
-     if result.rel_error < 1e-3:                   # self-tolerance gate
-         if gamma_min < 1e-4 and tau_alpha_max > 0.4 * threshold:
-             cross-validate against DD PowerSeries  # guard silent misses
-         accept
-     else: fall through
+Asymptotic regime (tau_alpha_max < 0.035):
+    A1: AsymptoticSeries (double)    -- accept if rel_error < 1e-3
+    A2: AsymptoticSeries (DD)        -- accept if rel_error < 1e-3
+    Fall through on failure.
 
-2. if tau_alpha_max >= 0.02:                        # outside asymptotic regime
-     try double PowerSeries (speculative)
-     accept if rel_error < 5e-6 and (dsigma_dT or value >= 0)
+Power series regime (tau_alpha_max >= 0.035, or fallthrough):
+    P1: PowerSeries (double)         -- accept if rel_error < 5e-6 and non-negative
+    P2: PowerSeries (DD)             -- accept if rel_error < 5e-6 and non-negative
+    P3: AsymptoticSeries DD (last resort, skip if tried in A2)
 
-3. DD fallback:
-     try DD PowerSeries; viable if rel_error < 1.0
-     if not clearly trustworthy:
-         also try DD AsymptoticSeries (viable if rel_error < 1.0)
-     pick better viable result, or best available; raise if all failed
+Return best-seen if error < 1.0; raise otherwise.
 ```
+
+DD escalation in the asymptotic regime is purely error-driven: the
+roundoff-aware error estimator detects cancellation at ultra-low gamma and
+reports large self-error, triggering the A1-to-A2 escalation automatically.
 
 The thresholds are configurable at construction time (defaults from `compton_kernel_solver.hpp`):
 
-- `asymp_tau_alpha_threshold = 0.02` -- below this, the asymptotic series
+- `asymp_tau_alpha_threshold = 0.035` -- below this, the asymptotic series
   reaches its optimal truncation with few terms.
-- `quadrature_self_tol = 5e-6` -- accept any non-asymptotic result
-  (speculative double PS, DD cross-validation) when its self-reported
-  relative error is below this tolerance.  Raised from 1e-6 to accommodate
-  the relaxed series convergence threshold (`eps_rel = 1e-8`).
-- `asymp_gamma_dd_threshold = 0.002` -- within the asymptotic regime, switch
-  to DD arithmetic below this photon energy.
+- `quadrature_self_tol = 5e-6` -- accept power-series result when its
+  self-reported relative error is below this tolerance.
 - `asymp_self_tol = 1e-3` -- reject the asymptotic result when its
-  self-reported error exceeds this; falls through to DD power series.
-- `asymp_gamma_dd_cross_val_threshold = 1e-4` -- at ultra-low gamma near
-  the dispatch boundary, cross-validate DD asymptotic against DD power series.
+  self-reported error exceeds this; escalates or falls through.
 
 ## Tests
 

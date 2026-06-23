@@ -360,7 +360,7 @@ HEATMAP_RATIOS = [0.5, 0.9, 1.01, 2.0, 5.0]
 HEATMAP_XIS = [-0.5, 0.0, 0.5]
 
 
-ASYMP_TAU_ALPHA_THRESHOLD = 0.02
+ASYMP_TAU_ALPHA_THRESHOLD = 0.035
 GAMMA_DOUBLE_PRECISION_SAFE = 0.02
 
 # Method codes for the selection map: 0=Asymptotic, 1=PowerSeries, 2=PowerSeriesHP, nan=failed
@@ -637,8 +637,8 @@ def section_auto_vs_quad_colorplot():
     emit()
     emit('Blue = Asymptotic, Green = PowerSeries (double), Orange = PowerSeriesHP (DD). '
          'The method is selected by the Auto dispatch logic based on '
-         '`tau * max(alpha+, alpha-) < 0.02` (Asymptotic) and '
-         '`min(gamma, gamma\') >= 0.02` (PowerSeries vs HP).')
+         '`tau * max(alpha+, alpha-) < 0.035` (Asymptotic) and '
+         'error-driven DD escalation (PowerSeries vs HP).')
     emit()
 
 
