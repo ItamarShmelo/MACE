@@ -447,7 +447,7 @@ term-magnitude increases.
 tau_alpha_max = tau * max(alpha_plus, alpha_minus)
 gamma_min     = min(gamma, gamma_prime)
 
-1. if tau_alpha_max < 0.04:                        # cold regime
+1. if tau_alpha_max < 0.02:                        # cold regime
      if gamma_min < 0.002:
          result = AsymptoticSeries (DD)
      else:
@@ -458,7 +458,7 @@ gamma_min     = min(gamma, gamma_prime)
          accept
      else: fall through
 
-2. if tau_alpha_max >= 0.04:                        # outside asymptotic regime
+2. if tau_alpha_max >= 0.02:                        # outside asymptotic regime
      try double PowerSeries (speculative)
      accept if rel_error < 1e-6 and (dsigma_dT or value >= 0)
 
@@ -471,7 +471,7 @@ gamma_min     = min(gamma, gamma_prime)
 
 The thresholds are configurable at construction time (defaults from `compton_kernel_solver.hpp`):
 
-- `asymp_tau_alpha_threshold = 0.04` -- below this, the asymptotic series
+- `asymp_tau_alpha_threshold = 0.02` -- below this, the asymptotic series
   reaches its optimal truncation with few terms.
 - `quadrature_self_tol = 1e-6` -- accept any non-asymptotic result
   (speculative double PS, DD cross-validation) when its self-reported

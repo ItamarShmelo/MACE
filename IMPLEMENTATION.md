@@ -140,15 +140,15 @@ point:
 tau_alpha_max = tau * max(alpha_+, alpha_-)
 gamma_min     = min(gamma, gamma')
 
-1.  if tau_alpha_max < 0.04:
+1.  if tau_alpha_max < 0.02:
         (a) gamma_min >= 0.002  --> try Asymptotic series (double)
         (b) gamma_min <  0.002  --> try Asymptotic series (double-double)
         accept only if self-reported rel_error < 1e-3;
-        when accepted AND gamma_min < 1e-4 AND tau_alpha_max > 0.4 * 0.04,
+        when accepted AND gamma_min < 1e-4 AND tau_alpha_max > 0.4 * 0.02,
         cross-validate against DD power series (prefer DD power series
         if it succeeds with tight self-error AND lower self-error than
         asymptotic); otherwise fall through to steps 2-3.
-2.  if tau_alpha_max >= 0.04:
+2.  if tau_alpha_max >= 0.02:
         speculatively try Power series (double);
         accept if self-error < 1e-6 AND (dsigma_dT or value >= 0).
         Only attempted outside the asymptotic regime because double PS
@@ -191,7 +191,7 @@ The thresholds are empirically validated:
 
 | Constant | Value | Rationale |
 |----------|-------|-----------|
-| `ASYMP_TAU_ALPHA_THRESHOLD` | 0.04 | Numerical sweep shows max verified error < 5e-8 for tau_alpha in [0.025, 0.04); extends asymptotic coverage to T ~ 20 keV |
+| `ASYMP_TAU_ALPHA_THRESHOLD` | 0.02 | Lowered from 0.04 to restrict asymptotic regime to where the series converges most reliably; power series handles [0.02, 0.04) safely via the DD fallback path |
 | `ASYMP_GAMMA_DD_THRESHOLD` | 0.002 (~1 keV) | Worst-case double vs DD asymptotic error is 7e-7 at this boundary |
 | `quadrature_self_tol` | 1e-6 | Accepts speculative double PS only when self-reported error is tight |
 | `asymp_self_tol` | 1e-3 | Rejects asymptotic when self-reported error exceeds 0.1%; guards dispatch boundary |
@@ -618,10 +618,8 @@ cross-validation guard (step 1) limits cross-validation to the upper 60% of
 the asymptotic regime's $\tau\alpha$ range.  Deep inside the asymptotic regime
 ($\tau\alpha \ll \text{threshold}$), cross-validation is skipped because the
 asymptotic series is highly accurate there and the power series may not be
-viable (Poisson underflow).  As the threshold was raised from 0.025 to 0.04,
-the absolute boundary moved from 0.01 to 0.016.  This factor may need
-re-tuning if further threshold changes shift the dispatch boundary into
-regimes where ultra-low $\gamma$ cross-validation is needed deeper in.
+viable (Poisson underflow).  With the threshold at 0.02, cross-validation
+activates when $\tau\alpha > 0.008$.
 
 **DD fallback with best-available return (step 4).**  The DD fallback wraps
 both `power_series_dd_` and `asymp_series_dd_` in `try/catch` blocks because

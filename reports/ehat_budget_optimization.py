@@ -91,7 +91,7 @@ def regime_for_point(pt):
     alpha_plus = 0.5 * (s + q)
     alpha_minus = 0.5 * (s - q)
     tau_alpha_max = tau * max(alpha_plus, abs(alpha_minus))
-    return 'power' if tau_alpha_max >= 0.025 else 'asymptotic'
+    return 'power' if tau_alpha_max >= 0.02 else 'asymptotic'
 
 
 # ─────────────────────────────────────────────────────────────────────────────

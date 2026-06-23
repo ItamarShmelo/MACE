@@ -555,7 +555,7 @@ HEATMAP_T_GRID = np.logspace(-0.3, 2.7, 50)
 HEATMAP_RATIOS = [0.5, 0.9, 1.01, 2.0, 5.0]
 HEATMAP_XIS = [-0.5, 0.0, 0.5]
 
-ASYMP_TAU_ALPHA_THRESHOLD = 0.025
+ASYMP_TAU_ALPHA_THRESHOLD = 0.02
 GAMMA_DOUBLE_PRECISION_SAFE = 0.02
 
 METHOD_ASYMPTOTIC = 0
@@ -819,7 +819,7 @@ def section_auto_vs_quad_colorplot(report):
     report.append(f"![Method selection map](figs/{meth_fname})\n")
     report.append("Blue = Asymptotic, Green = PowerSeries (double), Orange = PowerSeriesHP (DD). "
                   "The method is selected by the Auto dispatch logic based on "
-                  "`tau * max(alpha+, alpha-) < 0.025` (Asymptotic) and "
+                  "`tau * max(alpha+, alpha-) < 0.02` (Asymptotic) and "
                   "`min(gamma, gamma') >= 0.02` (PowerSeries vs HP).\n")
     report.append("")
 
