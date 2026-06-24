@@ -447,30 +447,33 @@ term-magnitude increases.
 ```
 tau_alpha_max = tau * max(alpha_plus, alpha_minus)
 
-Asymptotic regime (tau_alpha_max < 0.035):
+if tau_alpha_max < 0.035:              -- Asymptotic regime
     A1: AsymptoticSeries (double)    -- accept if rel_error < 1e-7
-    A2: AsymptoticSeries (DD)        -- accept if rel_error < 1e-7
-    Fall through on failure.
-
-Power series regime (tau_alpha_max >= 0.035, or fallthrough):
+    A2: AsymptoticSeries (DD)        -- accept if rel_error < 1e-3
+else:                                  -- Power series regime
     P1: PowerSeries (double)         -- accept if rel_error < 1e-7 and non-negative
-    P2: PowerSeries (DD, n_max=500)  -- accept if rel_error < 1e-7 and non-negative
+    P2: PowerSeries (DD, n_max=500)  -- accept if rel_error < 1e-3 and non-negative
 
-Return best-seen if error < 1e-3; raise otherwise.
+Throw if no backend passes its tolerance.
 ```
 
-DD escalation in the asymptotic regime is purely error-driven: the
-roundoff-aware error estimator detects cancellation at ultra-low gamma and
-reports large self-error, triggering the A1-to-A2 escalation automatically.
+The two regimes are mutually exclusive (strict `if/else`).  DD escalation
+within the asymptotic regime is purely error-driven: the roundoff-aware error
+estimator detects cancellation at ultra-low gamma and reports large self-error,
+triggering the A1-to-A2 escalation automatically.
 
 The thresholds are configurable at construction time (defaults from `compton_kernel_solver.hpp`):
 
 - `asymp_tau_alpha_threshold = 0.035` -- below this, the asymptotic series
   reaches its optimal truncation with few terms.
-- `power_series_self_tol = 1e-7` -- accept power-series result when its
+- `power_series_self_tol = 1e-7` -- accept double power-series result when its
   self-reported relative error is below this tolerance.
-- `asymp_self_tol = 1e-7` -- reject the asymptotic result when its
-  self-reported error exceeds this; escalates or falls through.
+- `asymp_self_tol = 1e-7` -- reject the double asymptotic result when its
+  self-reported error exceeds this; escalates to DD within the regime.
+- `dd_power_series_self_tol = 1e-3` -- accept DD power-series result when its
+  self-reported error is below this (looser) tolerance.
+- `dd_asymp_self_tol = 1e-3` -- accept DD asymptotic result when its
+  self-reported error is below this (looser) tolerance.
 
 ## Tests
 

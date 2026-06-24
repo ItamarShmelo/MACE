@@ -139,24 +139,22 @@ point via a purely error-driven cascade:
 ```
 tau_alpha_max = tau * max(alpha_+, alpha_-)
 
-Asymptotic regime (tau_alpha_max < 0.035):
+if tau_alpha_max < 0.035:              -- Asymptotic regime
     A1: try Asymptotic series (double)
         accept if self-error < asymp_self_tol (1e-7).
         The roundoff-aware error estimator naturally flags cancellation
         at ultra-low gamma, triggering escalation to DD.
     A2: try Asymptotic series (DD)
-        accept if self-error < asymp_self_tol.
-    Fall through to power series on failure.
-
-Power series regime (tau_alpha_max >= 0.035, or fallthrough):
-    P1: try Power series (double) -- only outside asymptotic regime
+        accept if self-error < dd_asymp_self_tol (1e-3).
+else:                                  -- Power series regime
+    P1: try Power series (double)
         accept if self-error < power_series_self_tol (1e-7)
         AND (dsigma_dT or value >= 0).
     P2: try Power series (DD, n_max=500)
-        accept if self-error < power_series_self_tol
+        accept if self-error < dd_power_series_self_tol (1e-3)
         AND (dsigma_dT or value >= 0).
 
-Return best-seen result if error < 1e-3; throw otherwise.
+Throw if no backend passes its tolerance.
 ```
 
 **P3 removal and n_max increase.**  The previous dispatch included a P3 step
@@ -651,14 +649,18 @@ $F_{n+1}$ subtraction, and the final error is `max(truncation, roundoff)`.
 In DD arithmetic, $\varepsilon_T \sim 10^{-32}$ makes the roundoff contribution
 negligible even after $G$-amplification, so DD results are unaffected.
 
-**Best-available return.**  Each step in the cascade is wrapped in
+**Strict regime dispatch.**  Each step in the cascade is wrapped in
 `try/catch` because any backend can throw on underflow or non-convergence at
-extreme parameters.  The solver tracks the best result seen so far (lowest
-self-error).  If no step's self-error falls below its respective acceptance
-threshold but the best-seen error is below 1.0, the best result is returned
---- a poorly-converged result is vastly more accurate than returning nothing.
-Only when all backends fail entirely (throw or self-error $\geq 1$) does the
-solver throw `runtime_error`.
+extreme parameters.  The asymptotic and power-series regimes are mutually
+exclusive (strict `if/else`): there is no fallthrough from the asymptotic
+regime to the power series.  If no backend within the selected regime passes
+its acceptance tolerance, the solver throws `runtime_error`.  The public
+`sigma_E` and `dsigma_E_dT` methods catch the throw and return
+`{value=0, error=1}` with a stderr warning, so callers in integration loops
+are not interrupted.  The DD power series uses a separate, looser tolerance
+(`dd_power_series_self_tol`, default $10^{-3}$) because it is the last resort
+in the power-series regime and its DD precision makes even modestly-converged
+results reliable.
 
 Tests anchor accuracy against Q256 post-IBP Gauss–Laguerre as the numerical
 ground truth.

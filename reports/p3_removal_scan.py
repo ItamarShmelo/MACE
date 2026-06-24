@@ -60,6 +60,8 @@ def run_scan():
                         r = solver.sigma_E(E, Ep, xi, T, 1.0)
                         values[ie, ixi, it, ir] = r.value
                         errors[ie, ixi, it, ir] = r.estimated_rel_error
+                        if r.estimated_rel_error >= 1.0:
+                            failed[ie, ixi, it, ir] = True
                     except Exception:
                         failed[ie, ixi, it, ir] = True
                     done += 1
@@ -121,7 +123,7 @@ def compare():
     changed = valid_both & (rel_diff > 1e-15)
 
     print("=" * 70)
-    print("P3 REMOVAL COMPARISON REPORT")
+    print("BEFORE / AFTER COMPARISON REPORT")
     print("=" * 70)
     print(f"Total grid points: {total}")
     print()
@@ -173,9 +175,9 @@ def compare():
 
     print()
     if n_changed == 0 and np.sum(newly_failed) == 0:
-        print("CONCLUSION: P3 removal has NO EFFECT on solver outputs.")
+        print("CONCLUSION: Change has NO EFFECT on solver outputs.")
     else:
-        print("CONCLUSION: P3 removal AFFECTS solver outputs. See details above.")
+        print("CONCLUSION: Change AFFECTS solver outputs. See details above.")
     print("=" * 70)
 
 
