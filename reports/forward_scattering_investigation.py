@@ -60,9 +60,9 @@ def step1_diagnostic_dump():
 
     nodes, weights = cm.gauss_legendre_rule(QUAD_ORDER)
 
-    mu_lo, mu_hi = 0.96, 1.0
-    half_w = 0.5 * (mu_hi - mu_lo)
-    mid = 0.5 * (mu_lo + mu_hi)
+    xi_lo, xi_hi = 0.96, 1.0
+    half_w = 0.5 * (xi_hi - xi_lo)
+    mid = 0.5 * (xi_lo + xi_hi)
     xi_nodes = half_w * nodes + mid
 
     kernel_auto = ComptonKernelSolver()
@@ -294,7 +294,7 @@ def step4_eps_sweep():
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
             quad_order_E=qE,
             quad_order_Ep=qE,
-            quad_order_mu=32,
+            xi_order=32,
         )
         S = mg.compute_sigma_matrix(kernel_auto, NUM_BINS, T_K, 1.0)
         row = S[1, 1, :]
@@ -311,7 +311,7 @@ def step4_eps_sweep():
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5))
 
     ax1.plot(quad_orders, last_bin_pdf, 'b-o', linewidth=2, markersize=7,
-             label='Last bin (mu in [0.9375, 1.0])')
+             label='Last bin (xi in [0.9375, 1.0])')
     ax1.plot(quad_orders, second_last_pdf, 'g-s', linewidth=1.5, markersize=5,
              label='Second-to-last bin')
     if cmmc_last_pdf is not None:
@@ -369,7 +369,7 @@ def step5_validation_plot():
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
             quad_order_E=qE,
             quad_order_Ep=qE,
-            quad_order_mu=qmu,
+            xi_order=qmu,
         )
         print(f"  Computing: {label}...")
         S = mg.compute_sigma_matrix(kernel, NUM_BINS, T_K, 1.0)

@@ -163,7 +163,7 @@ def section_convergence():
     emit()
     emit('The multigroup integral uses independent Gauss-Legendre rules '
          'for the three axes: incident energy $N_E$, scattered energy $N_{E\'}$, '
-         'and scattering cosine $N_\\mu$.  This section studies convergence '
+         'and scattering cosine $N_\\xi$.  This section studies convergence '
          'along each axis independently and jointly.')
     emit()
 
@@ -182,7 +182,7 @@ def section_convergence():
     emit()
     emit('Each axis is swept while the other two are held fixed at '
          f'$N_{{ref}} = {N_REF}$. The reference matrix uses '
-         f'$N_E = N_{{E\'}} = N_\\mu = {N_REF}$.')
+         f'$N_E = N_{{E\'}} = N_\\xi = {N_REF}$.')
     emit()
 
     wf = cm.PlanckWeightFunction(cap_x=25.0)
@@ -190,13 +190,13 @@ def section_convergence():
     mg_ref = cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds,
         weight_function=wf,
-        quad_order_E=N_REF, quad_order_Ep=N_REF, quad_order_mu=N_REF)
+        quad_order_E=N_REF, quad_order_Ep=N_REF, xi_order=N_REF)
     S_ref = mg_ref.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
 
     axis_configs = [
-        ('$N_E$ (incident energy)', 'quad_order_E', 'quad_order_Ep', 'quad_order_mu'),
-        ("$N_{E'}$ (scattered energy)", 'quad_order_Ep', 'quad_order_E', 'quad_order_mu'),
-        ('$N_\\mu$ (scattering cosine)', 'quad_order_mu', 'quad_order_E', 'quad_order_Ep'),
+        ('$N_E$ (incident energy)', 'quad_order_E', 'quad_order_Ep', 'xi_order'),
+        ("$N_{E'}$ (scattered energy)", 'quad_order_Ep', 'quad_order_E', 'xi_order'),
+        ('$N_\\xi$ (scattering cosine)', 'xi_order', 'quad_order_E', 'quad_order_Ep'),
     ]
 
     fig, axes_arr = plt.subplots(1, 3, figsize=(15, 5), sharey=True)
@@ -240,9 +240,9 @@ def section_convergence():
             emit(f'| {label} | {n} | {mx:.2e} | {md:.2e} |')
     emit()
 
-    # ── 2b. Joint convergence (N_E = N_E' = N_mu = N) ────────────────────
+    # ── 2b. Joint convergence (N_E = N_E' = N_xi = N) ────────────────────
 
-    emit('### 2b. Joint Convergence ($N_E = N_{E\'} = N_\\mu = N$)')
+    emit('### 2b. Joint Convergence ($N_E = N_{E\'} = N_\\xi = N$)')
     emit()
     emit(f'All three axes swept together.  Reference: N = {N_REF}.')
     emit()
@@ -259,7 +259,7 @@ def section_convergence():
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=wf,
-            quad_order_E=n, quad_order_Ep=n, quad_order_mu=n)
+            quad_order_E=n, quad_order_Ep=n, xi_order=n)
         t0 = time.perf_counter()
         matrices[n] = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
         dt = time.perf_counter() - t0
@@ -369,7 +369,7 @@ def section_convergence():
         mg_ref_T = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=wf,
-            quad_order_E=N_REF, quad_order_Ep=N_REF, quad_order_mu=N_REF)
+            quad_order_E=N_REF, quad_order_Ep=N_REF, xi_order=N_REF)
         S_ref_T = mg_ref_T.compute_sigma_matrix(KERNEL_Q64, T=T_val, Ne=1.0)
 
         cells = []
@@ -378,7 +378,7 @@ def section_convergence():
             mg_T = cm.ComptonMultigroupKernel(
                 energy_group_boundaries=bounds,
                 weight_function=wf,
-                quad_order_E=n, quad_order_Ep=n, quad_order_mu=n)
+                quad_order_E=n, quad_order_Ep=n, xi_order=n)
             S_T = mg_T.compute_sigma_matrix(KERNEL_Q64, T=T_val, Ne=1.0)
             mx = _max_rel_diff(S_T, S_ref_T)
             cells.append(f'{mx:.2e}')
@@ -416,7 +416,7 @@ def section_angle_summation():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=narrow_bounds,
         weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-        quad_order_E=12, quad_order_Ep=12, quad_order_mu=16)
+        quad_order_E=12, quad_order_Ep=12, xi_order=16)
 
     S_int = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
 
@@ -463,7 +463,7 @@ def section_heatmaps():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=DENSE_BOUNDS_ERG.tolist(),
         weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-        quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
+        quad_order_E=8, quad_order_Ep=8, xi_order=8)
 
     centers_kev = np.sqrt(DENSE_BOUNDS_KEV[:-1] * DENSE_BOUNDS_KEV[1:])
     tick_positions = np.arange(0, G_dense, max(1, G_dense // 6))
@@ -600,7 +600,7 @@ def section_detailed_balance():
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds_erg,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            quad_order_E=16, quad_order_Ep=16, quad_order_mu=16)
+            quad_order_E=16, quad_order_Ep=16, xi_order=16)
         S = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
 
         # DB factor f(g->g') = (1+n_g') * B_g * E_g' / ((1+n_g) * B_g' * E_g)
@@ -665,7 +665,7 @@ def section_detailed_balance():
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds_erg,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            quad_order_E=16, quad_order_Ep=16, quad_order_mu=16)
+            quad_order_E=16, quad_order_Ep=16, xi_order=16)
         S = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
 
         f_db = np.zeros((G, G))
@@ -750,7 +750,7 @@ def section_mc_smatrix():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds_erg,
         weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-        quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
+        quad_order_E=8, quad_order_Ep=8, xi_order=8)
     S_det = mg.compute_sigma_matrix(KERNEL_Q64, T=T, Ne=1.0)
 
     tick_positions = np.arange(0, G, max(1, G // 6))
@@ -854,11 +854,11 @@ def section_mc_angle_cdf():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds_erg,
         weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-        quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
+        quad_order_E=8, quad_order_Ep=8, xi_order=8)
     S_det = mg.compute_sigma_matrix(
         KERNEL_Q64, num_angle_bins=NUM_ANGLE_BINS, T=T, Ne=1.0)
 
-    mu_edges = np.linspace(-1, 1, NUM_ANGLE_BINS + 1)
+    xi_edges = np.linspace(-1, 1, NUM_ANGLE_BINS + 1)
 
     sig_pairs = []
     for g0 in range(G):
@@ -888,8 +888,8 @@ def section_mc_angle_cdf():
 
         cdf_mc = np.array(mc_obj.get_angle_cdf(temperature=T, g0=g0, g=g))
 
-        ax.plot(mu_edges, cdf_det, 'b-', linewidth=1.5, label='Deterministic')
-        ax.plot(mu_edges, cdf_mc, 'r--', linewidth=1.5, label='MC')
+        ax.plot(xi_edges, cdf_det, 'b-', linewidth=1.5, label='Deterministic')
+        ax.plot(xi_edges, cdf_mc, 'r--', linewidth=1.5, label='MC')
         ax.set_title(f'{centers_kev[g0]:.1f} -> {centers_kev[g]:.1f} keV')
         ax.set_xlabel(r'$\cos\theta$')
         ax.set_ylabel('CDF')

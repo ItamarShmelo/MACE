@@ -12,8 +12,8 @@
  * ComptonMultigroupKernel, but via Monte Carlo integration of the
  * relativistic Compton kernel:
  *
- *     σ(g→g', [μᵢ,μᵢ₊₁]; T) =
- *         ∫_{ΔEg} w(E,T) Σ_KN(E→E',μ; T) dE
+ *     σ(g→g', [ξᵢ,ξᵢ₊₁]; T) =
+ *         ∫_{ΔEg} w(E,T) Σ_KN(E→E',ξ; T) dE
  *         ───────────────────────────────────────
  *                  ∫_{ΔEg} w(E,T) dE
  *
@@ -30,7 +30,7 @@
  * - The returned matrix is *microscopic* [cm²] (per free electron).
  *   Nₑ is forwarded to the KernelMultiplier only; it does not scale
  *   the output.
- * - Angle-integrated overloads (no num_angle_bins) integrate μ over
+ * - Angle-integrated overloads (no num_angle_bins) integrate ξ over
  *   [−1,1].
  */
 
@@ -164,7 +164,7 @@ private:
     /**
      * @brief Core MC integration loop parameterized by a multiplier callable.
      *
-     * @tparam MultiplierFn  Callable (E0, E, mu_scat, T, Ne, lam) -> double.
+     * @tparam MultiplierFn  Callable (E0, E, xi, T, Ne, lam) -> double.
      *         For plain sigma this wraps KernelMultiplier (ignoring lam).
      *         For dsigma/dT it wraps KernelMultiplier times the derivative
      *         weight ((λ − κ)/τ² − 3/τ) · dτ/dT.

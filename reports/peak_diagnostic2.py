@@ -41,7 +41,7 @@ mg = cm.ComptonMultigroupKernel(
     weight_function=cm.PlanckWeightFunction(cap_x=25.0),
     quad_order_E=32,
     quad_order_Ep=32,
-    quad_order_mu=32)
+    xi_order=32)
 S_s = np.array(mg.compute_sigma_matrix(kernel, T=T_K, Ne=1.0))
 
 # Find incoming group

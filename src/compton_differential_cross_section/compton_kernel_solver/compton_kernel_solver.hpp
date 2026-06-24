@@ -5,18 +5,23 @@
  * @brief Adaptive dispatch kernel for Compton scattering.
  *
  * ComptonKernelSolver selects the fastest accurate method at each
- * phase-space point:
+ * phase-space point via a purely error-driven cascade:
  *
- *   1.  Asymptotic series (double or DD) -- when tau * max(alpha+, alpha-)
- *       is small.  DD is used when min(gamma, gamma') falls below
- *       asymp_gamma_dd_threshold.  Near the dispatch boundary at ultra-low
- *       gamma, the result is cross-validated against DD power series.
- *   2.  Double power series (speculative) -- attempted outside the
- *       asymptotic regime; accepted when self-error < quadrature_self_tol
- *       and (for sigma_E) non-negative.
- *   3.  DD power series + conditional Asymp-DD cross-validation --
- *       fallback when both asymptotic and double PS fail.  Asymp-DD is
- *       skipped when PS-DD reports clearly trustworthy results.
+ *   Asymptotic regime (tau_alpha_max < threshold):
+ *     A1. Asymptotic series (double) -- accepted if self-error < asymp_self_tol.
+ *         The roundoff-aware error estimator naturally reports large errors
+ *         at ultra-low gamma, triggering escalation to DD.
+ *     A2. Asymptotic series (DD) -- accepted if self-error < asymp_self_tol.
+ *     Falls through to power series on failure.
+ *
+ *   Power series regime (tau_alpha_max >= threshold, or fallthrough):
+ *     P1. Power series (double) -- accepted if self-error < power_series_self_tol
+ *         and (for sigma_E) non-negative.  Only outside asymptotic regime.
+ *     P2. Power series (DD) -- accepted if self-error < power_series_self_tol
+ *         and (for sigma_E) non-negative.
+ *     P3. Asymptotic DD (last resort) -- skipped if already tried in A2.
+ *
+ *   Returns best-seen result if error < 1e-3; throws otherwise.
  *
  * All dispatch thresholds are configurable at construction time.
  */
@@ -27,12 +32,7 @@
 namespace compton {
 
 namespace constants {
-constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.02;
-constexpr double ASYMP_GAMMA_DD_THRESHOLD = 0.002;
-/// Cross-validate DD asymptotic against DD power series when gamma is
-/// below this value.  At ultra-low gamma the asymptotic series can
-/// silently return wrong values while reporting tiny self-error.
-constexpr double ASYMP_GAMMA_DD_CROSS_VAL_THRESHOLD = 1e-4;
+constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.035;
 } // namespace constants
 
 class ComptonKernelSolver {
@@ -40,28 +40,18 @@ public:
     /**
      * @param asymp_tau_alpha_threshold  Dispatch to asymptotic series when
      *        tau * max(alpha+, alpha-) falls below this value.
-     * @param quadrature_self_tol  Accept speculative double PS result when
-     *        its self-reported relative error is below this tolerance.
-     * @param asymp_gamma_dd_threshold  Within the asymptotic regime, use
-     *        DD arithmetic when min(gamma, gamma') falls below this value.
-     *        Set to 0 to disable DD in the asymptotic path.
-     * @param asymp_self_tol  Accept the asymptotic result only when its
+     * @param power_series_self_tol  Accept power-series result when its
      *        self-reported relative error is below this tolerance.
-     *        When exceeded, the solver falls through to DD power series.
-     * @param asymp_gamma_dd_cross_val_threshold  When gamma_min falls
-     *        below this value, the DD asymptotic result is
-     *        cross-validated against DD power series even when the
-     *        asymptotic self-tolerance passes.
+     * @param asymp_self_tol  Accept an asymptotic result only when its
+     *        self-reported relative error is below this tolerance.
+     *        When exceeded, the solver escalates or falls through.
      */
     enum class KernelOp { sigma, dsigma_dT };
 
     ComptonKernelSolver(
-        double asymp_tau_alpha_threshold   = constants::ASYMP_TAU_ALPHA_THRESHOLD,
-        double quadrature_self_tol         = 5e-6,
-        double asymp_gamma_dd_threshold    = constants::ASYMP_GAMMA_DD_THRESHOLD,
-        double asymp_self_tol              = 1e-3,
-        double asymp_gamma_dd_cross_val_threshold
-            = constants::ASYMP_GAMMA_DD_CROSS_VAL_THRESHOLD);
+        double asymp_tau_alpha_threshold = constants::ASYMP_TAU_ALPHA_THRESHOLD,
+        double power_series_self_tol      = 1e-7,
+        double asymp_self_tol            = 1e-7);
 
     ComptonResult sigma_E(
         double E,
@@ -79,10 +69,8 @@ public:
 
 private:
     double asymp_tau_alpha_threshold_;
-    double quadrature_self_tol_;
-    double asymp_gamma_dd_threshold_;
+    double power_series_self_tol_;
     double asymp_self_tol_;
-    double asymp_gamma_dd_cross_val_threshold_;
 
     ComptonKernelAsymptoticSeries asymp_series_;
     ComptonKernelAsymptoticSeries asymp_series_dd_;

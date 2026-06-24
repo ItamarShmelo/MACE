@@ -36,7 +36,6 @@ file(CREATE_LINK
 )
 
 include_directories(src)
-include_directories(external/CMMC/src)
 include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${doubledouble_SOURCE_DIR}/include)
 include_directories(${planck_integral_SOURCE_DIR})

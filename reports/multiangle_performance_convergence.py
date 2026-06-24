@@ -143,7 +143,7 @@ def section_angle_bins_overhead():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds,
         weight_function=WF,
-        quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
+        quad_order_E=8, quad_order_Ep=8, xi_order=8)
 
     bin_counts = [1, 2, 4, 8, 16, 32, 64]
     times_const = []
@@ -200,7 +200,7 @@ def section_quad_order_overhead():
     log("Section 2: Quadrature order overhead...")
     emit('## 2. Multiplier Overhead — Quadrature Order Scaling')
     emit()
-    emit('Wall-clock time vs joint quadrature order $N = N_E = N_{E\'} = N_\\mu$ '
+    emit('Wall-clock time vs joint quadrature order $N = N_E = N_{E\'} = N_\\xi$ '
          'for 5 groups, 16 angle bins.  Both multiplier modes.')
     emit()
 
@@ -218,7 +218,7 @@ def section_quad_order_overhead():
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=WF,
-            quad_order_E=n, quad_order_Ep=n, quad_order_mu=n)
+            quad_order_E=n, quad_order_Ep=n, xi_order=n)
         dt_c = bench(lambda: mg.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=16, T=T, Ne=1.0))
         dt_e = bench(lambda: mg.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=16, T=T, Ne=1.0,
                                                      multiplier=et_mult))
@@ -289,7 +289,7 @@ def section_group_scaling():
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=WF,
-            quad_order_E=8, quad_order_Ep=8, quad_order_mu=8)
+            quad_order_E=8, quad_order_Ep=8, xi_order=8)
         dt_c = bench(lambda: mg.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=16, T=T, Ne=1.0))
         dt_e = bench(lambda: mg.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=16, T=T, Ne=1.0,
                                                      multiplier=et_mult))
@@ -379,7 +379,7 @@ def section_quad_convergence():
     mg_ref = cm.ComptonMultigroupKernel(
         energy_group_boundaries=CONV_BOUNDS,
         weight_function=WF,
-        quad_order_E=N_REF, quad_order_Ep=N_REF, quad_order_mu=N_REF)
+        quad_order_E=N_REF, quad_order_Ep=N_REF, xi_order=N_REF)
     et_mult = make_et_multiplier(CONV_BOUNDS)
     S_ref_c = np.array(mg_ref.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=16, T=T, Ne=1.0))
     S_ref_e = np.array(mg_ref.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=16, T=T, Ne=1.0,
@@ -398,7 +398,7 @@ def section_quad_convergence():
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=CONV_BOUNDS,
             weight_function=WF,
-            quad_order_E=n, quad_order_Ep=n, quad_order_mu=n)
+            quad_order_E=n, quad_order_Ep=n, xi_order=n)
         t0 = time.perf_counter()
         S_c = np.array(mg.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=16, T=T, Ne=1.0))
         S_e = np.array(mg.compute_sigma_matrix(KERNEL_SOLVER, num_angle_bins=16, T=T, Ne=1.0,
@@ -467,7 +467,7 @@ def section_angle_convergence():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=CONV_BOUNDS,
         weight_function=WF,
-        quad_order_E=N_QUAD, quad_order_Ep=N_QUAD, quad_order_mu=N_QUAD)
+        quad_order_E=N_QUAD, quad_order_Ep=N_QUAD, xi_order=N_QUAD)
 
     log("  Computing angle-integrated baselines...")
     S_int_c = np.array(mg.compute_sigma_matrix(KERNEL_SOLVER, T=T, Ne=1.0))
@@ -568,27 +568,27 @@ def section_angle_convergence():
             S_e = np.array(mg.compute_sigma_matrix(
                 KERNEL_SOLVER, num_angle_bins=nb, T=T, Ne=1.0, multiplier=et_mult))
 
-        dmu = 2.0 / nb
-        mu_edges = np.linspace(-1.0, 1.0, nb + 1)
+        dxi = 2.0 / nb
+        xi_edges = np.linspace(-1.0, 1.0, nb + 1)
 
         row_c = S_c[g_in, g_out, :]
         total_c = row_c.sum()
-        pdf_c = (row_c / total_c / dmu) if total_c > 0 else np.zeros(nb)
+        pdf_c = (row_c / total_c / dxi) if total_c > 0 else np.zeros(nb)
 
         row_e = S_e[g_in, g_out, :]
         total_e = row_e.sum()
-        pdf_e = (row_e / total_e / dmu) if total_e > 0 else np.zeros(nb)
+        pdf_e = (row_e / total_e / dxi) if total_e > 0 else np.zeros(nb)
 
-        ax1.stairs(pdf_c, edges=mu_edges, linewidth=1.2, label=f'{nb} bins')
-        ax2.stairs(pdf_e, edges=mu_edges, linewidth=1.2, label=f'{nb} bins')
+        ax1.stairs(pdf_c, edges=xi_edges, linewidth=1.2, label=f'{nb} bins')
+        ax2.stairs(pdf_e, edges=xi_edges, linewidth=1.2, label=f'{nb} bins')
 
-    ax1.set_xlabel(r'$\mu = \cos\theta$')
+    ax1.set_xlabel(r'$\xi = \cos\theta$')
     ax1.set_ylabel('PDF density')
     ax1.set_title('Constant multiplier')
     ax1.legend(fontsize=8)
     ax1.grid(True, alpha=0.3)
 
-    ax2.set_xlabel(r'$\mu = \cos\theta$')
+    ax2.set_xlabel(r'$\xi = \cos\theta$')
     ax2.set_ylabel('PDF density')
     ax2.set_title('EnergyTransfer multiplier')
     ax2.legend(fontsize=8)
@@ -671,7 +671,7 @@ def section_temperature_convergence():
         mg_ref = cm.ComptonMultigroupKernel(
             energy_group_boundaries=CONV_BOUNDS,
             weight_function=WF,
-            quad_order_E=N_REF, quad_order_Ep=N_REF, quad_order_mu=N_REF)
+            quad_order_E=N_REF, quad_order_Ep=N_REF, xi_order=N_REF)
         S_ref_c = np.array(mg_ref.compute_sigma_matrix(
             KERNEL_Q64, num_angle_bins=16, T=T_val, Ne=1.0))
         S_ref_e = np.array(mg_ref.compute_sigma_matrix(
@@ -683,7 +683,7 @@ def section_temperature_convergence():
             mg = cm.ComptonMultigroupKernel(
                 energy_group_boundaries=CONV_BOUNDS,
                 weight_function=WF,
-                quad_order_E=n, quad_order_Ep=n, quad_order_mu=n)
+                quad_order_E=n, quad_order_Ep=n, xi_order=n)
             S_c = np.array(mg.compute_sigma_matrix(
                 KERNEL_Q64, num_angle_bins=16, T=T_val, Ne=1.0))
             S_e = np.array(mg.compute_sigma_matrix(

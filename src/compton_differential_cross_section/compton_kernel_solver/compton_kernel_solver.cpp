@@ -1,20 +1,17 @@
 #include "compton_differential_cross_section/compton_kernel_solver/compton_kernel_solver.hpp"
 
 #include <cstdio>
+#include <limits>
 
 namespace compton {
 
 ComptonKernelSolver::ComptonKernelSolver(
     double const asymp_tau_alpha_threshold,
-    double const quadrature_self_tol,
-    double const asymp_gamma_dd_threshold,
-    double const asymp_self_tol,
-    double const asymp_gamma_dd_cross_val_threshold)
+    double const power_series_self_tol,
+    double const asymp_self_tol)
     : asymp_tau_alpha_threshold_(asymp_tau_alpha_threshold)
-    , quadrature_self_tol_(quadrature_self_tol)
-    , asymp_gamma_dd_threshold_(asymp_gamma_dd_threshold)
+    , power_series_self_tol_(power_series_self_tol)
     , asymp_self_tol_(asymp_self_tol)
-    , asymp_gamma_dd_cross_val_threshold_(asymp_gamma_dd_cross_val_threshold)
     , asymp_series_(false)
     , asymp_series_dd_(true)
     , power_series_(false)
@@ -23,8 +20,6 @@ ComptonKernelSolver::ComptonKernelSolver(
 
 namespace {
 
-/// Compile-time selector: calls sigma_E or dsigma_E_dT on any solver
-/// backend, deducing the concrete solver type from the argument.
 template <ComptonKernelSolver::KernelOp Op, typename Solver>
 ComptonResult eval_kernel(Solver const& s,
                           double E, double Ep, double xi,
@@ -46,99 +41,75 @@ ComptonResult ComptonKernelSolver::dispatch(
     double const T,
     double const Ne) const
 {
-    double const tau     = T * units::k_boltz / units::me_c2;
-    double const gamma   = E / units::me_c2;
-    double const gamma_p = E_prime / units::me_c2;
-
-    auto const p = compute_params<double>(gamma, gamma_p, xi, tau);
-
+    double const tau = T * units::k_boltz / units::me_c2;
+    auto const p = compute_params<double>(
+        E / units::me_c2, E_prime / units::me_c2, xi, tau);
     double const tau_alpha_max = std::max(tau * p.alpha_plus,
                                           tau * p.alpha_minus);
-    double const gamma_min = std::min(gamma, gamma_p);
 
-    if (tau_alpha_max < asymp_tau_alpha_threshold_) {
-      try {
-        auto const a_result =
-            (gamma_min < asymp_gamma_dd_threshold_)
-                ? eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T, Ne)
-                : eval_kernel<Op>(asymp_series_,    E, E_prime, xi, T, Ne);
-        if (a_result.estimated_rel_error < asymp_self_tol_) {
-            // Near the dispatch boundary at ultra-low gamma the
-            // asymptotic error estimate can silently underestimate the
-            // true error.  Cross-validate against DD power series, but
-            // only when tau_alpha is close to the threshold -- deep in
-            // the asymptotic regime the kernel can have narrow spikes
-            // that are correct point-wise but unresolvable by GL
-            // quadrature, so using asymptotic there avoids artifacts.
-            // Only prefer PS-DD when it also reports lower self-error
-            // than the asymptotic series, guarding against the PS-DD
-            // error estimator underreporting at extreme kinematics.
-            if (gamma_min < asymp_gamma_dd_cross_val_threshold_
-                && tau_alpha_max > 0.4 * asymp_tau_alpha_threshold_) {
-                try {
-                    auto const ps = eval_kernel<Op>(power_series_dd_,
-                                                    E, E_prime, xi, T, Ne);
-                    if (ps.estimated_rel_error < quadrature_self_tol_
-                        && ps.estimated_rel_error < a_result.estimated_rel_error)
-                        return ps;
-                } catch (...) {}
-            }
-            return a_result;
+    ComptonResult best;
+    double best_err = std::numeric_limits<double>::infinity();
+    bool tried_asymp_dd = false;
+
+    auto update_best = [&](ComptonResult const& r) {
+        if (r.estimated_rel_error < best_err) {
+            best = r;
+            best_err = r.estimated_rel_error;
         }
-      } catch (...) {}
+    };
+
+    // --- Asymptotic regime ---
+    if (tau_alpha_max < asymp_tau_alpha_threshold_) {
+        // A1: double asymptotic (roundoff estimator flags cancellation)
+        try {
+            auto const r = eval_kernel<Op>(asymp_series_, E, E_prime, xi, T, Ne);
+            if (r.estimated_rel_error < asymp_self_tol_)
+                return r;
+            update_best(r);
+        } catch (...) {}
+
+        // A2: DD asymptotic
+        tried_asymp_dd = true;
+        try {
+            auto const r = eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T, Ne);
+            if (r.estimated_rel_error < asymp_self_tol_)
+                return r;
+            update_best(r);
+        } catch (...) {}
     }
 
-    // Step 1: Speculatively try double PS first.  Accept if self-error
-    // is below tolerance and (for sigma_E) the result is non-negative.
-    // Only attempted outside the asymptotic regime -- inside that regime
-    // (small tau_alpha_max), PS can produce catastrophically wrong values
-    // at near-forward angles while reporting tiny self-error.
+    // --- Power series regime (or asymptotic fallthrough) ---
+
+    // P1: double power series (only outside asymptotic regime)
     if (tau_alpha_max >= asymp_tau_alpha_threshold_) {
         try {
-            auto const ps_dbl = eval_kernel<Op>(power_series_, E, E_prime, xi, T, Ne);
-            bool const accept =
-                ps_dbl.estimated_rel_error < quadrature_self_tol_
-                && (Op == KernelOp::dsigma_dT || ps_dbl.value >= 0.0);
-            if (accept)
-                return ps_dbl;
+            auto const r = eval_kernel<Op>(power_series_, E, E_prime, xi, T, Ne);
+            if (r.estimated_rel_error < power_series_self_tol_
+                && (Op == KernelOp::dsigma_dT || r.value >= 0.0))
+                return r;
+            update_best(r);
         } catch (...) {}
     }
 
-    // Step 2: DD fallback with conditional cross-validation.
-    ComptonResult ps_result;
-    bool ps_ok = false;
+    // P2: DD power series
     try {
-        ps_result = eval_kernel<Op>(power_series_dd_, E, E_prime, xi, T, Ne);
-        ps_ok = ps_result.estimated_rel_error < 1.0;
+        auto const r = eval_kernel<Op>(power_series_dd_, E, E_prime, xi, T, Ne);
+        if (r.estimated_rel_error < power_series_self_tol_
+            && (Op == KernelOp::dsigma_dT || r.value >= 0.0))
+            return r;
+        update_best(r);
     } catch (...) {}
 
-    // Skip Asymp-DD cross-validation only when PS-DD is clearly
-    // trustworthy: self-error well below tolerance and (for sigma_E)
-    // result is non-negative.
-    bool const ps_clearly_good =
-        ps_ok
-        && ps_result.estimated_rel_error < 0.1 * quadrature_self_tol_
-        && (Op == KernelOp::dsigma_dT || ps_result.value >= 0.0);
-
-    ComptonResult a_last;
-    bool a_ok = false;
-    if (!ps_clearly_good) {
+    // P3: DD asymptotic last resort (skip if already tried in A2)
+    if (!tried_asymp_dd) {
         try {
-            a_last = eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T, Ne);
-            a_ok = a_last.estimated_rel_error < 1.0;
+            auto const r = eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T, Ne);
+            update_best(r);
         } catch (...) {}
     }
 
-    if (ps_ok && a_ok) {
-        auto const& better = (a_last.estimated_rel_error <= ps_result.estimated_rel_error)
-                                 ? a_last : ps_result;
-        if (better.estimated_rel_error < quadrature_self_tol_)
-            return better;
-        return (a_last.estimated_rel_error <= ps_result.estimated_rel_error)
-                   ? a_last : ps_result;
-    }
-    if (ps_ok) return ps_result;
-    if (a_ok)  return a_last;
+    if (best_err < 1e-3)
+        return best;
     throw std::runtime_error("all kernel backends failed");
 }
 

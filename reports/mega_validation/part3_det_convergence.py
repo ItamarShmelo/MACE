@@ -1,7 +1,7 @@
 """
 Part 3 – Deterministic quadrature-parameter convergence analysis.
 
-Sweeps base_order, peak_max_depth, mu_order, tail_order, far_order
+Sweeps base_order, peak_max_depth, xi_order, tail_order, far_order
 one at a time, measuring row-sum relative error against a high-quality
 reference.  Covers both sigma and dsigma/dT, all 3 weight functions,
 3 representative grids, and 10 temperatures.
@@ -58,7 +58,7 @@ REF_CONFIG = dict(
     cutoff_ratio=1e-10,
     tail_order=32,
     far_order=32,
-    mu_order=32,
+    xi_order=32,
 )
 
 # production defaults (held constant when sweeping one parameter)
@@ -69,7 +69,7 @@ PROD_DEFAULTS = dict(
     cutoff_ratio=1e-8,
     tail_order=24,
     far_order=24,
-    mu_order=24,
+    xi_order=24,
 )
 
 # sweep definitions
@@ -85,9 +85,9 @@ SWEEPS = [
         'label': 'peak depth',
     },
     {
-        'param': 'mu_order',
+        'param': 'xi_order',
         'values': [4, 6, 8, 12, 16, 24, 32],
-        'label': 'μ order',
+        'label': 'ξ order',
     },
     {
         'param': 'tail_order',
@@ -115,7 +115,7 @@ def _make_config(**overrides):
         cutoff_ratio=kw['cutoff_ratio'],
         tail_order=kw['tail_order'],
         far_order=kw['far_order'],
-        mu_order=kw['mu_order'],
+        xi_order=kw['xi_order'],
     )
 
 

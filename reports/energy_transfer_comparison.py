@@ -88,7 +88,7 @@ mg = cm.ComptonMultigroupKernel(
     weight_function=cm.PlanckWeightFunction(cap_x=25.0),
     quad_order_E=QUAD_ORDER,
     quad_order_Ep=QUAD_ORDER,
-    quad_order_mu=QUAD_ORDER)
+    xi_order=QUAD_ORDER)
 
 S_det_std = np.array(mg.compute_sigma_matrix(kernel, T=T_K, Ne=1.0))
 
@@ -105,7 +105,7 @@ mg_angle = cm.ComptonMultigroupKernel(
     weight_function=cm.PlanckWeightFunction(cap_x=25.0),
     quad_order_E=QUAD_ORDER_ANGLE,
     quad_order_Ep=QUAD_ORDER_ANGLE,
-    quad_order_mu=QUAD_ORDER_ANGLE)
+    xi_order=QUAD_ORDER_ANGLE)
 S_det_et_angle = np.array(mg_angle.compute_sigma_matrix(
     kernel, num_angle_bins=NUM_ANGLE_BINS_DET, T=T_K, Ne=1.0,
     multiplier=et_mult))
@@ -393,8 +393,8 @@ R()
 # 6. Angle PDF comparison
 # ═════════════════════════════════════════════════════════════════════════
 
-dmu = 2.0 / NUM_ANGLE_BINS_DET
-mu_edges = np.linspace(-1.0, 1.0, NUM_ANGLE_BINS_DET + 1)
+dxi = 2.0 / NUM_ANGLE_BINS_DET
+xi_edges = np.linspace(-1.0, 1.0, NUM_ANGLE_BINS_DET + 1)
 
 def angle_pdf_section(T_kev, section_num, E_in_kev_angle=2.25, g_out_offsets=None):
     if g_out_offsets is None:
@@ -439,10 +439,10 @@ def angle_pdf_section(T_kev, section_num, E_in_kev_angle=2.25, g_out_offsets=Non
 
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
-        ax1.stairs(pdf_mc / dmu, edges=mu_edges, color='red', linewidth=2.0, label='CMMC redistributed')
-        ax1.stairs(pdf_det / dmu, edges=mu_edges, color='blue', linewidth=1.0, linestyle='--', label='Det. energy-transfer')
-        ax1.set_xlabel(r"$\mu = \cos\theta$")
-        ax1.set_ylabel(r"PDF density [1/unit $\mu$]")
+        ax1.stairs(pdf_mc / dxi, edges=xi_edges, color='red', linewidth=2.0, label='CMMC redistributed')
+        ax1.stairs(pdf_det / dxi, edges=xi_edges, color='blue', linewidth=1.0, linestyle='--', label='Det. energy-transfer')
+        ax1.set_xlabel(r"$\xi = \cos\theta$")
+        ax1.set_ylabel(r"PDF density [1/unit $\xi$]")
         ax1.set_title(
             f"g={g_in} ({ec_kev[g_in]:.2f} keV) "
             f"$\\to$ g'={g_out} ({ec_kev[g_out]:.2f} keV)")
@@ -451,9 +451,9 @@ def angle_pdf_section(T_kev, section_num, E_in_kev_angle=2.25, g_out_offsets=Non
 
         mask_pdf = pdf_mc > 1e-8
         ratio_pdf = np.where(mask_pdf, pdf_det / pdf_mc, np.nan)
-        ax2.stairs(ratio_pdf, edges=mu_edges, color='black', linewidth=1.2)
+        ax2.stairs(ratio_pdf, edges=xi_edges, color='black', linewidth=1.2)
         ax2.axhline(1.0, color='gray', linestyle='--', linewidth=0.8)
-        ax2.set_xlabel(r"$\mu = \cos\theta$")
+        ax2.set_xlabel(r"$\xi = \cos\theta$")
         ax2.set_ylabel("Det / CMMC")
         ax2.set_title("PDF ratio")
         ax2.grid(True, alpha=0.3)

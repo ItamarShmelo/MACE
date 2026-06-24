@@ -2,14 +2,12 @@
 Monte Carlo multigroup kernel tests.
 
 Validates ComptonMonteCarloKernel against:
-  1. CMMC Monte Carlo (optional -- skip if unavailable)
-  2. Weight function invariance (standalone)
-  3. Kernel multiplier correctness (standalone)
-  4. Seed reproducibility (standalone)
+  1. Weight function invariance (standalone)
+  2. Kernel multiplier correctness (standalone)
+  3. Seed reproducibility (standalone)
 """
 
 import math
-import subprocess
 import sys
 
 import numpy as np
@@ -47,167 +45,7 @@ def _make_mc(bounds, *, weight_function=None, num_samples=NUM_SAMPLES, seed=SEED
 
 
 # ---------------------------------------------------------------------------
-# CMMC import guard (same pattern as test_multigroup.py)
-# ---------------------------------------------------------------------------
-
-def _try_import_cmmc():
-    try:
-        sys.path.insert(0, "external/CMMC/cpp_modules")
-        import _compton_matrix_mc
-        return _compton_matrix_mc
-    except (ImportError, OSError):
-        return None
-
-
-def _cmmc_smoke_test():
-    code = (
-        "import sys; sys.path.insert(0,'external/CMMC/cpp_modules'); "
-        "sys.path.insert(0,'cpp_modules'); "
-        "import _compton_matrix_mc as mc; "
-        "mc.ComptonMatrixMC("
-        "energy_groups_centers=[1e-9,5e-9],"
-        "energy_groups_boundaries=[5e-10,2e-9,1e-8],"
-        "num_of_samples=10,"
-        "force_detailed_balance=False,"
-        "seed=1).calculate_S_matrix(temperature=1e8)"
-    )
-    result = subprocess.run(
-        [sys.executable, "-c", code],
-        capture_output=True, timeout=30)
-    return result.returncode == 0
-
-
-_cmmc = _try_import_cmmc()
-_cmmc_functional = _cmmc_smoke_test() if _cmmc is not None else False
-
-
-# ---------------------------------------------------------------------------
-# 1. CMMC comparison (optional)
-# ---------------------------------------------------------------------------
-
-class TestCMMCComparison:
-    """Compare row sums against CMMC Monte Carlo."""
-
-    @pytest.fixture(autouse=True)
-    def _require_mc(self):
-        if _cmmc is None:
-            pytest.skip("_compton_matrix_mc not available")
-        if not _cmmc_functional:
-            pytest.skip("_compton_matrix_mc segfaults (pre-existing issue)")
-
-    @pytest.mark.parametrize("T_kev", [1.0, 10.0, 100.0])
-    def test_close_match(self, T_kev):
-        """Same seed must produce nearly identical matrices (within FP noise)."""
-        T = T_kev * kev_kelvin
-        mc_bounds_kev = [0.1, 1.0, 5.0, 10.0, 50.0, 100.0]
-        mc_bounds_erg = [b * kev for b in mc_bounds_kev]
-        G_local = len(mc_bounds_erg) - 1
-        centers = [math.sqrt(mc_bounds_erg[i] * mc_bounds_erg[i + 1])
-                   for i in range(G_local)]
-
-        cmmc_obj = _cmmc.ComptonMatrixMC(
-            energy_groups_centers=centers,
-            energy_groups_boundaries=mc_bounds_erg,
-            num_of_samples=NUM_SAMPLES,
-            force_detailed_balance=False,
-            seed=SEED,
-            discard_out_of_grid=True)
-        S_cmmc = np.array(cmmc_obj.calculate_S_matrix(temperature=T))
-
-        mc_obj = _make_mc(mc_bounds_erg)
-        S_mc = mc_obj.compute_sigma_matrix(T=T, Ne=1.0)
-
-        np.testing.assert_allclose(
-            S_mc, S_cmmc, rtol=1e-14, atol=0,
-            err_msg=f"mismatch at T={T_kev} keV")
-
-    def test_row_sum_agreement(self):
-        """Row sums should agree within ~5% relative."""
-        T_kev = 10.0
-        T = T_kev * kev_kelvin
-
-        mc_bounds_kev = [1.0, 5.0, 10.0, 50.0]
-        mc_bounds_erg = [b * kev for b in mc_bounds_kev]
-        G_local = len(mc_bounds_erg) - 1
-        centers = [math.sqrt(mc_bounds_erg[i] * mc_bounds_erg[i + 1])
-                   for i in range(G_local)]
-
-        cmmc_obj = _cmmc.ComptonMatrixMC(
-            energy_groups_centers=centers,
-            energy_groups_boundaries=mc_bounds_erg,
-            num_of_samples=NUM_SAMPLES,
-            force_detailed_balance=False,
-            seed=SEED,
-            discard_out_of_grid=True)
-        S_cmmc = np.array(cmmc_obj.calculate_S_matrix(temperature=T))
-
-        mc_obj = _make_mc(mc_bounds_erg)
-        S_mc = mc_obj.compute_sigma_matrix(T=T, Ne=1.0)
-
-        rs_cmmc = S_cmmc.sum(axis=1)
-        rs_mc = S_mc.sum(axis=1)
-
-        mask = np.abs(rs_cmmc) > 1e-35
-        if not np.any(mask):
-            pytest.skip("all row sums near zero")
-
-        rel_err = np.abs(rs_cmmc[mask] - rs_mc[mask]) / np.abs(rs_cmmc[mask])
-        assert np.max(rel_err) < 0.05, (
-            f"row-sum max rel error = {np.max(rel_err):.3f}")
-
-    def test_angle_cdf_agreement(self):
-        """Angular CDFs should have median max-difference < 0.15."""
-        T_kev = 10.0
-        T = T_kev * kev_kelvin
-
-        mc_bounds_kev = [1.0, 5.0, 10.0]
-        mc_bounds_erg = [b * kev for b in mc_bounds_kev]
-        G_local = len(mc_bounds_erg) - 1
-        centers = [math.sqrt(mc_bounds_erg[i] * mc_bounds_erg[i + 1])
-                   for i in range(G_local)]
-
-        NUM_ANGLE_BINS = _cmmc.ComptonMatrixMC.NUM_ANGLE_BINS
-
-        cmmc_obj = _cmmc.ComptonMatrixMC(
-            energy_groups_centers=centers,
-            energy_groups_boundaries=mc_bounds_erg,
-            num_of_samples=NUM_SAMPLES,
-            force_detailed_balance=False,
-            seed=SEED,
-            discard_out_of_grid=True)
-        cmmc_obj.set_tables(temperature_grid=[T * 0.9, T, T * 1.1])
-
-        mc_obj = _make_mc(mc_bounds_erg, num_samples=NUM_SAMPLES)
-        S_mc = mc_obj.compute_sigma_matrix(
-            num_angle_bins=NUM_ANGLE_BINS, T=T, Ne=1.0)
-
-        max_cdf_diffs = []
-        for g0 in range(G_local):
-            for g in range(G_local):
-                row = S_mc[g0, g, :]
-                total = row.sum()
-                if total < 1e-35:
-                    continue
-
-                cdf_mc_new = np.zeros(NUM_ANGLE_BINS + 1)
-                cdf_mc_new[1:] = np.cumsum(row) / total
-                cdf_mc_new[-1] = 1.0
-
-                cdf_cmmc = np.array(
-                    cmmc_obj.get_angle_cdf(temperature=T, g0=g0, g=g))
-
-                max_cdf_diffs.append(np.max(np.abs(cdf_mc_new - cdf_cmmc)))
-
-        if not max_cdf_diffs:
-            pytest.skip("no significant transitions")
-
-        median_diff = np.median(max_cdf_diffs)
-        assert median_diff < 0.15, (
-            f"median max CDF diff = {median_diff:.3f}")
-
-
-# ---------------------------------------------------------------------------
-# 2. Weight function invariance
+# 1. Weight function invariance
 # ---------------------------------------------------------------------------
 
 class TestWeightFunctionInvariance:
@@ -257,7 +95,7 @@ class TestWeightFunctionInvariance:
 
 
 # ---------------------------------------------------------------------------
-# 3. Kernel multiplier correctness
+# 2. Kernel multiplier correctness
 # ---------------------------------------------------------------------------
 
 class TestKernelMultiplier:
@@ -291,7 +129,7 @@ class TestKernelMultiplier:
 
 
 # ---------------------------------------------------------------------------
-# 4. Seed reproducibility
+# 3. Seed reproducibility
 # ---------------------------------------------------------------------------
 
 class TestSeedReproducibility:
@@ -324,7 +162,7 @@ class TestSeedReproducibility:
 
 
 # ---------------------------------------------------------------------------
-# 5. Basic sanity checks
+# 4. Basic sanity checks
 # ---------------------------------------------------------------------------
 
 class TestBasicSanity:
@@ -378,7 +216,7 @@ class TestBasicSanity:
 
 
 # ---------------------------------------------------------------------------
-# 6. Derivative golden-value regression
+# 5. Derivative golden-value regression
 # ---------------------------------------------------------------------------
 
 class TestDerivativeGolden:

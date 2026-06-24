@@ -50,7 +50,7 @@ for NE in [16, 32, 64]:
         weight_function=cm.PlanckWeightFunction(cap_x=25.0),
         quad_order_E=NE,
         quad_order_Ep=NE,
-        quad_order_mu=32)
+        xi_order=32)
     S_s = np.array(mg.compute_sigma_matrix(kernel, T=T_K, Ne=1.0))
     
     # Compare near diagonal

@@ -91,7 +91,7 @@ def regime_for_point(pt):
     alpha_plus = 0.5 * (s + q)
     alpha_minus = 0.5 * (s - q)
     tau_alpha_max = tau * max(alpha_plus, abs(alpha_minus))
-    return 'power' if tau_alpha_max >= 0.02 else 'asymptotic'
+    return 'power' if tau_alpha_max >= 0.035 else 'asymptotic'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -201,7 +201,7 @@ def section_multigroup_timing():
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=wf,
-            quad_order_E=16, quad_order_Ep=16, quad_order_mu=16)
+            quad_order_E=16, quad_order_Ep=16, xi_order=16)
 
         log(f'  T={T_kev} keV...')
         t0 = time.perf_counter()

@@ -2,8 +2,8 @@
 Tests for ComptonKernelSolver adaptive dispatch.
 
 Validates that the solver produces the correct result across all dispatch
-regimes (asymptotic, double power series, Q64-accepted, DD fallback) for
-both sigma_E and dsigma_E_dT, and that custom threshold parameters work.
+regimes (asymptotic double/DD, power series double/DD) for both sigma_E
+and dsigma_E_dT, and that custom threshold parameters work.
 """
 
 import sys
@@ -156,35 +156,35 @@ class TestSolverFullSpace:
         assert rd < 1e-3, f"reldiff={rd:.2e}"
 
 
-# ── Custom threshold: tighter quadrature tolerance ───────────────────────
+# ── Custom threshold: tighter power-series tolerance ─────────────────────
 
 
 class TestCustomThresholds:
-    def test_tighter_quadrature_tol(self):
+    def test_tighter_power_series_tol(self):
         """A tighter self-tol falls back to DD more often but still accurate."""
-        tight = ComptonKernelSolver(quadrature_self_tol=1e-7)
+        tight = ComptonKernelSolver(power_series_self_tol=1e-7)
         E, Ep, T = 5.0 * kev, 5.5 * kev, 30.0 * kev_kelvin
         tight_res = tight.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
         default_res = SOLVER.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
         assert _rel_diff(tight_res.value, default_res.value) < 1e-5
 
-    def test_zero_quadrature_tol_forces_dd(self):
-        """With tol=0 the quadrature is never accepted; result = DD."""
-        dd_only = ComptonKernelSolver(quadrature_self_tol=0.0)
+    def test_zero_power_series_tol_forces_dd(self):
+        """With tol=0 the power series is never accepted; result = DD."""
+        dd_only = ComptonKernelSolver(power_series_self_tol=0.0)
         dd_series = ComptonPowerSeries(high_precision=True)
         E, Ep, T = 5.0 * kev, 5.5 * kev, 30.0 * kev_kelvin
         solver_res = dd_only.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
         dd_res = dd_series.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
         assert _rel_diff(solver_res.value, dd_res.value) < 1e-6
 
-    def test_large_quadrature_tol_accepts_everything(self):
+    def test_large_power_series_tol_accepts_everything(self):
         """With tol=1.0 the solver returns a correct result in the former DD regime.
 
         The speculative double PS attempt is accepted first at E=5 keV
         (gamma~0.01) because its self-error is well below 1.0.  Verify
         the result still agrees with Q64 to reasonable precision.
         """
-        q_always = ComptonKernelSolver(quadrature_self_tol=1.0)
+        q_always = ComptonKernelSolver(power_series_self_tol=1.0)
         q64 = cq.ComptonKernelQuadrature(64)
         E, Ep, T = 5.0 * kev, 5.5 * kev, 30.0 * kev_kelvin
         solver_res = q_always.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
@@ -203,57 +203,45 @@ ASYMP_DD_POINTS = [
 
 
 class TestAsymptoticDDRegime:
+    """Solver must be accurate at ultra-low gamma in cold plasma.
+
+    The solver now tries double first and escalates to DD only when the
+    roundoff estimator flags large cancellation, so we compare vs Q256
+    rather than requiring a bitwise DD match.
+    """
+
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", ASYMP_DD_POINTS)
-    def test_sigma_E_matches_dd_asymptotic(self, E_kev, Ep_kev, xi, T_kev):
-        """Solver should route to DD asymptotic at ultra-low gamma."""
+    def test_sigma_E_vs_q256(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        dd_asymp = ComptonKernelAsymptoticSeries(high_precision=True)
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        if qres.estimated_rel_error > 1e-3:
+            pytest.skip("quadrature reference unreliable")
         solver_res = SOLVER.sigma_E(E, Ep, xi, T, 1.0)
-        dd_res = dd_asymp.sigma_E(E, Ep, xi, T, 1.0)
-        assert _rel_diff(solver_res.value, dd_res.value) < 1e-12
+        assert _rel_diff(solver_res.value, qres.value) < 1e-3
 
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", ASYMP_DD_POINTS)
-    def test_dsigma_E_dT_matches_dd_asymptotic(self, E_kev, Ep_kev, xi, T_kev):
+    def test_dsigma_E_dT_vs_q256(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        dd_asymp = ComptonKernelAsymptoticSeries(high_precision=True)
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        if qres.estimated_rel_error > 1e-3:
+            pytest.skip("quadrature reference unreliable")
         solver_res = SOLVER.dsigma_E_dT(E, Ep, xi, T, 1.0)
-        dd_res = dd_asymp.dsigma_E_dT(E, Ep, xi, T, 1.0)
-        assert _rel_diff(solver_res.value, dd_res.value) < 1e-12
+        assert _rel_diff(solver_res.value, qres.value) < 1e-3
 
 
-class TestAsymptoticDDThreshold:
-    def test_zero_threshold_disables_dd(self):
-        """With asymp_gamma_dd_threshold=0 the DD path is never taken."""
-        no_dd = ComptonKernelSolver(asymp_gamma_dd_threshold=0.0)
-        dbl_asymp = ComptonKernelAsymptoticSeries(high_precision=False)
-        E, Ep, T = 0.1 * kev, 0.11 * kev, 0.1 * kev_kelvin
-        solver_res = no_dd.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
-        dbl_res = dbl_asymp.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
-        assert _rel_diff(solver_res.value, dbl_res.value) < 1e-12
-
-    def test_large_threshold_forces_dd(self):
-        """With a large threshold, all asymptotic evaluations use DD."""
-        dd_forced = ComptonKernelSolver(asymp_gamma_dd_threshold=1.0)
-        dd_asymp = ComptonKernelAsymptoticSeries(high_precision=True)
-        E, Ep, T = 10.0 * kev, 10.5 * kev, 0.5 * kev_kelvin
-        solver_res = dd_forced.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
-        dd_res = dd_asymp.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
-        assert _rel_diff(solver_res.value, dd_res.value) < 1e-12
-
-
-# ── Dispatch boundary: tau_alpha_max ~ 0.02 ──────────────────────────────
+# ── Dispatch boundary: tau_alpha_max ~ 0.035 ─────────────────────────────
 
 BOUNDARY_POINTS = [
     # (E_kev, Ep_kev, xi, T_kev, tau_alpha_approx)
-    (10.0, 10.5, 0.5, 7.0, 0.0197),   # just below threshold -> asymptotic
-    (10.0, 10.5, 0.5, 7.1, 0.0202),   # just above threshold -> power series
-    (10.0, 10.5, 0.5, 8.0, 0.0257),   # comfortably above -> power series
-    (10.0, 10.5, 0.0, 7.0, 0.0137),   # well below threshold -> asymptotic
+    (10.0, 10.5, 0.5, 110.0, 0.0347),  # just below threshold -> asymptotic
+    (10.0, 10.5, 0.5, 112.0, 0.0354),  # just above threshold -> power series
+    (10.0, 10.5, 0.5, 120.0, 0.0379),  # comfortably above -> power series
+    (10.0, 10.5, 0.0, 80.0, 0.0308),   # well below threshold -> asymptotic
 ]
 
 
 class TestDispatchBoundary:
-    """Points straddling tau_alpha_max = 0.02 must all match Q256."""
+    """Points straddling tau_alpha_max = 0.035 must all match Q256."""
 
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev,_ta",
                              BOUNDARY_POINTS,
@@ -280,19 +268,19 @@ class TestDispatchBoundary:
         assert rd < 1e-3, f"reldiff={rd:.2e}"
 
 
-# ── Cross-validation gate at ultra-low gamma ─────────────────────────────
+# ── Ultra-low gamma accuracy ──────────────────────────────────────────────
 
-CROSS_VAL_POINTS = [
-    # gamma_min < 1e-4, tau_alpha in [0.008, 0.02] -> cross-validation active
-    (0.04, 0.042, 0.0, 0.5),   # gamma~7.8e-5, tau_alpha~0.0175
-    (0.05, 0.0525, 0.0, 0.5),  # gamma~9.8e-5, tau_alpha~0.014
+ULTRA_LOW_GAMMA_POINTS = [
+    # gamma_min < 1e-4, cold plasma -- the roundoff estimator drives DD escalation
+    (0.04, 0.042, 0.0, 0.5),   # gamma~7.8e-5
+    (0.05, 0.0525, 0.0, 0.5),  # gamma~9.8e-5
 ]
 
 
-class TestCrossValidationGate:
-    """Ultra-low gamma points in the cross-validation zone must be accurate."""
+class TestUltraLowGammaAccuracy:
+    """Ultra-low gamma points must be accurate via the error-driven cascade."""
 
-    @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", CROSS_VAL_POINTS)
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", ULTRA_LOW_GAMMA_POINTS)
     def test_sigma_E(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
         qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)

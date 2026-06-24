@@ -97,11 +97,11 @@ cancellation.  Empirical measurement shows double vs DD relative error rising to
 $\sim 10^{-4}$ at $\gamma = 10^{-4}$ across all cold temperatures tested
 (0.01--5 keV), whereas at $\gamma > 0.01$ the two agree to $< 10^{-9}$.
 
-The solver dispatch (see below) now includes a DD asymptotic path: when the
-asymptotic regime is active *and* $\min(\gamma, \gamma') < 0.002$ (~1 keV),
-the solver automatically switches to DD arithmetic.  The threshold of 0.002 is
-chosen so double-vs-DD error stays below $10^{-6}$ with margin (empirically
-$7 \times 10^{-7}$ at $\gamma = 10^{-3}$, $10^{-9}$ at $\gamma = 10^{-2}$).
+The solver dispatch (see below) includes a DD asymptotic path: when the
+double-precision asymptotic series reports a self-error above the tolerance
+(driven by the roundoff-aware error estimator detecting cancellation), the
+solver automatically escalates to DD arithmetic.  This is purely error-driven
+and requires no hard-coded $\gamma$ threshold.
 
 **Rearranged accumulation for G-cancellation.**
 At ultra-low $\gamma$ the kinematic parameter
@@ -134,68 +134,64 @@ improvement in the DD result accuracy.
 ### Solver Dispatch
 
 `ComptonKernelSolver` selects the fastest accurate method at each phase-space
-point:
+point via a purely error-driven cascade:
 
 ```
 tau_alpha_max = tau * max(alpha_+, alpha_-)
-gamma_min     = min(gamma, gamma')
 
-1.  if tau_alpha_max < 0.02:
-        (a) gamma_min >= 0.002  --> try Asymptotic series (double)
-        (b) gamma_min <  0.002  --> try Asymptotic series (double-double)
-        accept only if self-reported rel_error < 1e-3;
-        when accepted AND gamma_min < 1e-4 AND tau_alpha_max > 0.4 * 0.02,
-        cross-validate against DD power series (prefer DD power series
-        if it succeeds with tight self-error AND lower self-error than
-        asymptotic); otherwise fall through to steps 2-3.
-2.  if tau_alpha_max >= 0.02:
-        speculatively try Power series (double);
-        accept if self-error < 5e-6 AND (dsigma_dT or value >= 0).
-        Only attempted outside the asymptotic regime because double PS
-        can produce catastrophically wrong values at near-forward angles
-        inside it while reporting tiny self-error.
-3.  DD fallback:
-        try PS-DD (accept if self-error < 1.0);
-        if PS-DD is "clearly good" (self-error < 5e-7 AND non-negative),
-            skip Asymp-DD and return PS-DD;
-        otherwise also try Asymp-DD (accept if self-error < 1.0);
-        return whichever of PS-DD / Asymp-DD has lower self-error
-            (even if above 5e-6 -- best available).
-        If both fail/throw, throw runtime_error.
+Asymptotic regime (tau_alpha_max < 0.035):
+    A1: try Asymptotic series (double)
+        accept if self-error < asymp_self_tol (1e-7).
+        The roundoff-aware error estimator naturally flags cancellation
+        at ultra-low gamma, triggering escalation to DD.
+    A2: try Asymptotic series (DD)
+        accept if self-error < asymp_self_tol.
+    Fall through to power series on failure.
+
+Power series regime (tau_alpha_max >= 0.035, or fallthrough):
+    P1: try Power series (double) -- only outside asymptotic regime
+        accept if self-error < power_series_self_tol (1e-7)
+        AND (dsigma_dT or value >= 0).
+    P2: try Power series (DD)
+        accept if self-error < power_series_self_tol
+        AND (dsigma_dT or value >= 0).
+    P3: try Asymptotic DD (last resort) -- skip if already tried in A2.
+
+Return best-seen result if error < 1e-3; throw otherwise.
 ```
 
-**Asymptotic quality gate (step 1).**  At high temperature and ultra-low
-photon energy ($\gamma \ll 1$), the quantity $\tau \cdot \max(\alpha_+, \alpha_-)$
-depends on the scattering angle $\xi$.  Near $\xi \approx 0.96$ (for $T = 100$
-keV), it crosses the 0.04 threshold, causing the solver to switch from DD
-power series to DD asymptotic.  Just past the boundary the asymptotic series
-reports self-errors $10^4 \times$ larger than the value, producing garbage that
-corrupts the multigroup angular integral.  The quality gate detects this and
-falls through to steps 2--4.  The entire
-asymptotic branch (step 1) is wrapped in a `try/catch` because the series can
-throw "failed to converge" near the dispatch boundary when factorial overflow
-occurs before the optimal truncation point is reached.
+**Error-driven DD escalation.**  The previous dispatch used a hard-coded
+$\gamma_{\min}$ threshold to decide when DD arithmetic was needed in the
+asymptotic regime.  This was fragile: the threshold was empirically tuned and
+couldn't adapt to the actual cancellation at each point.  The roundoff-aware
+error estimator (see Error Estimation below) now tracks per-term
+floating-point cancellation in the $D_n$ and $F_{n+1}$ subtractions and
+reports it as part of the self-error.  When cancellation exhausts double
+precision, the reported error exceeds `asymp_self_tol`, and the cascade
+naturally escalates to DD where the roundoff contribution is negligible.
 
-**Cross-validation at ultra-low $\gamma$ (step 1).**  Even when the DD
-asymptotic self-error passes the gate, its error estimate can silently
-underreport the true error at extreme forward scattering ($\xi > 0.99$) with
-ultra-low $\gamma$ ($< 10^{-4}$).  In this regime the DD asymptotic can return
-values orders of magnitude wrong while claiming relative errors of $10^{-13}$.
-To catch this, when $\gamma_{\min} < 10^{-4}$, the solver cross-validates the
-DD asymptotic result against DD power series.  If DD power series succeeds with
-self-reported error below $10^{-6}$, its result is preferred; otherwise the DD
-asymptotic result is returned (e.g., in cold-plasma regimes where DD power
-series may not be viable).
+**Asymptotic quality gate.**  At high temperature and ultra-low
+photon energy ($\gamma \ll 1$), the quantity $\tau \cdot \max(\alpha_+, \alpha_-)$
+depends on the scattering angle $\xi$.  Near the dispatch boundary the
+asymptotic series can report self-errors much larger than the value, producing
+garbage that corrupts the multigroup angular integral.  The quality gate
+detects this (self-error > `asymp_self_tol`) and falls through to the power
+series.  The entire asymptotic branch is wrapped in `try/catch` because the
+series can throw "failed to converge" near the dispatch boundary when factorial
+overflow occurs before the optimal truncation point is reached.
+
+**Non-negative check (P1/P2).**  For `sigma_E`, the power series result is
+accepted only if non-negative.  A negative value indicates catastrophic
+cancellation at the $\Psi + P_+ - P_-$ level, and the solver escalates to a
+higher-precision method.
 
 The thresholds are empirically validated:
 
 | Constant | Value | Rationale |
 |----------|-------|-----------|
-| `ASYMP_TAU_ALPHA_THRESHOLD` | 0.02 | Lowered from 0.04 to restrict asymptotic regime to where the series converges most reliably; power series handles [0.02, 0.04) safely via the DD fallback path |
-| `ASYMP_GAMMA_DD_THRESHOLD` | 0.002 (~1 keV) | Worst-case double vs DD asymptotic error is 7e-7 at this boundary |
-| `quadrature_self_tol` | 5e-6 | Raised from 1e-6 to accommodate the relaxed series `eps_rel = 1e-8`; the power series error estimator reports `trunc_rel` up to ~100x larger than `eps_rel` due to amplification from t_plus/t_minus partial cancellation |
-| `asymp_self_tol` | 1e-3 | Rejects asymptotic when self-reported error exceeds 0.1%; guards dispatch boundary |
-| `asymp_gamma_dd_cross_val_threshold` | 1e-4 (~0.05 keV) | Cross-validate DD asymptotic against DD power series below this $\gamma$ |
+| `ASYMP_TAU_ALPHA_THRESHOLD` | 0.035 | Widened from 0.02; the asymptotic series is highly reliable in this range and the power series (via DD) safely handles points above the threshold |
+| `power_series_self_tol` | 1e-7 | Tightened from 5e-6; the DD fallback handles points where the double power series cannot meet this tolerance |
+| `asymp_self_tol` | 1e-7 | Tightened from 1e-3; forces DD escalation for any asymptotic result with self-error above 0.00001%; guards dispatch boundary and roundoff-dominated points |
 
 
 ## Precision Strategy
@@ -287,16 +283,16 @@ which is stable for small $x$ (amplitude factor $x/(n+1) < 1$).
 
 The multigroup cross section
 
-$$\sigma(g \to g') = \frac{2\pi \int_{\Delta E_g} \int_{\Delta E_{g'}} \int_{\mu_i}^{\mu_{i+1}} w(E,T)\,\Sigma_E\, d\mu\, dE'\, dE}{\int_{\Delta E_g} w(E,T)\, dE}$$
+$$\sigma(g \to g') = \frac{2\pi \int_{\Delta E_g} \int_{\Delta E_{g'}} \int_{\xi_i}^{\xi_{i+1}} w(E,T)\,\Sigma_E\, d\xi\, dE'\, dE}{\int_{\Delta E_g} w(E,T)\, dE}$$
 
-is evaluated by Gauss–Legendre quadrature on three finite intervals $(E, E', \mu)$.
+is evaluated by Gauss–Legendre quadrature on three finite intervals $(E, E', \xi)$.
 **Only the E' peak region uses adaptive refinement**; all other axes and sub-regions
 use single-panel GL quadrature with appropriate coordinate mappings.
 
 **Rationale:** The Compton kernel has a sharp recoil-band peak in $E'$ that benefits
 from adaptive bisection.  The tails decay smoothly (exponentially away from the
 peak boundary) and are well resolved by the log/rlog change of variable alone.
-The $E$ and $\mu$ integrands, being weighted integrals over the $E'$ axis result,
+The $E$ and $\xi$ integrands, being weighted integrals over the $E'$ axis result,
 are already smooth.  Removing adaptivity from these axes dramatically reduces
 function evaluations, allowing higher base quadrature orders without performance
 penalty.
@@ -316,7 +312,7 @@ the E' peak region.  Accuracy of other axes is controlled by increasing `base_or
 near-Thomson scattering, requiring more quadrature nodes for convergence.
 When $T <$ `COLD_TEMPERATURE_THRESHOLD` (defined in `compton_common.hpp`),
 the integrator automatically substitutes `cold_temperature_order` (default 48)
-for `base_order` on the E and $\mu$ axes.  The threshold was determined
+for `base_order` on the E and $\xi$ axes.  The threshold was determined
 empirically: `base_order=24` produces < 0.05% self-convergence error above
 0.002 keV but degrades to ~8% at 0.0001 keV.
 
@@ -365,17 +361,17 @@ kinematics to concentrate quadrature effort where the integrand is large.
 
 #### Cold Compton Recoil Band
 
-For an angle bin $[\mu_\text{lo}, \mu_\text{hi}]$ and incoming energy $E$, the
+For an angle bin $[\xi_\text{lo}, \xi_\text{hi}]$ and incoming energy $E$, the
 cold-electron recoil band in $E'$ is
 
-$$a = \frac{E}{1 + \gamma(1 - \mu_\text{lo})}, \quad
-  b = \frac{E}{1 + \gamma(1 - \mu_\text{hi})}$$
+$$a = \frac{E}{1 + \gamma(1 - \xi_\text{lo})}, \quad
+  b = \frac{E}{1 + \gamma(1 - \xi_\text{hi})}$$
 
 where $\gamma = E / m_e c^2$.  Inside this band there exists a scattering angle
 for which a cold (rest-frame) electron can produce the observed $E'$; outside,
 the kernel is exponentially suppressed by the Boltzmann factor
 $\sim\exp(-(\lambda_\mathrm{min} - 1)/\tau)$.  This kinematic band depends only on $E$
-and the $\mu$-bin endpoints, not on temperature.
+and the $\xi$-bin endpoints, not on temperature.
 
 At finite temperature `peak_limits` extends each edge by one thermal Doppler
 half-width $\Delta E = E\sqrt{2\tau}$; below `COLD_TEMPERATURE_THRESHOLD` the
@@ -432,13 +428,13 @@ the constructor so that invalid configurations are rejected early.
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `base_order` | 24 | GL panel order for E, mu, and E'-peak axes |
-| `cold_temperature_order` | 48 | GL order for E/mu axes when T < 0.005 keV |
+| `base_order` | 24 | GL panel order for E, xi, and E'-peak axes |
+| `cold_temperature_order` | 48 | GL order for E/xi axes when T < 0.005 keV |
 | `peak_max_depth` | 5 | Maximum recursion depth for adaptive E' peak |
 | `tail_order` | `nullopt` → `base_order` | GL order for E' tail (log/rlog) regions |
 | `far_order` | `nullopt` → `base_order` | GL order for E' far-from-peak regions |
-| `mu_order` | `nullopt` → `base_order` | GL order for the μ peak panel |
-| `mu_peak_k` | 10.0 | Number of FWHMs for the μ peak-focused splitting window |
+| `xi_order` | `nullopt` → `base_order` | GL order for the ξ peak panel |
+| `xi_peak_k` | 10.0 | Number of FWHMs for the ξ peak-focused splitting window |
 | `integration_tolerance` | 1e-3 | Overall relative tolerance for the outer integral |
 | `cutoff_ratio` | 1e-8 | Outward-from-peak early-termination ratio |
 | `flat_ep` | `nullopt` | Optional flat E' density config (replaces adaptive E' with single-pass GL) |
@@ -458,21 +454,21 @@ largest, making adaptive refinement unnecessary.  For far groups the mapping
 direction is chosen so that nodes cluster at the group edge closest to the
 peak (log for groups above the peak, rlog for groups below).
 
-#### μ Peak-Focused Splitting
+#### ξ Peak-Focused Splitting
 
-For non-elastic scattering (|E'/E − 1| > 0.05), the μ integrand has a sharp
-peak at the Compton angle $\mu_c = 1 - (1/\gamma)(1/r - 1)$ where $r = E'/E$.
+For non-elastic scattering (|E'/E − 1| > 0.05), the ξ integrand has a sharp
+peak at the Compton angle $\xi_c = 1 - (1/\gamma)(1/r - 1)$ where $r = E'/E$.
 The FWHM of this peak scales as:
 
-$$\text{FWHM}(\mu) \approx 4\sqrt{|1-r|/r} \cdot \sqrt{\tau} / \gamma^{3/2}$$
+$$\text{FWHM}(\xi) \approx 4\sqrt{|1-r|/r} \cdot \sqrt{\tau} / \gamma^{3/2}$$
 
-The integrator splits the μ interval into three panels:
-1. Left tail: [μ_lo, μ_c − k·FWHM/2] with 8-point GL
-2. Peak: [μ_c − k·FWHM/2, μ_c + k·FWHM/2] with `mu_order`-point GL
-3. Right tail: [μ_c + k·FWHM/2, μ_hi] with 8-point GL
+The integrator splits the ξ interval into three panels:
+1. Left tail: [ξ_lo, ξ_c − k·FWHM/2] with 8-point GL
+2. Peak: [ξ_c − k·FWHM/2, ξ_c + k·FWHM/2] with `xi_order`-point GL
+3. Right tail: [ξ_c + k·FWHM/2, ξ_hi] with 8-point GL
 
-where k = `mu_peak_k` (default 10). This splitting is applied only when the
-peak window is narrower than 80% of the full μ interval, ensuring the tails
+where k = `xi_peak_k` (default 10). This splitting is applied only when the
+peak window is narrower than 80% of the full ξ interval, ensuring the tails
 are exponentially small and well-resolved by just 8 points. For near-elastic
 scatter (|r − 1| < 0.05) or when the peak fills most of the interval, the
 integrator falls back to log/rlog mapping or standard linear GL.
@@ -487,8 +483,8 @@ Two factory methods provide validated high-accuracy configurations:
 |-----------|-------|-----------|
 | `base_order` | 192 | Resolves narrow Compton recoil band at cold T |
 | `peak_max_depth` | 9 | Deep recursion for extremely narrow E' peaks |
-| `mu_order` | 512 | Resolves sharp μ peak (FWHM ∝ √τ/γ^1.5, very narrow at high E + cold T) |
-| `mu_peak_k` | 10 | 10× FWHM window captures >99.99% of μ peak area |
+| `xi_order` | 512 | Resolves sharp ξ peak (FWHM ∝ √τ/γ^1.5, very narrow at high E + cold T) |
+| `xi_peak_k` | 10 | 10× FWHM window captures >99.99% of ξ peak area |
 | `integration_tolerance` | 1e-8 | Tight tolerance for adaptive refinement |
 | `cutoff_ratio` | 1e-12 | Conservative group cutoff |
 | `cold_temperature_order` | 192 | Matches base_order |
@@ -503,11 +499,11 @@ noise), element-wise RMS ~3e-3. Runtime: ~300–600s per 24-group matrix
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
 | `base_order` | 96 | High-order GL for E axis |
-| `mu_order` | 96 | Adequate for broader μ peaks at warm T |
-| `mu_peak_k` | 10 | Standard peak window |
+| `xi_order` | 96 | Adequate for broader ξ peaks at warm T |
+| `xi_peak_k` | 10 | Standard peak window |
 | `flat_ep` | density=512, ppd, max=8192 | Dense flat E' (no adaptive recursion needed at warm T) |
 | `flat_E` | false | Keeps E-axis boundary layer log-mapping |
-| `flat_mu` | false | Keeps μ peak-focused splitting |
+| `flat_xi` | false | Keeps ξ peak-focused splitting |
 | `cutoff_ratio` | 1e-12 | Conservative group cutoff |
 
 Validated accuracy: MC converges as 1/√N with no bias. At N=10^9:
@@ -517,8 +513,8 @@ Runtime: ~30–120s per 24-group matrix.
 **Temperature switch at T = 0.1 keV:** Below this threshold, the Compton
 kernel narrows dramatically, requiring high adaptive resolution (bo=192) to
 resolve. Above, the kernel is broad enough that flat E' with 512 points/decade
-is sufficient and much faster. Both configs use `mu_peak_k=10` and keep
-`flat_mu=false` to leverage the analytically-derived FWHM peak splitting.
+is sufficient and much faster. Both configs use `xi_peak_k=10` and keep
+`flat_xi=false` to leverage the analytically-derived FWHM peak splitting.
 
 Python usage:
 ```python
@@ -643,28 +639,17 @@ $F_{n+1}$ subtraction, and the final error is `max(truncation, roundoff)`.
 In DD arithmetic, $\varepsilon_T \sim 10^{-32}$ makes the roundoff contribution
 negligible even after $G$-amplification, so DD results are unaffected.
 
-**Cross-validation boundary factor.**  The `0.4 * threshold` factor in the
-cross-validation guard (step 1) limits cross-validation to the upper 60% of
-the asymptotic regime's $\tau\alpha$ range.  Deep inside the asymptotic regime
-($\tau\alpha \ll \text{threshold}$), cross-validation is skipped because the
-asymptotic series is highly accurate there and the power series may not be
-viable (Poisson underflow).  With the threshold at 0.02, cross-validation
-activates when $\tau\alpha > 0.008$.
-
-**DD fallback with best-available return (step 4).**  The DD fallback wraps
-both `power_series_dd_` and `asymp_series_dd_` in `try/catch` blocks because
-either can throw on underflow or non-convergence at extreme parameters.  When
-PS-DD is "clearly good" (self-error well below tolerance and non-negative),
-Asymp-DD is skipped entirely to avoid unnecessary computation.  Otherwise the
-solver tries both and returns whichever reports lower self-error — even if that
-error exceeds `quadrature_self_tol` — because a poorly-converged result is
-vastly more accurate than returning nothing.  Only when both backends fail
-entirely (throw or self-error $\geq 1$) does the solver throw `runtime_error`.
+**Best-available return.**  Each step in the cascade is wrapped in
+`try/catch` because any backend can throw on underflow or non-convergence at
+extreme parameters.  The solver tracks the best result seen so far (lowest
+self-error).  If no step's self-error falls below its respective acceptance
+threshold but the best-seen error is below 1.0, the best result is returned
+--- a poorly-converged result is vastly more accurate than returning nothing.
+Only when all backends fail entirely (throw or self-error $\geq 1$) does the
+solver throw `runtime_error`.
 
 Tests anchor accuracy against Q256 post-IBP Gauss–Laguerre as the numerical
-ground truth.  Multigroup accuracy is validated against the CMMC Monte Carlo
-code (row sums and angular CDFs, since element-wise agreement is affected by
-CMMC's linear energy redistribution).
+ground truth.
 
 
 ## Temperature Derivatives
