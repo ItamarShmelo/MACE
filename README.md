@@ -487,10 +487,9 @@ The suite covers point-wise kernels, multigroup integration, and utilities:
 - **`test_kernel_solver`** -- adaptive dispatch regime selection, custom
   thresholds, and `sigma_E_vec` / `dsigma_E_dT_vec` vectorized APIs.
 - **`test_multigroup`** -- deterministic `ComptonMultigroupKernel`, Planck
-  denominator sanity, adaptive tolerance convergence, and optional CMMC
-  cross-validation.
+  denominator sanity, adaptive tolerance convergence, and group cutoff.
 - **`test_monte_carlo`** -- `ComptonMonteCarloKernel`, seed reproducibility,
-  weight-function invariance, and optional CMMC parity checks.
+  and weight-function invariance.
 - **`test_weight_function`** -- `PlanckWeightFunction`, `UniformWeightFunction`,
   `WienWeightFunction` against analytic formulae and SciPy quadrature.
 - **`test_integration_functions`** -- Gauss-Legendre and Gauss-Laguerre node/weight

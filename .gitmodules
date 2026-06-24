@@ -1,3 +1,0 @@
-[submodule "external/CMMC"]
-	path = external/CMMC
-	url = git@github.com:menahemkrief/CMMC.git

@@ -649,9 +649,7 @@ Only when all backends fail entirely (throw or self-error $\geq 1$) does the
 solver throw `runtime_error`.
 
 Tests anchor accuracy against Q256 post-IBP Gauss–Laguerre as the numerical
-ground truth.  Multigroup accuracy is validated against the CMMC Monte Carlo
-code (row sums and angular CDFs, since element-wise agreement is affected by
-CMMC's linear energy redistribution).
+ground truth.
 
 
 ## Temperature Derivatives

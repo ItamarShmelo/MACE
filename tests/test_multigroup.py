@@ -5,12 +5,9 @@ Validates the ComptonMultigroupKernel integration against:
   1. Analytic Planck integral for the denominator
   2. Quadrature convergence (increasing order)
   3. Angle-bin summation consistency
-  4. CMMC Monte Carlo S-matrix (optional)
-  5. CMMC angle CDF (optional)
 """
 
 import sys
-import math
 
 import numpy as np
 import pytest
@@ -152,107 +149,8 @@ class TestAdaptiveConvergence:
 #    forward-scatter limit where all kernel backends throw)
 # ---------------------------------------------------------------------------
 
-
 # ---------------------------------------------------------------------------
-# 4. MC comparison (optional)
-# ---------------------------------------------------------------------------
-
-def _try_import_cmmc():
-    """Import _compton_matrix_mc if available and functional, else None."""
-    try:
-        sys.path.insert(0, "external/CMMC/cpp_modules")
-        import _compton_matrix_mc
-        return _compton_matrix_mc
-    except (ImportError, OSError):
-        return None
-
-
-def _cmmc_smoke_test():
-    """Run a trivial MC call in a subprocess to detect segfaults."""
-    import subprocess
-    code = (
-        "import sys; sys.path.insert(0,'external/CMMC/cpp_modules'); "
-        "sys.path.insert(0,'cpp_modules'); "
-        "import _compton_matrix_mc as mc; "
-        "mc.ComptonMatrixMC("
-        "energy_groups_centers=[1e-9,5e-9],"
-        "energy_groups_boundaries=[5e-10,2e-9,1e-8],"
-        "num_of_samples=10,"
-        "force_detailed_balance=False,"
-        "seed=1).calculate_S_matrix(temperature=1e8)"
-    )
-    result = subprocess.run(
-        [sys.executable, "-c", code],
-        capture_output=True, timeout=30)
-    return result.returncode == 0
-
-
-_cmmc = _try_import_cmmc()
-_cmmc_functional = _cmmc_smoke_test() if _cmmc is not None else False
-
-
-class TestMCComparison:
-    """Compare angle-integrated matrix against CMMC Monte Carlo."""
-
-    @pytest.fixture(autouse=True)
-    def _require_mc(self):
-        if _cmmc is None:
-            pytest.skip("_compton_matrix_mc not available")
-        if not _cmmc_functional:
-            pytest.skip("_compton_matrix_mc segfaults (pre-existing issue)")
-
-    def test_s_matrix_row_sums(self):
-        """Compare row sums (total cross sections) between deterministic and MC.
-
-        Element-wise comparison is not expected to match because CMMC
-        uses a linear energy-redistribution scheme that shifts weight
-        toward the diagonal.  Row sums, however, should agree since
-        both compute the same total scattering rate out of each group.
-
-        Uses a 3-group grid to keep runtime practical with adaptive
-        3-axis integration.
-        """
-        T_kev = 10.0
-        T = T_kev * kev_kelvin
-
-        mc_bounds_kev = [1.0, 5.0, 10.0, 50.0]
-        mc_bounds_erg = [b * kev for b in mc_bounds_kev]
-        G = len(mc_bounds_erg) - 1
-        centers = [math.sqrt(mc_bounds_erg[i] * mc_bounds_erg[i + 1]) for i in range(G)]
-
-        mc = _cmmc.ComptonMatrixMC(
-            energy_groups_centers=centers,
-            energy_groups_boundaries=mc_bounds_erg,
-            num_of_samples=200000,
-            force_detailed_balance=False,
-            seed=42)
-
-        S_mc = np.array(mc.calculate_S_matrix(temperature=T))
-
-        mg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=mc_bounds_erg,
-            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
-        S_det = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
-
-        row_sums_mc = S_mc.sum(axis=1)
-        row_sums_det = S_det.sum(axis=1)
-
-        mask = row_sums_mc > 1e-30
-        if not np.any(mask):
-            pytest.skip("no significant row sums to compare")
-
-        rel_diff = np.abs(row_sums_det[mask] - row_sums_mc[mask]) / row_sums_mc[mask]
-        max_rel = np.max(rel_diff)
-        assert max_rel < 0.15, f"max row-sum rel diff vs MC = {max_rel:.2e}"
-
-
-# ---------------------------------------------------------------------------
-# 5. Angle CDF comparison (optional)
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# 4b. Cold recoil band functions
+# 4. Cold recoil band functions
 # ---------------------------------------------------------------------------
 
 class TestPeakLimits:
@@ -298,7 +196,7 @@ class TestPeakLimits:
 
 
 # ---------------------------------------------------------------------------
-# 4c. Peak-aware vs uniform consistency
+# 4b. Peak-aware vs uniform consistency
 # ---------------------------------------------------------------------------
 
 class TestPeakAwareConsistency:
@@ -355,7 +253,7 @@ class TestPeakAwareConsistency:
 
 
 # ---------------------------------------------------------------------------
-# 4d. Hard physics regression tests
+# 4c. Hard physics regression tests
 # ---------------------------------------------------------------------------
 
 class TestHardPhysicsRegression:
@@ -392,74 +290,9 @@ class TestHardPhysicsRegression:
         assert np.all(row_sums >= 0), "negative row sums"
 
 
-# ---------------------------------------------------------------------------
-# 5. Angle CDF comparison (optional)
-# ---------------------------------------------------------------------------
-
-class TestAngleCDFComparison:
-    """Compare angular CDF against CMMC MC CDF."""
-
-    @pytest.fixture(autouse=True)
-    def _require_mc(self):
-        if _cmmc is None:
-            pytest.skip("_compton_matrix_mc not available")
-        if not _cmmc_functional:
-            pytest.skip("_compton_matrix_mc segfaults (pre-existing issue)")
-
-    def test_angle_cdf(self):
-        """Uses 2-group grid for practical runtime with adaptive integration."""
-        T_kev = 10.0
-        T = T_kev * kev_kelvin
-
-        mc_bounds_kev = [1.0, 5.0, 10.0]
-        mc_bounds_erg = [b * kev for b in mc_bounds_kev]
-        G = len(mc_bounds_erg) - 1
-        centers = [math.sqrt(mc_bounds_erg[i] * mc_bounds_erg[i + 1]) for i in range(G)]
-
-        NUM_ANGLE_BINS = _cmmc.ComptonMatrixMC.NUM_ANGLE_BINS
-
-        mc = _cmmc.ComptonMatrixMC(
-            energy_groups_centers=centers,
-            energy_groups_boundaries=mc_bounds_erg,
-            num_of_samples=500000,
-            force_detailed_balance=False,
-            seed=42)
-
-        mc.set_tables(temperature_grid=[T * 0.9, T, T * 1.1])
-
-        mg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=mc_bounds_erg,
-            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
-        S_det = mg.compute_sigma_matrix(
-            KERNEL, num_angle_bins=NUM_ANGLE_BINS, T=T, Ne=1.0)
-
-        max_cdf_diffs = []
-        for g0 in range(G):
-            for g in range(G):
-                row = S_det[g0, g, :]
-                total = row.sum()
-                if total < 1e-35:
-                    continue
-
-                cdf_det = np.zeros(NUM_ANGLE_BINS + 1)
-                cdf_det[1:] = np.cumsum(row) / total
-                cdf_det[-1] = 1.0
-
-                cdf_mc = np.array(mc.get_angle_cdf(temperature=T, g0=g0, g=g))
-
-                max_cdf_diffs.append(np.max(np.abs(cdf_det - cdf_mc)))
-
-        if not max_cdf_diffs:
-            pytest.skip("no significant transitions")
-
-        median_diff = np.median(max_cdf_diffs)
-        assert median_diff < 0.15, (
-            f"median max CDF diff = {median_diff:.3f}")
-
 
 # ---------------------------------------------------------------------------
-# 6. Group cutoff (outward-from-peak early termination)
+# 5. Group cutoff (outward-from-peak early termination)
 # ---------------------------------------------------------------------------
 
 class TestGroupCutoff:
