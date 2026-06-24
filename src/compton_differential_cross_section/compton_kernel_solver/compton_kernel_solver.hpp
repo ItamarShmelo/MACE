@@ -17,9 +17,8 @@
  *   Power series regime (tau_alpha_max >= threshold, or fallthrough):
  *     P1. Power series (double) -- accepted if self-error < power_series_self_tol
  *         and (for sigma_E) non-negative.  Only outside asymptotic regime.
- *     P2. Power series (DD) -- accepted if self-error < power_series_self_tol
+ *     P2. Power series (DD, n_max=500) -- accepted if self-error < power_series_self_tol
  *         and (for sigma_E) non-negative.
- *     P3. Asymptotic DD (last resort) -- skipped if already tried in A2.
  *
  *   Returns best-seen result if error < 1e-3; throws otherwise.
  *

@@ -152,13 +152,25 @@ Power series regime (tau_alpha_max >= 0.035, or fallthrough):
     P1: try Power series (double) -- only outside asymptotic regime
         accept if self-error < power_series_self_tol (1e-7)
         AND (dsigma_dT or value >= 0).
-    P2: try Power series (DD)
+    P2: try Power series (DD, n_max=500)
         accept if self-error < power_series_self_tol
         AND (dsigma_dT or value >= 0).
-    P3: try Asymptotic DD (last resort) -- skip if already tried in A2.
 
 Return best-seen result if error < 1e-3; throw otherwise.
 ```
+
+**P3 removal and n_max increase.**  The previous dispatch included a P3 step
+that tried the asymptotic DD series as a last resort in the power-series regime.
+Analysis showed that at ultra-low $\gamma$ (< $10^{-6}$) the DD power series
+with the default `n_max=200` converged prematurely due to extreme cancellation
+in P+ − P−, reporting self-error just above $10^{-3}$.  The asymptotic DD
+happened to pass because it is geometrically accurate when $\gamma \to 0$
+(its expansion parameter $\tau\alpha$ is gamma-independent).  However, raising
+`n_max` to 500 allows the DD power series to converge properly at these points
+(reaching the DD roundoff floor of ~$10^{-6}$), eliminating the need for P3.
+This is preferable because the asymptotic series is a divergent expansion and
+its self-reported error is not a reliable bound outside its intended regime
+($\tau\alpha < 0.035$).
 
 **Error-driven DD escalation.**  The previous dispatch used a hard-coded
 $\gamma_{\min}$ threshold to decide when DD arithmetic was needed in the

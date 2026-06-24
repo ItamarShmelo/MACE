@@ -454,8 +454,7 @@ Asymptotic regime (tau_alpha_max < 0.035):
 
 Power series regime (tau_alpha_max >= 0.035, or fallthrough):
     P1: PowerSeries (double)         -- accept if rel_error < 1e-7 and non-negative
-    P2: PowerSeries (DD)             -- accept if rel_error < 1e-7 and non-negative
-    P3: AsymptoticSeries DD (last resort, skip if tried in A2)
+    P2: PowerSeries (DD, n_max=500)  -- accept if rel_error < 1e-7 and non-negative
 
 Return best-seen if error < 1e-3; raise otherwise.
 ```

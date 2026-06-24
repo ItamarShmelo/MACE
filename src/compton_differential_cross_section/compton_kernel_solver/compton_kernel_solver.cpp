@@ -15,7 +15,7 @@ ComptonKernelSolver::ComptonKernelSolver(
     , asymp_series_(false)
     , asymp_series_dd_(true)
     , power_series_(false)
-    , power_series_dd_(true)
+    , power_series_dd_(true, 1e-8, 4, 500)
 {}
 
 namespace {
@@ -49,7 +49,6 @@ ComptonResult ComptonKernelSolver::dispatch(
 
     ComptonResult best;
     double best_err = std::numeric_limits<double>::infinity();
-    bool tried_asymp_dd = false;
 
     auto update_best = [&](ComptonResult const& r) {
         if (r.estimated_rel_error < best_err) {
@@ -69,7 +68,6 @@ ComptonResult ComptonKernelSolver::dispatch(
         } catch (...) {}
 
         // A2: DD asymptotic
-        tried_asymp_dd = true;
         try {
             auto const r = eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T, Ne);
             if (r.estimated_rel_error < asymp_self_tol_)
@@ -99,14 +97,6 @@ ComptonResult ComptonKernelSolver::dispatch(
             return r;
         update_best(r);
     } catch (...) {}
-
-    // P3: DD asymptotic last resort (skip if already tried in A2)
-    if (!tried_asymp_dd) {
-        try {
-            auto const r = eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T, Ne);
-            update_best(r);
-        } catch (...) {}
-    }
 
     if (best_err < 1e-3)
         return best;

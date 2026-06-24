@@ -37,7 +37,7 @@ public:
         bool high_precision = false,
         double eps_rel = 1e-8,
         int n_min = 4,
-        int n_max = 200);
+        int n_max = 500);
 
     /**
      * @brief Evaluate Σ_E(E → E', ξ; T, Nₑ) using the power series.

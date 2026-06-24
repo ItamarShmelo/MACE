@@ -23,7 +23,7 @@ PYBIND11_MODULE(_compton_differential_cross_section, m) {
              "high_precision"_a = false,
              "eps_rel"_a = 1e-8,
              "n_min"_a = 4,
-             "n_max"_a = 200)
+             "n_max"_a = 500)
         .def("sigma_E", &ComptonPowerSeries::sigma_E,
              "E"_a, "E_prime"_a, "xi"_a,
              "T"_a, "Ne"_a)
