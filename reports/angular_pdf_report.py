@@ -91,17 +91,17 @@ def compute_angular_pdf(T):
         weight_function=cm.PlanckWeightFunction(cap_x=25.0),
         quad_order_E=QUAD_ORDER,
         quad_order_Ep=QUAD_ORDER,
-        quad_order_mu=QUAD_ORDER,
+        xi_order=QUAD_ORDER,
     )
 
     S_3d = mg.compute_sigma_matrix(
         kernel, num_angle_bins=NUM_ANGLE_BINS, T=T, Ne=1.0)
 
-    delta_mu = 2.0 / NUM_ANGLE_BINS
-    mu_centers = np.linspace(-1 + delta_mu / 2, 1 - delta_mu / 2, NUM_ANGLE_BINS)
-    mu_edges = np.linspace(-1, 1, NUM_ANGLE_BINS + 1)
+    delta_xi = 2.0 / NUM_ANGLE_BINS
+    xi_centers = np.linspace(-1 + delta_xi / 2, 1 - delta_xi / 2, NUM_ANGLE_BINS)
+    xi_edges = np.linspace(-1, 1, NUM_ANGLE_BINS + 1)
 
-    return S_3d, mu_centers, mu_edges, delta_mu
+    return S_3d, xi_centers, xi_edges, delta_xi
 
 
 # ─── Report ───────────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ def generate_temperature_section(T_kev, fig_name):
     emit()
 
     print(f"Computing multiangle sigma matrix for T = {T_kev} keV...")
-    S_3d, mu_centers, mu_edges, delta_mu = compute_angular_pdf(T)
+    S_3d, xi_centers, xi_edges, delta_xi = compute_angular_pdf(T)
     print("Done.")
 
     # ── CMMC Monte Carlo reference ──────────────────────────────────────────
@@ -186,8 +186,8 @@ def generate_temperature_section(T_kev, fig_name):
         emit(f'- Total cross section (sum over bins): {sigma_total:.6e} cm²')
         emit(f'- Peak PDF value: {pdf.max():.4f} '
              f'(x = {bin_centers[peak_idx]:.3f})')
-        emit(f'- Corresponding μ ∈ [{mu_edges[peak_idx]:.3f}, '
-             f'{mu_edges[peak_idx+1]:.3f}]')
+        emit(f'- Corresponding ξ ∈ [{xi_edges[peak_idx]:.3f}, '
+             f'{xi_edges[peak_idx+1]:.3f}]')
         emit()
 
     fig.suptitle(f'Angular PDF — T = {T_kev} keV, Series kernel, N = {QUAD_ORDER}',

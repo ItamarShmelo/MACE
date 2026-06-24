@@ -77,13 +77,13 @@ Compton scattering matrix by numerically integrating the point-wise kernel over
 energy groups and angle bins:
 
 $$
-\sigma(g \to g', [\mu_i, \mu_{i+1}]; T)
-= \frac{2\pi \int_{\Delta E_g} \int_{\Delta E_{g'}} \int_{\mu_i}^{\mu_{i+1}}
-        w(E,T)\, \Sigma_E(E, E', \mu)\; d\mu\, dE'\, dE}
+\sigma(g \to g', [\xi_i, \xi_{i+1}]; T)
+= \frac{2\pi \int_{\Delta E_g} \int_{\Delta E_{g'}} \int_{\xi_i}^{\xi_{i+1}}
+        w(E,T)\, \Sigma_E(E, E', \xi)\; d\xi\, dE'\, dE}
        {\int_{\Delta E_g} w(E,T)\, dE}
 $$
 
-The $2\pi$ factor accounts for azimuthal symmetry ($d\Omega = 2\pi\, d\mu$).
+The $2\pi$ factor accounts for azimuthal symmetry ($d\Omega = 2\pi\, d\xi$).
 
 **Weight function.** The weighting function $w(E,T)$ is user-selectable via
 the `weight_function` constructor argument.

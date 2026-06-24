@@ -201,7 +201,7 @@ def section_multigroup_timing():
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=wf,
-            quad_order_E=16, quad_order_Ep=16, quad_order_mu=16)
+            quad_order_E=16, quad_order_Ep=16, xi_order=16)
 
         log(f'  T={T_kev} keV...')
         t0 = time.perf_counter()

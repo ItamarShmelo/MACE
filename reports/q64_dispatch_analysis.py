@@ -496,14 +496,14 @@ def section_recommendation(sig_nz, dsig_nz):
         T_val = T_kev * kev_kelvin
         mg1 = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds, weight_function=wf,
-            quad_order_E=16, quad_order_Ep=16, quad_order_mu=16)
+            quad_order_E=16, quad_order_Ep=16, xi_order=16)
         t0 = time.perf_counter()
         mg1.compute_sigma_matrix(kernel_solver, num_angle_bins=16, T=T_val, Ne=1.0)
         dt_s = time.perf_counter() - t0
 
         mg2 = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds, weight_function=wf,
-            quad_order_E=16, quad_order_Ep=16, quad_order_mu=16)
+            quad_order_E=16, quad_order_Ep=16, xi_order=16)
         t0 = time.perf_counter()
         mg2.compute_sigma_matrix(kernel_q, num_angle_bins=16, T=T_val, Ne=1.0)
         dt_q = time.perf_counter() - t0

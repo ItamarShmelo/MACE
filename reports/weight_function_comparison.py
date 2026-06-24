@@ -63,7 +63,7 @@ def _build_mg(wf):
         weight_function=wf,
         quad_order_E=QUAD_ORDER,
         quad_order_Ep=QUAD_ORDER,
-        quad_order_mu=QUAD_ORDER)
+        xi_order=QUAD_ORDER)
 
 
 def _rel_diff(S, S_ref):

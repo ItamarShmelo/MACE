@@ -157,28 +157,28 @@ class TestPeakLimits:
     """Validate peak_limits and backward-compat cold_recoil_lo/hi bindings."""
 
     def test_forward_scatter_identity(self):
-        """At mu=1 (forward scatter), E'=E (no energy change)."""
+        """At xi=1 (forward scatter), E'=E (no energy change)."""
         for E_kev in [0.1, 1.0, 10.0, 100.0]:
             E_erg = E_kev * kev
             assert cm.cold_recoil_hi(E_erg, 1.0) == pytest.approx(E_erg, rel=1e-12)
 
     def test_backscatter_formula(self):
-        """At mu=-1 (backscatter), E' = E/(1+2*gamma)."""
+        """At xi=-1 (backscatter), E' = E/(1+2*gamma)."""
         for E_kev in [1.0, 10.0, 100.0, 511.0]:
             E_erg = E_kev * kev
             gamma = E_kev / 511.0
             expected = E_erg / (1.0 + 2.0 * gamma)
             assert cm.cold_recoil_lo(E_erg, -1.0) == pytest.approx(expected, rel=1e-10)
 
-    def test_monotonic_in_mu(self):
-        """cold_recoil is monotonically increasing in mu."""
+    def test_monotonic_in_xi(self):
+        """cold_recoil is monotonically increasing in xi."""
         E_erg = 10.0 * kev
-        mus = np.linspace(-1, 1, 20)
-        vals = [cm.cold_recoil_lo(E_erg, mu) for mu in mus]
+        xis = np.linspace(-1, 1, 20)
+        vals = [cm.cold_recoil_lo(E_erg, xi) for xi in xis]
         assert all(vals[i] <= vals[i+1] for i in range(len(vals)-1))
 
     def test_band_contains_E_for_full_range(self):
-        """For mu in [-1, 1], the band is [E/(1+2*gamma), E]."""
+        """For xi in [-1, 1], the band is [E/(1+2*gamma), E]."""
         for E_kev in [0.1, 1.0, 50.0, 300.0]:
             E_erg = E_kev * kev
             lo = cm.cold_recoil_lo(E_erg, -1.0)

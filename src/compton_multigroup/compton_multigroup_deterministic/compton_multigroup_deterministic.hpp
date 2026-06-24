@@ -11,14 +11,14 @@
  * Given the point-wise differential scattering kernel Σ_E(E→E', ξ; T, Nₑ),
  * this module computes the multigroup-multiangle cross section:
  *
- *     σ(g→g', [μᵢ,μᵢ₊₁]; T) =
- *         2π ∫_{ΔEg} ∫_{ΔEg'} ∫_{μᵢ}^{μᵢ₊₁} w(E,T) Σ_E dμ dE' dE
+ *     σ(g→g', [ξᵢ,ξᵢ₊₁]; T) =
+ *         2π ∫_{ΔEg} ∫_{ΔEg'} ∫_{ξᵢ}^{ξᵢ₊₁} w(E,T) Σ_E dξ dE' dE
  *         ─────────────────────────────────────────────────────────────
  *                        ∫_{ΔEg} w(E,T) dE
  *
  * where the weight function w(E, T),
  *
- * The 2π factor accounts for azimuthal symmetry (dΩ = 2π dμ), ensuring
+ * The 2π factor accounts for azimuthal symmetry (dΩ = 2π dξ), ensuring
  * that summing over all angle bins gives the total group-to-group cross
  * section, consistent with the CMMC Monte Carlo convention.
  *
@@ -27,7 +27,7 @@
  * Angle bins divide [−1, 1] into N equal segments of width 2/N.
  *
  * The numerator is evaluated by tensor-product Gauss-Legendre quadrature
- * over the three finite intervals (E, E', μ).  The denominator is computed
+ * over the three finite intervals (E, E', ξ).  The denominator is computed
  * by the weight function.
  *
  * ─────────────────────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@
  * - Energy group boundaries are in [erg].
  * - Temperature T is in [K], electron density Nₑ in [cm⁻³].
  * - The returned matrix entries have units [cm²] (Nₑ=1) or [1/cm].
- * - Angle-integrated overloads (no num_angle_bins) integrate μ over [−1,1].
+ * - Angle-integrated overloads (no num_angle_bins) integrate ξ over [−1,1].
  *
  * The dsigma_dT variants plug the derivative kernel ∂Σ_E/∂T into the same
  * weighted-integral formula.  They are NOT the full ∂σ/∂T of the multigroup
@@ -69,7 +69,7 @@ namespace compton {
 
 namespace constants {
 /// Temperature [K] below which the multigroup integrator switches to
-/// cold_temperature_order for the E and mu axes (0.005 keV).
+/// cold_temperature_order for the E and ξ axes (0.005 keV).
 constexpr double COLD_TEMPERATURE_THRESHOLD = 0.005 * units::kev_kelvin;
 } // namespace constants
 
@@ -89,17 +89,17 @@ struct FlatEpConfig {
     int max_points;
     FlatEpDensityMode mode;
     bool flat_E;
-    bool flat_mu;
+    bool flat_xi;
 
     FlatEpConfig(double density = 64.0,
                  int min_points = 8,
                  int max_points = 1024,
                  FlatEpDensityMode mode = FlatEpDensityMode::points_per_decade,
                  bool flat_E = true,
-                 bool flat_mu = true)
+                 bool flat_xi = true)
         : density(density), min_points(min_points),
           max_points(max_points), mode(mode),
-          flat_E(flat_E), flat_mu(flat_mu) {}
+          flat_E(flat_E), flat_xi(flat_xi) {}
 };
 
 /**
@@ -116,10 +116,10 @@ struct MGIntegrationConfig {
     int peak_max_depth;
     std::optional<int> tail_order;
     std::optional<int> far_order;
-    std::optional<int> mu_order;
+    std::optional<int> xi_order;
     double integration_tolerance;
     double cutoff_ratio;
-    double mu_peak_k;
+    double xi_peak_k;
     std::optional<FlatEpConfig> flat_ep;
 
     /**
@@ -129,11 +129,11 @@ struct MGIntegrationConfig {
      * @param integration_tolerance   Overall relative tolerance for the outer integral.
      * @param cutoff_ratio            Outward-from-peak early-termination ratio.
      * @param peak_max_depth          Maximum recursion depth for adaptive E' peak.
-     * @param cold_temperature_order  GL order for E/mu when T < COLD_TEMPERATURE_THRESHOLD.
+     * @param cold_temperature_order  GL order for E/ξ when T < COLD_TEMPERATURE_THRESHOLD.
      * @param tail_order              GL order for E' tail regions (defaults to base_order).
      * @param far_order               GL order for E' far-from-peak regions (defaults to base_order).
-     * @param mu_order                GL order for the μ axis (defaults to base_order).
-     * @param mu_peak_k               Number of FWHMs for mu peak-focused splitting window.
+     * @param xi_order                GL order for the ξ axis (defaults to base_order).
+     * @param xi_peak_k               Number of FWHMs for ξ peak-focused splitting window.
      * @param flat_ep                 Optional flat E' density config (disables adaptive E' recursion).
      * @throws std::invalid_argument on invalid parameters.
      */
@@ -145,8 +145,8 @@ struct MGIntegrationConfig {
         int cold_temperature_order = 48,
         std::optional<int> tail_order = std::nullopt,
         std::optional<int> far_order = std::nullopt,
-        std::optional<int> mu_order = std::nullopt,
-        double mu_peak_k = 10.0,
+        std::optional<int> xi_order = std::nullopt,
+        double xi_peak_k = 10.0,
         std::optional<FlatEpConfig> flat_ep = std::nullopt);
 
     /** @brief Effective tail GL order (tail_order if set, otherwise base_order). */
@@ -155,13 +155,13 @@ struct MGIntegrationConfig {
     /** @brief Effective far GL order (far_order if set, otherwise base_order). */
     int effective_far_order() const { return far_order.value_or(base_order); }
 
-    /** @brief Effective μ GL order (mu_order if set, otherwise base_order). */
-    int effective_mu_order() const { return mu_order.value_or(base_order); }
+    /** @brief Effective ξ GL order (xi_order if set, otherwise base_order). */
+    int effective_xi_order() const { return xi_order.value_or(base_order); }
 
     /**
      * @brief High-accuracy adaptive config for cold temperatures (T < 0.1 keV).
      *
-     * bo=192, pd=9, mu_order=512, mu_peak_k=10, tol=1e-8.
+     * bo=192, pd=9, xi_order=512, xi_peak_k=10, tol=1e-8.
      * Achieves < 1e-4 row-sum accuracy (MC-noise limited at N=1e9).
      * Runtime: ~600-1300s per matrix depending on temperature.
      */
@@ -174,8 +174,8 @@ struct MGIntegrationConfig {
     /**
      * @brief High-accuracy flat E' config for warm temperatures (T >= 0.1 keV).
      *
-     * bo=96, mu_order=96, mu_peak_k=10, flat_ep(d=512, ppd, max=8192).
-     * flat_E=false, flat_mu=false (keeps boundary layers and peak-focused mu).
+     * bo=96, xi_order=96, xi_peak_k=10, flat_ep(d=512, ppd, max=8192).
+     * flat_E=false, flat_xi=false (keeps boundary layers and peak-focused ξ).
      * Achieves < 1e-4 row-sum accuracy at T >= 1 keV.
      * Runtime: ~30-120s per matrix depending on temperature.
      */
@@ -190,7 +190,7 @@ struct MGIntegrationConfig {
 /**
  * @brief Abstract base for kernel multipliers.
  *
- * A kernel multiplier f(E, E', mu, T, Ne) is an extra factor that multiplies
+ * A kernel multiplier f(E, E', ξ, T, Ne) is an extra factor that multiplies
  * the differential scattering kernel pointwise inside the multigroup integral.
  * The result is *not* normalised by the integral of f itself, so it behaves
  * like an observable averaged against the scattering distribution.
@@ -198,7 +198,7 @@ struct MGIntegrationConfig {
 class KernelMultiplier {
 public:
     virtual ~KernelMultiplier() = default;
-    virtual double operator()(double E, double Ep, double mu, double T, double Ne) const = 0;
+    virtual double operator()(double E, double Ep, double xi, double T, double Ne) const = 0;
 };
 
 /**
@@ -221,7 +221,7 @@ public:
  *
  * The 3D integral is evaluated adaptively: each axis recursively bisects
  * until the relative error estimate is below its tolerance.  Inner axes
- * use progressively tighter tolerances (E: tol, E': tol*0.1, mu: tol*0.01).
+ * use progressively tighter tolerances (E: tol, E': tol*0.1, ξ: tol*0.01).
  */
 class ComptonMultigroupKernel {
 public:
@@ -296,11 +296,11 @@ private:
      * **Tolerance hierarchy** (set once here and forwarded):
      *   - E  axis:  integration_tolerance_
      *   - E' axis:  integration_tolerance_ × 0.1
-     *   - μ  axis:  integration_tolerance_ × 0.01
+     *   - ξ  axis:  integration_tolerance_ × 0.01
      *
      * @param kernel         Point-wise kernel evaluator.
      * @param eval           Pointer-to-member: sigma_E or dsigma_E_dT.
-     * @param num_angle_bins Number of equal-width μ bins on [−1, 1].
+     * @param num_angle_bins Number of equal-width ξ bins on [−1, 1].
      * @param T              Electron temperature [K].
      * @param Ne             Electron density [cm⁻³].
      * @param multiplier     Optional pointwise factor applied inside the integrand.
@@ -322,14 +322,14 @@ private:
      * method evaluates the weighted 3D integral
      *
      *     S(g, gp, a) = 2π / D(g) ∫_{E_lo}^{E_hi} w(E,T)
-     *                   ∫_{Ep_lo}^{Ep_hi} ∫_{mu_lo}^{mu_hi}
-     *                   f(E,E',μ) · Σ_E(E,E',μ,T,Ne) dμ dE' dE
+     *                   ∫_{Ep_lo}^{Ep_hi} ∫_{xi_lo}^{xi_hi}
+     *                   f(E,E',ξ) · Σ_E(E,E',ξ,T,Ne) dξ dE' dE
      *
      * for each angle bin a ∈ [0, num_angle_bins).  Here D(g) is the weight
      * function denominator for group g, and f is the optional multiplier.
      *
      * **Integration strategy (inside-out):**
-     *   1. μ axis  -- adaptive Gauss-Legendre on [mu_lo, mu_hi].
+     *   1. ξ axis  -- adaptive Gauss-Legendre on [xi_lo, xi_hi].
      *   2. E' axis -- peak-aware three-region quadrature (peak / tail / far),
      *                 split around the thermally broadened cold-recoil band
      *                 returned by peak_limits().
@@ -348,13 +348,13 @@ private:
      * @param eval           Pointer-to-member returning ComptonResult.
      * @param g              Incoming energy group index.
      * @param gp             Target (scattered) energy group index.
-     * @param num_angle_bins Number of equal-width μ bins.
-     * @param dmu            Bin width: 2 / num_angle_bins.
+     * @param num_angle_bins Number of equal-width ξ bins.
+     * @param dxi            Bin width: 2 / num_angle_bins.
      * @param T              Electron temperature [K].
      * @param Ne             Electron density [cm⁻³].
      * @param peak_tol       Tolerance for adaptive E' integration inside the recoil band.
      * @param inv_denom      1 / D(g), precomputed weight-function denominator.
-     * @param multiplier     Pointwise factor f(E, E', μ, T, Ne).
+     * @param multiplier     Pointwise factor f(E, E', ξ, T, Ne).
      * @param[in,out] result Flat output vector; entries at the (g, gp, a)
      *                       positions are written (row-major layout).
      */
@@ -364,14 +364,14 @@ private:
         int g,
         int gp,
         int num_angle_bins,
-        double dmu,
+        double dxi,
         double T,
         double Ne,
         double peak_tol,
         double inv_denom,
         KernelMultiplier const& multiplier,
         GaussLegendreRule const& active_rule,
-        GaussLegendreRule const& active_mu_rule,
+        GaussLegendreRule const& active_xi_rule,
         std::vector<double>& result) const;
 
     std::vector<double> group_boundaries_;
@@ -388,20 +388,20 @@ private:
     GaussLegendreRule tail_rule_;
     /// GL rule for E' far-from-peak sub-regions.
     GaussLegendreRule far_rule_;
-    /// GL rule for the μ (scattering-angle) axis.
-    GaussLegendreRule mu_rule_;
-    /// GL rule for μ when T < COLD_TEMPERATURE_THRESHOLD.
-    GaussLegendreRule mu_cold_rule_;
-    /// GL rule for μ tails in peak-focused splitting (low order, tails are exponentially small).
-    GaussLegendreRule mu_tail_rule_;
+    /// GL rule for the ξ (scattering-angle) axis.
+    GaussLegendreRule xi_rule_;
+    /// GL rule for ξ when T < COLD_TEMPERATURE_THRESHOLD.
+    GaussLegendreRule xi_cold_rule_;
+    /// GL rule for ξ tails in peak-focused splitting (low order, tails are exponentially small).
+    GaussLegendreRule xi_tail_rule_;
 
     /// Per-group GL rules for flat E' mode (empty when adaptive mode is active).
     std::vector<GaussLegendreRule> flat_ep_rules_;
     bool flat_E_ = false;
-    bool flat_mu_ = false;
+    bool flat_xi_ = false;
 
     double integration_tolerance_;
-    double mu_peak_k_;
+    double xi_peak_k_;
     int peak_max_depth_;
     double group_cutoff_ratio_;
 };
@@ -428,30 +428,30 @@ inline double thermal_half_width(double const E, double const T)
 }
 
 /**
- * @brief E' limits for peak-aware quadrature in an angle bin [mu_lo, mu_hi].
+ * @brief E' limits for peak-aware quadrature in an angle bin [xi_lo, xi_hi].
  *
  * Starts from the cold-electron recoil band:
  *
- *     E'(mu) = E / (1 + gamma * (1 - mu)),    gamma = E / (m_e c^2)
+ *     E'(ξ) = E / (1 + gamma * (1 - ξ)),    gamma = E / (m_e c^2)
  *
  * and extends each edge by thermal_half_width(E, T).
  *
  * @param E     Incoming photon energy [erg].
- * @param mu_lo Lower edge of the mu bin.
- * @param mu_hi Upper edge of the mu bin.
+ * @param xi_lo Lower edge of the ξ bin.
+ * @param xi_hi Upper edge of the ξ bin.
  * @param T     Electron temperature [K].
  * @return      {lo, hi} in [erg], thermally broadened.
  */
 inline std::pair<double, double> peak_limits(
     double const E,
-    double const mu_lo,
-    double const mu_hi,
+    double const xi_lo,
+    double const xi_hi,
     double const T)
 {
     double const gamma = E / units::me_c2;
     double const dE = thermal_half_width(E, T);
-    return {E / (1.0 + gamma * (1.0 - mu_lo)) - dE,
-            E / (1.0 + gamma * (1.0 - mu_hi)) + dE};
+    return {E / (1.0 + gamma * (1.0 - xi_lo)) - dE,
+            E / (1.0 + gamma * (1.0 - xi_hi)) + dE};
 }
 
 } // namespace compton

@@ -14,9 +14,9 @@ namespace compton {
 
 namespace constants {
 static constexpr double LOG_E_RATIO_THRESHOLD = 10.0;
-static constexpr double LOG_MU_EP_RATIO_THRESHOLD = 1.5;
+static constexpr double LOG_XI_EP_RATIO_THRESHOLD = 1.5;
 static constexpr double E_BOUNDARY_LAYER_MULTIPLIER = 10.0;
-static constexpr double MU_PEAK_RATIO_THRESHOLD = 0.05;
+static constexpr double XI_PEAK_RATIO_THRESHOLD = 0.05;
 } // namespace constants
 
 // ── MGIntegrationConfig ─────────────────────────────────────────────────
@@ -29,18 +29,18 @@ MGIntegrationConfig::MGIntegrationConfig(
     int const cold_temperature_order,
     std::optional<int> const tail_order,
     std::optional<int> const far_order,
-    std::optional<int> const mu_order,
-    double const mu_peak_k,
+    std::optional<int> const xi_order,
+    double const xi_peak_k,
     std::optional<FlatEpConfig> const flat_ep)
     : base_order(base_order)
     , cold_temperature_order(cold_temperature_order)
     , peak_max_depth(peak_max_depth)
     , tail_order(tail_order)
     , far_order(far_order)
-    , mu_order(mu_order)
+    , xi_order(xi_order)
     , integration_tolerance(integration_tolerance)
     , cutoff_ratio(cutoff_ratio)
-    , mu_peak_k(mu_peak_k)
+    , xi_peak_k(xi_peak_k)
     , flat_ep(flat_ep)
 {
     if (base_order < 1)
@@ -57,10 +57,10 @@ MGIntegrationConfig::MGIntegrationConfig(
         throw std::invalid_argument("tail_order must be >= 1");
     if (far_order.has_value() && far_order.value() < 1)
         throw std::invalid_argument("far_order must be >= 1");
-    if (mu_order.has_value() && mu_order.value() < 1)
-        throw std::invalid_argument("mu_order must be >= 1");
-    if (!(mu_peak_k > 0.0))
-        throw std::invalid_argument("mu_peak_k must be > 0");
+    if (xi_order.has_value() && xi_order.value() < 1)
+        throw std::invalid_argument("xi_order must be >= 1");
+    if (!(xi_peak_k > 0.0))
+        throw std::invalid_argument("xi_peak_k must be > 0");
     if (flat_ep.has_value()) {
         if (!(flat_ep->density > 0.0))
             throw std::invalid_argument("flat_ep.density must be > 0");
@@ -81,12 +81,12 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
     , cold_rule_(compute_gauss_legendre(config.cold_temperature_order))
     , tail_rule_(compute_gauss_legendre(config.effective_tail_order()))
     , far_rule_(compute_gauss_legendre(config.effective_far_order()))
-    , mu_rule_(compute_gauss_legendre(config.effective_mu_order()))
-    , mu_cold_rule_(compute_gauss_legendre(
-          std::max(config.cold_temperature_order, config.effective_mu_order())))
-    , mu_tail_rule_(compute_gauss_legendre(8))
+    , xi_rule_(compute_gauss_legendre(config.effective_xi_order()))
+    , xi_cold_rule_(compute_gauss_legendre(
+          std::max(config.cold_temperature_order, config.effective_xi_order())))
+    , xi_tail_rule_(compute_gauss_legendre(8))
     , integration_tolerance_(config.integration_tolerance)
-    , mu_peak_k_(config.mu_peak_k)
+    , xi_peak_k_(config.xi_peak_k)
     , peak_max_depth_(config.peak_max_depth)
     , group_cutoff_ratio_(config.cutoff_ratio)
 {
@@ -114,7 +114,7 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
     if (config.flat_ep.has_value()) {
         auto const& cfg = *config.flat_ep;
         flat_E_ = cfg.flat_E;
-        flat_mu_ = cfg.flat_mu;
+        flat_xi_ = cfg.flat_xi;
         double const E_ref = std::sqrt(
             group_boundaries_.front() * group_boundaries_.back());
 
@@ -237,9 +237,9 @@ double integrate_Ep_group(
 // Evaluates the weighted multigroup scattering matrix element for one
 // incoming group g scattering into target group gp, across all angle bins.
 //
-// The integral is three-dimensional (E × E' × μ) and evaluated inside-out:
+// The integral is three-dimensional (E × E' × ξ) and evaluated inside-out:
 //
-//   1. Innermost: μ integral via single-panel Gauss-Legendre over one angle bin.
+//   1. Innermost: ξ integral via single-panel Gauss-Legendre over one angle bin.
 //   2. Middle:    E' integral via peak-aware three-region quadrature.
 //                 The cold-electron recoil band (thermally broadened by
 //                 peak_limits) splits E' into a peak region where the kernel
@@ -256,7 +256,7 @@ double integrate_Ep_group(
 //
 // The final matrix element is:
 //
-//   result[g, gp, a] = 2π / D(g) · ∫ w(E) · [∫∫ f·Σ dμ dE'] dE
+//   result[g, gp, a] = 2π / D(g) · ∫ w(E) · [∫∫ f·Σ dξ dE'] dE
 //
 // Returns Σ_a |result[g, gp, a]| so the caller can apply the
 // outward-from-peak cutoff.
@@ -267,14 +267,14 @@ double ComptonMultigroupKernel::compute_group_entry(
     int const g,
     int const gp,
     int const num_angle_bins,
-    double const dmu,
+    double const dxi,
     double const T,
     double const Ne,
     double const peak_tol,
     double const inv_denom,
     KernelMultiplier const& multiplier,
     GaussLegendreRule const& active_rule,
-    GaussLegendreRule const& active_mu_rule,
+    GaussLegendreRule const& active_xi_rule,
     std::vector<double>& result) const
 {
     int const G = num_groups();
@@ -291,27 +291,27 @@ double ComptonMultigroupKernel::compute_group_entry(
     double group_sum = 0.0;
 
     // --- Loop over angle bins ---
-    // Each bin [mu_lo, mu_hi] is an equal-width slice of [-1, 1].
-    // mu = 1 (xi = 1) is an integrable singularity where a = 1 - xi = 0,
-    // causing division by zero in kinematic parameters.  Clamping the last
-    // bin edge to 1 - MU_UPPER_EPS avoids this; the excluded sliver
+    // Each bin [xi_lo, xi_hi] is an equal-width slice of [-1, 1].
+    // ξ = 1 is an integrable singularity where a = 1 - ξ = 0, causing
+    // division by zero in kinematic parameters.  Clamping the last bin
+    // edge to 1 - XI_UPPER_EPS avoids this; the excluded sliver
     // [1-eps, 1] contributes O(eps / bin_width) ≈ 4e-10 relative error.
-    constexpr double MU_UPPER_EPS = 1e-10;
+    constexpr double XI_UPPER_EPS = 1e-10;
     for (int a = 0; a < num_angle_bins; ++a) {
-        double const mu_lo = -1.0 + a * dmu;
-        double const mu_hi = std::min(-1.0 + (a + 1) * dmu,
-                                      1.0 - MU_UPPER_EPS);
+        double const xi_lo = -1.0 + a * dxi;
+        double const xi_hi = std::min(-1.0 + (a + 1) * dxi,
+                                      1.0 - XI_UPPER_EPS);
 
         // --- E integrand (outermost axis) ---
         // For a given incoming energy E, this lambda computes:
-        //   w(E, T) · ∫_{Ep_lo}^{Ep_hi} ∫_{mu_lo}^{mu_hi} f·Σ dμ dE'
+        //   w(E, T) · ∫_{Ep_lo}^{Ep_hi} ∫_{xi_lo}^{xi_hi} f·Σ dξ dE'
         auto E_integrand = [&](double const E) {
             double const w = weight_func_->weight(E, T);
 
             // Thermally broadened cold-recoil band: the E' interval where
             // the kernel peaks for a cold electron.  Outside this band
             // the kernel is exponentially suppressed ∝ exp(-(λ_min-1)/τ).
-            auto const [band_lo, band_hi] = peak_limits(E, mu_lo, mu_hi, T);
+            auto const [band_lo, band_hi] = peak_limits(E, xi_lo, xi_hi, T);
 
             // --- E' integral (middle axis) ---
             // integrate_Ep_group splits [Ep_lo, Ep_hi] into three regions
@@ -319,68 +319,68 @@ double ComptonMultigroupKernel::compute_group_entry(
             //   peak: adaptive GL
             //   tail: single-panel log/rlog GL
             //   far:  single-panel linear GL
-            auto mu_integrand = [&](double const E_in, double const Ep) {
-                auto f = [&](double const mu) {
-                    return multiplier(E_in, Ep, mu, T, Ne) *
-                           (kernel.*eval)(E_in, Ep, mu, T, Ne).value;
+            auto xi_integrand = [&](double const E_in, double const Ep) {
+                auto f = [&](double const xi) {
+                    return multiplier(E_in, Ep, xi, T, Ne) *
+                           (kernel.*eval)(E_in, Ep, xi, T, Ne).value;
                 };
-                if (flat_mu_) {
-                    return legendre_integrate(f, active_mu_rule, mu_lo, mu_hi);
+                if (flat_xi_) {
+                    return legendre_integrate(f, active_xi_rule, xi_lo, xi_hi);
                 }
 
                 double const r = Ep / E_in;
 
                 // Peak-focused splitting: for non-elastic scatter, compute
                 // the Compton peak location and FWHM. If the peak is narrow
-                // relative to the mu interval, concentrate quadrature there.
-                if (std::abs(r - 1.0) > constants::MU_PEAK_RATIO_THRESHOLD) {
+                // relative to the ξ interval, concentrate quadrature there.
+                if (std::abs(r - 1.0) > constants::XI_PEAK_RATIO_THRESHOLD) {
                     double const gamma = E_in / units::me_c2;
-                    double const mu_c_raw = 1.0 - (1.0 / gamma) * (1.0 / r - 1.0);
-                    double const mu_c = std::clamp(mu_c_raw, mu_lo, mu_hi);
+                    double const xi_c_raw = 1.0 - (1.0 / gamma) * (1.0 / r - 1.0);
+                    double const xi_c = std::clamp(xi_c_raw, xi_lo, xi_hi);
                     double const fwhm = 4.0 * std::sqrt(std::abs(1.0 - r) / r)
                                       * sqrt_tau / std::pow(gamma, 1.5);
-                    double const half_w = mu_peak_k_ * fwhm;
+                    double const half_w = xi_peak_k_ * fwhm;
 
-                    double const peak_lo = std::max(mu_lo, mu_c - half_w);
-                    double const peak_hi = std::min(mu_hi, mu_c + half_w);
+                    double const peak_lo = std::max(xi_lo, xi_c - half_w);
+                    double const peak_hi = std::min(xi_hi, xi_c + half_w);
 
                     if (peak_hi > peak_lo &&
-                        (peak_hi - peak_lo) < 0.8 * (mu_hi - mu_lo)) {
+                        (peak_hi - peak_lo) < 0.8 * (xi_hi - xi_lo)) {
                         double result = legendre_integrate(
-                            f, active_mu_rule, peak_lo, peak_hi);
-                        if (peak_lo > mu_lo)
+                            f, active_xi_rule, peak_lo, peak_hi);
+                        if (peak_lo > xi_lo)
                             result += legendre_integrate(
-                                f, mu_tail_rule_, mu_lo, peak_lo);
-                        if (peak_hi < mu_hi)
+                                f, xi_tail_rule_, xi_lo, peak_lo);
+                        if (peak_hi < xi_hi)
                             result += legendre_integrate(
-                                f, mu_tail_rule_, peak_hi, mu_hi);
+                                f, xi_tail_rule_, peak_hi, xi_hi);
                         return result;
                     }
                 }
 
                 // Fallback: log/rlog mapping for boundary-peaked cases
-                if (r > constants::LOG_MU_EP_RATIO_THRESHOLD) {
-                    double const dmu_span = mu_hi - mu_lo;
-                    double const eps = dmu_span * 1e-14;
+                if (r > constants::LOG_XI_EP_RATIO_THRESHOLD) {
+                    double const dxi_span = xi_hi - xi_lo;
+                    double const eps = dxi_span * 1e-14;
                     return log_legendre_integrate(
-                        [&](double const s) { return f(mu_lo + s); },
-                        active_mu_rule, eps, dmu_span);
+                        [&](double const s) { return f(xi_lo + s); },
+                        active_xi_rule, eps, dxi_span);
                 }
-                if (r < 1.0 / constants::LOG_MU_EP_RATIO_THRESHOLD) {
-                    double const dmu_span = mu_hi - mu_lo;
-                    double const eps = dmu_span * 1e-14;
+                if (r < 1.0 / constants::LOG_XI_EP_RATIO_THRESHOLD) {
+                    double const dxi_span = xi_hi - xi_lo;
+                    double const eps = dxi_span * 1e-14;
                     return log_legendre_integrate(
-                        [&](double const s) { return f(mu_hi - s); },
-                        active_mu_rule, eps, dmu_span);
+                        [&](double const s) { return f(xi_hi - s); },
+                        active_xi_rule, eps, dxi_span);
                 }
 
-                return legendre_integrate(f, active_mu_rule, mu_lo, mu_hi);
+                return legendre_integrate(f, active_xi_rule, xi_lo, xi_hi);
             };
 
             double inner;
             if (!flat_ep_rules_.empty()) {
                 auto ep_integrand = [&](double const Ep) {
-                    return mu_integrand(E, Ep);
+                    return xi_integrand(E, Ep);
                 };
                 GaussLegendreRule const& ep_rule = flat_ep_rules_[gp];
                 if (band_hi <= Ep_lo) {
@@ -393,7 +393,7 @@ double ComptonMultigroupKernel::compute_group_entry(
             } else {
                 inner = integrate_Ep_group(
                     [&](double const Ep) {
-                        return mu_integrand(E, Ep);
+                        return xi_integrand(E, Ep);
                     },
                     Ep_lo, Ep_hi, band_lo, band_hi,
                     active_rule, peak_tol, peak_max_depth_,
@@ -504,7 +504,7 @@ double ComptonMultigroupKernel::compute_group_entry(
 //
 // Adaptive refinement is used only for the E' peak region:
 //   peak_tol = integration_tolerance_ * 0.1
-// All other axes (E, mu, tail, far) use single-panel GL quadrature
+// All other axes (E, ξ, tail, far) use single-panel GL quadrature
 // whose accuracy is controlled by increasing base_order.
 
 std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
@@ -525,8 +525,8 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     std::vector<double> result(
         static_cast<std::size_t>(G) * G * num_angle_bins, 0.0);
 
-    // Uniform angle-bin width: μ ∈ [-1, 1] split into num_angle_bins slices.
-    double const dmu = 2.0 / static_cast<double>(num_angle_bins);
+    // Uniform angle-bin width: ξ ∈ [-1, 1] split into num_angle_bins slices.
+    double const dxi = 2.0 / static_cast<double>(num_angle_bins);
 
     // --- Weight-function denominators ---
     // D(g) = ∫_{E_lo}^{E_hi} w(E, T) dE normalises each row of the matrix
@@ -539,15 +539,15 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
 
     // --- Peak tolerance ---
     // Only the E' peak region uses adaptive refinement; all other axes
-    // (E, mu, tail, far) use single-panel GL quadrature.
+    // (E, ξ, tail, far) use single-panel GL quadrature.
     double const peak_tol = integration_tolerance_ * 0.1;
 
     // --- Cold-temperature rule selection ---
     // Below the threshold the kernel is extremely sharp (near-Thomson);
-    // a higher-order rule is needed for the E and mu axes.
+    // a higher-order rule is needed for the E and ξ axes.
     bool const is_cold = T < constants::COLD_TEMPERATURE_THRESHOLD;
     GaussLegendreRule const& active_rule = is_cold ? cold_rule_ : base_rule_;
-    GaussLegendreRule const& active_mu_rule = is_cold ? mu_cold_rule_ : mu_rule_;
+    GaussLegendreRule const& active_xi_rule = is_cold ? xi_cold_rule_ : xi_rule_;
 
     auto const wall_t0 = std::chrono::steady_clock::now();
     std::FILE* log_file = std::fopen("compton_multigroup.log", "a");
@@ -566,9 +566,9 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
 
         auto do_group = [&](int const gp) {
             return compute_group_entry(
-                kernel, eval, g, gp, num_angle_bins, dmu,
+                kernel, eval, g, gp, num_angle_bins, dxi,
                 T, Ne, peak_tol,
-                inv_denom, multiplier, active_rule, active_mu_rule, result);
+                inv_denom, multiplier, active_rule, active_xi_rule, result);
         };
 
         // --- Outward-from-peak target-group traversal ---

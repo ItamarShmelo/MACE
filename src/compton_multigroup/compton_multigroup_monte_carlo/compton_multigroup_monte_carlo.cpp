@@ -202,14 +202,14 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
             Omega_tag_x * sin_e + Omega_tag_z * mu_e;
         double const D_tag = lam * (1.0 + beta * dot_Omega_tag_e);
 
-        double mu_scat_lab =
+        double xi_scat_lab =
             (Omega_tag_z +
              ((lam - 1.0) * dot_Omega_tag_e + lam * beta) * mu_e) /
             D_tag;
-        mu_scat_lab = std::clamp(mu_scat_lab, -1.0, 1.0);
+        xi_scat_lab = std::clamp(xi_scat_lab, -1.0, 1.0);
 
         int const angle_bin = std::min(
-            static_cast<int>((mu_scat_lab + 1.0) * 0.5 * num_angle_bins),
+            static_cast<int>((xi_scat_lab + 1.0) * 0.5 * num_angle_bins),
             num_angle_bins - 1);
 
         // Step 8: loop over incoming energy groups
@@ -247,7 +247,7 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
                 w_E0 * beta;
 
             double const mult =
-                multiplier_fn(E0, E, mu_scat_lab, T, Ne, lam);
+                multiplier_fn(E0, E, xi_scat_lab, T, Ne, lam);
 
             std::size_t const idx =
                 static_cast<std::size_t>(g0) * G * num_angle_bins +
@@ -300,8 +300,8 @@ std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
     KernelMultiplier const& multiplier) const
 {
     return mc_integrate(num_angle_bins, T, Ne,
-        [&](double E0, double E, double mu, double Tv, double Nev, double) {
-            return multiplier(E0, E, mu, Tv, Nev);
+        [&](double E0, double E, double xi, double Tv, double Nev, double) {
+            return multiplier(E0, E, xi, Tv, Nev);
         });
 }
 
@@ -326,9 +326,9 @@ std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
 
     return mc_integrate(num_angle_bins, T, Ne,
         [&, kappa_val, tau2, dtau_dT](
-            double E0, double E, double mu,
+            double E0, double E, double xi,
             double Tv, double Nev, double lam) {
-            return multiplier(E0, E, mu, Tv, Nev)
+            return multiplier(E0, E, xi, Tv, Nev)
                  * ((lam - kappa_val) / tau2 - 3.0 / tau) * dtau_dT;
         });
 }

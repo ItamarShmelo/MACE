@@ -5,7 +5,7 @@
 # Submits 24 independent worker tasks + 1 dependent collect job.
 # Task mapping:  0-17 = sigma (6 temps x 3 grids)
 #                18-20 = derivative (3 temps)
-#                21-23 = mu profiles (3 temps)
+#                21-23 = xi profiles (3 temps)
 #
 # Usage:  bash reports/run_multigroup_validation.sh
 #

@@ -62,8 +62,8 @@ ELEM_SIGMA_TOL = 3.0
 DERIV_ROW_SUM_SIGMA_TOL = 3.0
 
 PROFILE_GRID = "medium_10g"
-MU_PROFILE_GRID = "coarse_4g"
-MU_PROFILE_TEMPS_KEV = [0.1, 10.0, 100.0]
+XI_PROFILE_GRID = "coarse_4g"
+XI_PROFILE_TEMPS_KEV = [0.1, 10.0, 100.0]
 
 RESULTS_DIR = os.path.join(ROOT, "reports", "generated", "results")
 
@@ -72,7 +72,7 @@ def build_task_list():
     """Build flat task list for SLURM array dispatch.
 
     Returns list of (task_type, T_kev, grid_name) tuples.
-    Index ranges: 0..17 sigma, 18..20 deriv, 21..23 mu.
+    Index ranges: 0..17 sigma, 18..20 deriv, 21..23 xi.
     """
     tasks = []
     for T_kev in TEMPERATURES_KEV:
@@ -80,8 +80,8 @@ def build_task_list():
             tasks.append(("sigma", T_kev, grid_name))
     for T_kev in DERIV_TEMPS_KEV:
         tasks.append(("deriv", T_kev, DERIV_GRID))
-    for T_kev in MU_PROFILE_TEMPS_KEV:
-        tasks.append(("mu", T_kev, MU_PROFILE_GRID))
+    for T_kev in XI_PROFILE_TEMPS_KEV:
+        tasks.append(("xi", T_kev, XI_PROFILE_GRID))
     return tasks
 
 
@@ -91,7 +91,7 @@ def get_det_config(T_kev):
         return cm.MGIntegrationConfig(
             base_order=48,
             peak_max_depth=7,
-            mu_order=96,
+            xi_order=96,
             integration_tolerance=1e-6,
             cutoff_ratio=1e-10,
             cold_temperature_order=48,
@@ -297,20 +297,20 @@ def plot_ep_profiles(results_with_matrices, figs_dir):
     return paths
 
 
-def plot_mu_profiles(figs_dir):
-    """Plot angular (mu) scattering profiles for representative cases.
+def plot_xi_profiles(figs_dir):
+    """Plot angular (xi) scattering profiles for representative cases.
 
-    Computes multiangle matrices on the MU_PROFILE_GRID and plots
+    Computes multiangle matrices on the XI_PROFILE_GRID and plots
     the angular distribution for selected (g, g') pairs.
     """
-    bounds_kev = GRIDS[MU_PROFILE_GRID]
+    bounds_kev = GRIDS[XI_PROFILE_GRID]
     G = len(bounds_kev) - 1
     centers = group_centers_kev(bounds_kev)
-    mu_edges = np.linspace(-1, 1, NUM_ANGLE_BINS + 1)
-    mu_centers = 0.5 * (mu_edges[:-1] + mu_edges[1:])
+    xi_edges = np.linspace(-1, 1, NUM_ANGLE_BINS + 1)
+    xi_centers = 0.5 * (xi_edges[:-1] + xi_edges[1:])
 
     paths = []
-    for T_kev in MU_PROFILE_TEMPS_KEV:
+    for T_kev in XI_PROFILE_TEMPS_KEV:
         T_K = T_kev * kev_kelvin
         config = get_det_config(T_kev)
 
@@ -327,27 +327,27 @@ def plot_mu_profiles(figs_dir):
         fig, axes = plt.subplots(1, len(g_in_indices), figsize=(5 * len(g_in_indices), 4))
         if len(g_in_indices) == 1:
             axes = [axes]
-        fig.suptitle(f"mu profile: det vs MC ({len(MC_SEEDS)} seeds) — T = {T_kev:.3g} keV, {MU_PROFILE_GRID}",
+        fig.suptitle(f"xi profile: det vs MC ({len(MC_SEEDS)} seeds) — T = {T_kev:.3g} keV, {XI_PROFILE_GRID}",
                      fontsize=13)
 
         for ax, gi in zip(axes, g_in_indices):
             gp = int(np.argmax(np.abs(S_det_3d[gi, :, :]).sum(axis=-1)))
-            det_mu = S_det_3d[gi, gp, :]
-            mc_mu = mc_mean_3d[gi, gp, :]
+            det_xi = S_det_3d[gi, gp, :]
+            mc_xi = mc_mean_3d[gi, gp, :]
             mc_err = mc_std_3d[gi, gp, :]
 
-            ax.step(mu_centers, det_mu, where="mid", label="Det", linewidth=1.5)
-            ax.errorbar(mu_centers, mc_mu, yerr=mc_err, fmt="o", ms=3,
+            ax.step(xi_centers, det_xi, where="mid", label="Det", linewidth=1.5)
+            ax.errorbar(xi_centers, mc_xi, yerr=mc_err, fmt="o", ms=3,
                         capsize=2, label=f"MC mean±1σ", linewidth=1.0)
-            ax.set_xlabel(r"$\mu = \cos\theta$")
-            ax.set_ylabel(r"$\sigma(g \to g', \mu)$ [cm$^2$]")
+            ax.set_xlabel(r"$\xi = \cos\theta$")
+            ax.set_ylabel(r"$\sigma(g \to g', \xi)$ [cm$^2$]")
             ax.set_title(f"g={gi}->g'={gp}\n"
                          f"({centers[gi]:.2g}->{centers[gp]:.2g} keV)")
             ax.legend(fontsize=8)
             ax.ticklabel_format(axis="y", style="sci", scilimits=(-2, 2))
 
         fig.tight_layout()
-        fname = f"mu_profile_T{T_kev:.3g}keV.png"
+        fname = f"xi_profile_T{T_kev:.3g}keV.png"
         path = os.path.join(figs_dir, fname)
         fig.savefig(path, dpi=140, bbox_inches="tight")
         plt.close(fig)
@@ -356,13 +356,13 @@ def plot_mu_profiles(figs_dir):
     return paths
 
 
-def plot_mu_profiles_from_data(mu_data_list, figs_dir):
-    """Plot mu profiles from pre-computed worker data (collect mode)."""
-    mu_edges = np.linspace(-1, 1, NUM_ANGLE_BINS + 1)
-    mu_centers = 0.5 * (mu_edges[:-1] + mu_edges[1:])
+def plot_xi_profiles_from_data(xi_data_list, figs_dir):
+    """Plot xi profiles from pre-computed worker data (collect mode)."""
+    xi_edges = np.linspace(-1, 1, NUM_ANGLE_BINS + 1)
+    xi_centers = 0.5 * (xi_edges[:-1] + xi_edges[1:])
 
     paths = []
-    for data in mu_data_list:
+    for data in xi_data_list:
         T_kev = data["T_kev"]
         S_det_3d = data["S_det_3d"]
         mc_mean_3d = data["mc_mean_3d"]
@@ -378,27 +378,27 @@ def plot_mu_profiles_from_data(mu_data_list, figs_dir):
         if len(g_in_indices) == 1:
             axes = [axes]
         fig.suptitle(
-            f"mu profile: det vs MC ({len(MC_SEEDS)} seeds) "
+            f"xi profile: det vs MC ({len(MC_SEEDS)} seeds) "
             f"— T = {T_kev:.3g} keV", fontsize=13)
 
         for ax, gi in zip(axes, g_in_indices):
             gp = int(np.argmax(np.abs(S_det_3d[gi, :, :]).sum(axis=-1)))
-            det_mu = S_det_3d[gi, gp, :]
-            mc_mu = mc_mean_3d[gi, gp, :]
+            det_xi = S_det_3d[gi, gp, :]
+            mc_xi = mc_mean_3d[gi, gp, :]
             mc_err = mc_std_3d[gi, gp, :]
 
-            ax.step(mu_centers, det_mu, where="mid", label="Det", linewidth=1.5)
-            ax.errorbar(mu_centers, mc_mu, yerr=mc_err, fmt="o", ms=3,
+            ax.step(xi_centers, det_xi, where="mid", label="Det", linewidth=1.5)
+            ax.errorbar(xi_centers, mc_xi, yerr=mc_err, fmt="o", ms=3,
                         capsize=2, label="MC mean±1σ", linewidth=1.0)
-            ax.set_xlabel(r"$\mu = \cos\theta$")
-            ax.set_ylabel(r"$\sigma(g \to g', \mu)$ [cm$^2$]")
+            ax.set_xlabel(r"$\xi = \cos\theta$")
+            ax.set_ylabel(r"$\sigma(g \to g', \xi)$ [cm$^2$]")
             ax.set_title(f"g={gi}->g'={gp}\n"
                          f"({centers[gi]:.2g}->{centers[gp]:.2g} keV)")
             ax.legend(fontsize=8)
             ax.ticklabel_format(axis="y", style="sci", scilimits=(-2, 2))
 
         fig.tight_layout()
-        fname = f"mu_profile_T{T_kev:.3g}keV.png"
+        fname = f"xi_profile_T{T_kev:.3g}keV.png"
         path = os.path.join(figs_dir, fname)
         fig.savefig(path, dpi=140, bbox_inches="tight")
         plt.close(fig)
@@ -532,7 +532,7 @@ def run_worker(task_idx):
         dr = run_derivative(T_kev, bounds_kev)
         result["metrics"] = dr
 
-    elif task_type == "mu":
+    elif task_type == "xi":
         T_K = T_kev * kev_kelvin
         config = get_det_config(T_kev)
         G = len(bounds_kev) - 1
@@ -561,7 +561,7 @@ def run_worker(task_idx):
 # ---------------------------------------------------------------------------
 
 def build_report(sigma_results, profile_results, deriv_results,
-                 ep_paths, mu_paths):
+                 ep_paths, xi_paths):
     """Assemble markdown report text from collected data."""
     lines = []
     emit_header(lines)
@@ -579,16 +579,16 @@ def build_report(sigma_results, profile_results, deriv_results,
         lines.append(f"![E' profile T={T_kev:.3g} keV](figs/{fname})")
         lines.append("")
 
-    lines.append("## mu Profiles (angular distributions)")
+    lines.append("## xi Profiles (angular distributions)")
     lines.append("")
-    lines.append(f"Grid: `{MU_PROFILE_GRID}`, {NUM_ANGLE_BINS} angle bins. "
+    lines.append(f"Grid: `{XI_PROFILE_GRID}`, {NUM_ANGLE_BINS} angle bins. "
                  "For each incoming group, the outgoing group with largest "
                  "cross-section is selected.")
     lines.append("")
-    for T_kev, fname in mu_paths:
+    for T_kev, fname in xi_paths:
         lines.append(f"### T = {T_kev:.3g} keV")
         lines.append("")
-        lines.append(f"![mu profile T={T_kev:.3g} keV](figs/{fname})")
+        lines.append(f"![xi profile T={T_kev:.3g} keV](figs/{fname})")
         lines.append("")
 
     emit_deriv_table(lines, deriv_results)
@@ -611,7 +611,7 @@ def collect_results():
     os.makedirs(figs_dir, exist_ok=True)
 
     tasks = build_task_list()
-    sigma_results, profile_results, deriv_results, mu_data = [], [], [], []
+    sigma_results, profile_results, deriv_results, xi_data = [], [], [], []
     missing = []
 
     for idx in range(len(tasks)):
@@ -627,22 +627,22 @@ def collect_results():
                 profile_results.append(r["metrics"])
         elif r["task_type"] == "deriv":
             deriv_results.append(r["metrics"])
-        elif r["task_type"] == "mu":
-            mu_data.append(r)
+        elif r["task_type"] == "xi":
+            xi_data.append(r)
 
     if missing:
         print(f"WARNING: missing results for tasks {missing}")
 
     print(f"Loaded: {len(sigma_results)} sigma, {len(deriv_results)} deriv, "
-          f"{len(mu_data)} mu")
+          f"{len(xi_data)} xi")
 
     ep_paths = plot_ep_profiles(profile_results, figs_dir)
     print(f"  {len(ep_paths)} E' profile figures saved.")
-    mu_paths = plot_mu_profiles_from_data(mu_data, figs_dir)
-    print(f"  {len(mu_paths)} mu profile figures saved.")
+    xi_paths = plot_xi_profiles_from_data(xi_data, figs_dir)
+    print(f"  {len(xi_paths)} xi profile figures saved.")
 
     report_text, overall = build_report(
-        sigma_results, profile_results, deriv_results, ep_paths, mu_paths)
+        sigma_results, profile_results, deriv_results, ep_paths, xi_paths)
 
     out_path = os.path.join(gen_dir, "multigroup_solver_validation.md")
     with open(out_path, "w") as f:
@@ -707,8 +707,8 @@ def run_monolithic():
     print(flush=True)
     ep_paths = plot_ep_profiles(profile_results, figs_dir)
     print(f"  {len(ep_paths)} E' profile figures saved.", flush=True)
-    mu_paths = plot_mu_profiles(figs_dir)
-    print(f"  {len(mu_paths)} mu profile figures saved.", flush=True)
+    xi_paths = plot_xi_profiles(figs_dir)
+    print(f"  {len(xi_paths)} xi profile figures saved.", flush=True)
 
     deriv_results = []
     deriv_bounds = GRIDS[DERIV_GRID]
@@ -727,7 +727,7 @@ def run_monolithic():
 
     dt_total = time.perf_counter() - t_start
     report_text, overall = build_report(
-        results, profile_results, deriv_results, ep_paths, mu_paths)
+        results, profile_results, deriv_results, ep_paths, xi_paths)
 
     out_path = os.path.join(gen_dir, "multigroup_solver_validation.md")
     with open(out_path, "w") as f:

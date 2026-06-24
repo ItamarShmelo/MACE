@@ -38,13 +38,13 @@ PYBIND11_MODULE(_compton_multigroup, m) {
              "max_points"_a = 1024,
              "mode"_a = FlatEpDensityMode::points_per_decade,
              "flat_E"_a = true,
-             "flat_mu"_a = true)
+             "flat_xi"_a = true)
         .def_readwrite("density",    &FlatEpConfig::density)
         .def_readwrite("min_points", &FlatEpConfig::min_points)
         .def_readwrite("max_points", &FlatEpConfig::max_points)
         .def_readwrite("mode",       &FlatEpConfig::mode)
         .def_readwrite("flat_E",     &FlatEpConfig::flat_E)
-        .def_readwrite("flat_mu",    &FlatEpConfig::flat_mu);
+        .def_readwrite("flat_xi",    &FlatEpConfig::flat_xi);
 
     py::class_<MGIntegrationConfig>(m, "MGIntegrationConfig")
         .def(py::init<int, double, double, int, int,
@@ -58,26 +58,26 @@ PYBIND11_MODULE(_compton_multigroup, m) {
              "cold_temperature_order"_a = 48,
              "tail_order"_a = std::nullopt,
              "far_order"_a = std::nullopt,
-             "mu_order"_a = std::nullopt,
-             "mu_peak_k"_a = 10.0,
+             "xi_order"_a = std::nullopt,
+             "xi_peak_k"_a = 10.0,
              "flat_ep"_a = std::nullopt)
         .def_readwrite("base_order",              &MGIntegrationConfig::base_order)
         .def_readwrite("cold_temperature_order",  &MGIntegrationConfig::cold_temperature_order)
         .def_readwrite("peak_max_depth",          &MGIntegrationConfig::peak_max_depth)
         .def_readwrite("tail_order",              &MGIntegrationConfig::tail_order)
         .def_readwrite("far_order",               &MGIntegrationConfig::far_order)
-        .def_readwrite("mu_order",                &MGIntegrationConfig::mu_order)
+        .def_readwrite("xi_order",                &MGIntegrationConfig::xi_order)
         .def_readwrite("integration_tolerance",   &MGIntegrationConfig::integration_tolerance)
         .def_readwrite("cutoff_ratio",            &MGIntegrationConfig::cutoff_ratio)
-        .def_readwrite("mu_peak_k",              &MGIntegrationConfig::mu_peak_k)
+        .def_readwrite("xi_peak_k",              &MGIntegrationConfig::xi_peak_k)
         .def_readwrite("flat_ep",                 &MGIntegrationConfig::flat_ep)
         .def("effective_tail_order", &MGIntegrationConfig::effective_tail_order)
         .def("effective_far_order",  &MGIntegrationConfig::effective_far_order)
-        .def("effective_mu_order",   &MGIntegrationConfig::effective_mu_order)
+        .def("effective_xi_order",   &MGIntegrationConfig::effective_xi_order)
         .def_static("cold_adaptive", &MGIntegrationConfig::cold_adaptive,
-            "High-accuracy adaptive config for T < 0.1 keV (bo=192, pd=9, mu=512)")
+            "High-accuracy adaptive config for T < 0.1 keV (bo=192, pd=9, xi=512)")
         .def_static("warm_flat", &MGIntegrationConfig::warm_flat,
-            "High-accuracy flat E' config for T >= 0.1 keV (bo=96, d=512, mu=96)");
+            "High-accuracy flat E' config for T >= 0.1 keV (bo=96, d=512, xi=96)");
 
     py::class_<ComptonMultigroupKernel>(m, "ComptonMultigroupKernel")
         .def(py::init<std::vector<double> const&,
@@ -227,19 +227,19 @@ PYBIND11_MODULE(_compton_multigroup, m) {
        "tol"_a = 1e-8, "max_depth"_a = 15,
        "Adaptive reflected-log GL integration of f over [a, b] (clusters nodes near b)");
 
-    m.def("peak_limits", [](double E, double mu_lo, double mu_hi, double T) {
-        return compton::peak_limits(E, mu_lo, mu_hi, T);
-    }, "E"_a, "mu_lo"_a, "mu_hi"_a, "T"_a,
+    m.def("peak_limits", [](double E, double xi_lo, double xi_hi, double T) {
+        return compton::peak_limits(E, xi_lo, xi_hi, T);
+    }, "E"_a, "xi_lo"_a, "xi_hi"_a, "T"_a,
        "Thermally broadened peak E' limits [erg]: returns (lo, hi)");
 
-    m.def("cold_recoil_lo", [](double E, double mu_lo) {
-        return compton::peak_limits(E, mu_lo, 1.0, 0.0).first;
-    }, "E"_a, "mu_lo"_a,
+    m.def("cold_recoil_lo", [](double E, double xi_lo) {
+        return compton::peak_limits(E, xi_lo, 1.0, 0.0).first;
+    }, "E"_a, "xi_lo"_a,
        "Lower edge of the cold Compton recoil band [erg] (T=0 limit)");
 
-    m.def("cold_recoil_hi", [](double E, double mu_hi) {
-        return compton::peak_limits(E, -1.0, mu_hi, 0.0).second;
-    }, "E"_a, "mu_hi"_a,
+    m.def("cold_recoil_hi", [](double E, double xi_hi) {
+        return compton::peak_limits(E, -1.0, xi_hi, 0.0).second;
+    }, "E"_a, "xi_hi"_a,
        "Upper edge of the cold Compton recoil band [erg] (T=0 limit)");
 
     // --- Monte Carlo ---
