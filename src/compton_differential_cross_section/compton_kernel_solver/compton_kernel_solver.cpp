@@ -7,10 +7,10 @@ namespace compton {
 
 ComptonKernelSolver::ComptonKernelSolver(
     double const asymp_tau_alpha_threshold,
-    double const quadrature_self_tol,
+    double const power_series_self_tol,
     double const asymp_self_tol)
     : asymp_tau_alpha_threshold_(asymp_tau_alpha_threshold)
-    , quadrature_self_tol_(quadrature_self_tol)
+    , power_series_self_tol_(power_series_self_tol)
     , asymp_self_tol_(asymp_self_tol)
     , asymp_series_(false)
     , asymp_series_dd_(true)
@@ -84,7 +84,7 @@ ComptonResult ComptonKernelSolver::dispatch(
     if (tau_alpha_max >= asymp_tau_alpha_threshold_) {
         try {
             auto const r = eval_kernel<Op>(power_series_, E, E_prime, xi, T, Ne);
-            if (r.estimated_rel_error < quadrature_self_tol_
+            if (r.estimated_rel_error < power_series_self_tol_
                 && (Op == KernelOp::dsigma_dT || r.value >= 0.0))
                 return r;
             update_best(r);
@@ -94,7 +94,7 @@ ComptonResult ComptonKernelSolver::dispatch(
     // P2: DD power series
     try {
         auto const r = eval_kernel<Op>(power_series_dd_, E, E_prime, xi, T, Ne);
-        if (r.estimated_rel_error < quadrature_self_tol_
+        if (r.estimated_rel_error < power_series_self_tol_
             && (Op == KernelOp::dsigma_dT || r.value >= 0.0))
             return r;
         update_best(r);
@@ -108,7 +108,7 @@ ComptonResult ComptonKernelSolver::dispatch(
         } catch (...) {}
     }
 
-    if (best_err < 1.0)
+    if (best_err < 1e-3)
         return best;
     throw std::runtime_error("all kernel backends failed");
 }

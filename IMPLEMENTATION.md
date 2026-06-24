@@ -141,7 +141,7 @@ tau_alpha_max = tau * max(alpha_+, alpha_-)
 
 Asymptotic regime (tau_alpha_max < 0.035):
     A1: try Asymptotic series (double)
-        accept if self-error < asymp_self_tol (1e-3).
+        accept if self-error < asymp_self_tol (1e-7).
         The roundoff-aware error estimator naturally flags cancellation
         at ultra-low gamma, triggering escalation to DD.
     A2: try Asymptotic series (DD)
@@ -150,14 +150,14 @@ Asymptotic regime (tau_alpha_max < 0.035):
 
 Power series regime (tau_alpha_max >= 0.035, or fallthrough):
     P1: try Power series (double) -- only outside asymptotic regime
-        accept if self-error < quadrature_self_tol (5e-6)
+        accept if self-error < power_series_self_tol (1e-7)
         AND (dsigma_dT or value >= 0).
     P2: try Power series (DD)
-        accept if self-error < quadrature_self_tol
+        accept if self-error < power_series_self_tol
         AND (dsigma_dT or value >= 0).
     P3: try Asymptotic DD (last resort) -- skip if already tried in A2.
 
-Return best-seen result if error < 1.0; throw otherwise.
+Return best-seen result if error < 1e-3; throw otherwise.
 ```
 
 **Error-driven DD escalation.**  The previous dispatch used a hard-coded
@@ -190,8 +190,8 @@ The thresholds are empirically validated:
 | Constant | Value | Rationale |
 |----------|-------|-----------|
 | `ASYMP_TAU_ALPHA_THRESHOLD` | 0.035 | Widened from 0.02; the asymptotic series is highly reliable in this range and the power series (via DD) safely handles points above the threshold |
-| `quadrature_self_tol` | 5e-6 | Raised from 1e-6 to accommodate the relaxed series `eps_rel = 1e-8`; the power series error estimator reports `trunc_rel` up to ~100x larger than `eps_rel` due to amplification from t_plus/t_minus partial cancellation |
-| `asymp_self_tol` | 1e-3 | Rejects asymptotic when self-reported error exceeds 0.1%; guards dispatch boundary and triggers DD escalation for roundoff-dominated points |
+| `power_series_self_tol` | 1e-7 | Tightened from 5e-6; the DD fallback handles points where the double power series cannot meet this tolerance |
+| `asymp_self_tol` | 1e-7 | Tightened from 1e-3; forces DD escalation for any asymptotic result with self-error above 0.00001%; guards dispatch boundary and roundoff-dominated points |
 
 
 ## Precision Strategy

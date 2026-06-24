@@ -15,13 +15,13 @@
  *     Falls through to power series on failure.
  *
  *   Power series regime (tau_alpha_max >= threshold, or fallthrough):
- *     P1. Power series (double) -- accepted if self-error < quadrature_self_tol
+ *     P1. Power series (double) -- accepted if self-error < power_series_self_tol
  *         and (for sigma_E) non-negative.  Only outside asymptotic regime.
- *     P2. Power series (DD) -- accepted if self-error < quadrature_self_tol
+ *     P2. Power series (DD) -- accepted if self-error < power_series_self_tol
  *         and (for sigma_E) non-negative.
  *     P3. Asymptotic DD (last resort) -- skipped if already tried in A2.
  *
- *   Returns best-seen result if error < 1.0; throws otherwise.
+ *   Returns best-seen result if error < 1e-3; throws otherwise.
  *
  * All dispatch thresholds are configurable at construction time.
  */
@@ -40,7 +40,7 @@ public:
     /**
      * @param asymp_tau_alpha_threshold  Dispatch to asymptotic series when
      *        tau * max(alpha+, alpha-) falls below this value.
-     * @param quadrature_self_tol  Accept power-series result when its
+     * @param power_series_self_tol  Accept power-series result when its
      *        self-reported relative error is below this tolerance.
      * @param asymp_self_tol  Accept an asymptotic result only when its
      *        self-reported relative error is below this tolerance.
@@ -50,8 +50,8 @@ public:
 
     ComptonKernelSolver(
         double asymp_tau_alpha_threshold = constants::ASYMP_TAU_ALPHA_THRESHOLD,
-        double quadrature_self_tol       = 5e-6,
-        double asymp_self_tol            = 1e-3);
+        double power_series_self_tol      = 1e-7,
+        double asymp_self_tol            = 1e-7);
 
     ComptonResult sigma_E(
         double E,
@@ -69,7 +69,7 @@ public:
 
 private:
     double asymp_tau_alpha_threshold_;
-    double quadrature_self_tol_;
+    double power_series_self_tol_;
     double asymp_self_tol_;
 
     ComptonKernelAsymptoticSeries asymp_series_;

@@ -448,16 +448,16 @@ term-magnitude increases.
 tau_alpha_max = tau * max(alpha_plus, alpha_minus)
 
 Asymptotic regime (tau_alpha_max < 0.035):
-    A1: AsymptoticSeries (double)    -- accept if rel_error < 1e-3
-    A2: AsymptoticSeries (DD)        -- accept if rel_error < 1e-3
+    A1: AsymptoticSeries (double)    -- accept if rel_error < 1e-7
+    A2: AsymptoticSeries (DD)        -- accept if rel_error < 1e-7
     Fall through on failure.
 
 Power series regime (tau_alpha_max >= 0.035, or fallthrough):
-    P1: PowerSeries (double)         -- accept if rel_error < 5e-6 and non-negative
-    P2: PowerSeries (DD)             -- accept if rel_error < 5e-6 and non-negative
+    P1: PowerSeries (double)         -- accept if rel_error < 1e-7 and non-negative
+    P2: PowerSeries (DD)             -- accept if rel_error < 1e-7 and non-negative
     P3: AsymptoticSeries DD (last resort, skip if tried in A2)
 
-Return best-seen if error < 1.0; raise otherwise.
+Return best-seen if error < 1e-3; raise otherwise.
 ```
 
 DD escalation in the asymptotic regime is purely error-driven: the
@@ -468,9 +468,9 @@ The thresholds are configurable at construction time (defaults from `compton_ker
 
 - `asymp_tau_alpha_threshold = 0.035` -- below this, the asymptotic series
   reaches its optimal truncation with few terms.
-- `quadrature_self_tol = 5e-6` -- accept power-series result when its
+- `power_series_self_tol = 1e-7` -- accept power-series result when its
   self-reported relative error is below this tolerance.
-- `asymp_self_tol = 1e-3` -- reject the asymptotic result when its
+- `asymp_self_tol = 1e-7` -- reject the asymptotic result when its
   self-reported error exceeds this; escalates or falls through.
 
 ## Tests

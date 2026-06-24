@@ -290,9 +290,15 @@ double ComptonMultigroupKernel::compute_group_entry(
 
     // --- Loop over angle bins ---
     // Each bin [mu_lo, mu_hi] is an equal-width slice of [-1, 1].
+    // mu = 1 (xi = 1) is an integrable singularity where a = 1 - xi = 0,
+    // causing division by zero in kinematic parameters.  Clamping the last
+    // bin edge to 1 - MU_UPPER_EPS avoids this; the excluded sliver
+    // [1-eps, 1] contributes O(eps / bin_width) ≈ 4e-10 relative error.
+    constexpr double MU_UPPER_EPS = 1e-10;
     for (int a = 0; a < num_angle_bins; ++a) {
         double const mu_lo = -1.0 + a * dmu;
-        double const mu_hi = -1.0 + (a + 1) * dmu;
+        double const mu_hi = std::min(-1.0 + (a + 1) * dmu,
+                                      1.0 - MU_UPPER_EPS);
 
         // --- E integrand (outermost axis) ---
         // For a given incoming energy E, this lambda computes:
@@ -565,15 +571,8 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
         };
 
         // --- Outward-from-peak target-group traversal ---
-        // Find gp_peak: the target group containing the geometric-mean
-        // energy of group g.  For elastic / near-elastic scattering this
-        // is always the dominant target.
-        double const E_center = group_centers_[g];
-        auto it = std::upper_bound(
-            group_boundaries_.begin(), group_boundaries_.end(), E_center);
-        int gp_peak = static_cast<int>(
-            std::distance(group_boundaries_.begin(), it)) - 1;
-        gp_peak = std::clamp(gp_peak, 0, G - 1);
+        // the target group which is the dominant elastic-scattering target.
+        int const gp_peak = g;
 
         // Evaluate the peak group first to establish the reference magnitude.
         double const peak_sum = do_group(gp_peak);
