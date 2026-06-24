@@ -278,6 +278,8 @@ double ComptonMultigroupKernel::compute_group_entry(
     std::vector<double>& result) const
 {
     int const G = num_groups();
+    double const tau = T * units::k_boltz / units::me_c2;
+    double const sqrt_tau = std::sqrt(tau);
 
     // Incoming group [E_lo, E_hi] and target group [Ep_lo, Ep_hi].
     double const E_lo = group_boundaries_[g];
@@ -333,11 +335,10 @@ double ComptonMultigroupKernel::compute_group_entry(
                 // relative to the mu interval, concentrate quadrature there.
                 if (std::abs(r - 1.0) > constants::MU_PEAK_RATIO_THRESHOLD) {
                     double const gamma = E_in / units::me_c2;
-                    double const tau = T * units::k_boltz / units::me_c2;
                     double const mu_c_raw = 1.0 - (1.0 / gamma) * (1.0 / r - 1.0);
                     double const mu_c = std::clamp(mu_c_raw, mu_lo, mu_hi);
                     double const fwhm = 4.0 * std::sqrt(std::abs(1.0 - r) / r)
-                                      * std::sqrt(tau) / std::pow(gamma, 1.5);
+                                      * sqrt_tau / std::pow(gamma, 1.5);
                     double const half_w = mu_peak_k_ * fwhm;
 
                     double const peak_lo = std::max(mu_lo, mu_c - half_w);
