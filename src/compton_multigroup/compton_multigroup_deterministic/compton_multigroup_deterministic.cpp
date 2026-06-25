@@ -328,16 +328,17 @@ double ComptonMultigroupKernel::compute_group_entry(
                     return legendre_integrate(f, active_xi_rule, xi_lo, xi_hi);
                 }
 
-                double const r = Ep / E_in;
+                double const gamma = E_in / units::me_c2;
+                double const gamma_p = Ep / units::me_c2;
+                double const r = gamma_p / gamma;
 
                 // Peak-focused splitting: for non-elastic scatter, compute
                 // the Compton peak location and FWHM. If the peak is narrow
                 // relative to the ξ interval, concentrate quadrature there.
-                if (std::abs(r - 1.0) > constants::XI_PEAK_RATIO_THRESHOLD) {
-                    double const gamma = E_in / units::me_c2;
-                    double const xi_c_raw = 1.0 - (1.0 / gamma) * (1.0 / r - 1.0);
+                if (std::abs(gamma_p - gamma) > gamma * constants::XI_PEAK_RATIO_THRESHOLD) {
+                    double const xi_c_raw = 1.0 - (gamma - gamma_p) / (gamma * gamma_p);
                     double const xi_c = std::clamp(xi_c_raw, xi_lo, xi_hi);
-                    double const fwhm = 4.0 * std::sqrt(std::abs(1.0 - r) / r)
+                    double const fwhm = 4.0 * std::sqrt(std::abs(gamma - gamma_p) / gamma_p)
                                       * sqrt_tau / std::pow(gamma, 1.5);
                     double const half_w = xi_peak_k_ * fwhm;
 
