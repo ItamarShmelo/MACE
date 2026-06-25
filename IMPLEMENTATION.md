@@ -468,18 +468,24 @@ peak (log for groups above the peak, rlog for groups below).
 
 For non-elastic scattering (|E'/E − 1| > 0.05), the ξ integrand has a sharp
 peak at the Compton angle $\xi_c = 1 - (1/\gamma)(1/r - 1)$ where $r = E'/E$.
-The FWHM of this peak scales as:
+The FWHM of this peak is:
 
-$$\text{FWHM}(\xi) \approx 4\sqrt{|1-r|/r} \cdot \sqrt{\tau} / \gamma^{3/2}$$
+$$\text{FWHM}(\xi) = 2\sqrt{2\ln 2}\;\frac{\sqrt{\tau\,|\gamma'-\gamma|\,(2+|\gamma-\gamma'|)}}{\gamma\,\gamma'}$$
+
+This expression is obtained from a Gaussian fit to the thermal broadening of
+the Compton kernel in ξ, retaining the exact relativistic recoil kinematics
+(the $(2+|\Delta\gamma|)$ factor) rather than the non-relativistic
+approximation used previously.
 
 The integrator splits the ξ interval into three panels:
-1. Left tail: [ξ_lo, ξ_c − k·FWHM/2] with 8-point GL
-2. Peak: [ξ_c − k·FWHM/2, ξ_c + k·FWHM/2] with `xi_order`-point GL
-3. Right tail: [ξ_c + k·FWHM/2, ξ_hi] with 8-point GL
+1. Left tail: [ξ_lo, ξ_c − k·FWHM] with 8-point GL
+2. Peak: [ξ_c − k·FWHM, ξ_c + k·FWHM] with `xi_order`-point GL
+3. Right tail: [ξ_c + k·FWHM, ξ_hi] with 8-point GL
 
-where k = `xi_peak_k` (default 10). This splitting is applied only when the
-peak window is narrower than 80% of the full ξ interval, ensuring the tails
-are exponentially small and well-resolved by just 8 points. For near-elastic
+where k = `xi_peak_k` (default 10) is the half-width in units of FWHM (total
+window = 2k·FWHM). This splitting is applied only when the peak window is
+narrower than 80% of the full ξ interval, ensuring the tails are
+exponentially small and well-resolved by just 8 points. For near-elastic
 scatter (|r − 1| < 0.05) or when the peak fills most of the interval, the
 integrator falls back to log/rlog mapping or standard linear GL.
 
@@ -493,8 +499,8 @@ Two factory methods provide validated high-accuracy configurations:
 |-----------|-------|-----------|
 | `base_order` | 192 | Resolves narrow Compton recoil band at cold T |
 | `peak_max_depth` | 9 | Deep recursion for extremely narrow E' peaks |
-| `xi_order` | 512 | Resolves sharp ξ peak (FWHM ∝ √τ/γ^1.5, very narrow at high E + cold T) |
-| `xi_peak_k` | 10 | 10× FWHM window captures >99.99% of ξ peak area |
+| `xi_order` | 512 | Resolves sharp ξ peak (FWHM ∝ √(τ·|Δγ|·(2+|Δγ|))/(γγ'), very narrow at high E + cold T) |
+| `xi_peak_k` | 10 | 10× FWHM half-width (20 FWHM total window) captures >99.99% of ξ peak area |
 | `integration_tolerance` | 1e-8 | Tight tolerance for adaptive refinement |
 | `cutoff_ratio` | 1e-12 | Conservative group cutoff |
 | `cold_temperature_order` | 192 | Matches base_order |
@@ -510,7 +516,7 @@ noise), element-wise RMS ~3e-3. Runtime: ~300–600s per 24-group matrix
 |-----------|-------|-----------|
 | `base_order` | 96 | High-order GL for E axis |
 | `xi_order` | 96 | Adequate for broader ξ peaks at warm T |
-| `xi_peak_k` | 10 | Standard peak window |
+| `xi_peak_k` | 10 | 10× FWHM half-width (20 FWHM total window) |
 | `flat_ep` | density=512, ppd, max=8192 | Dense flat E' (no adaptive recursion needed at warm T) |
 | `flat_E` | false | Keeps E-axis boundary layer log-mapping |
 | `flat_xi` | false | Keeps ξ peak-focused splitting |

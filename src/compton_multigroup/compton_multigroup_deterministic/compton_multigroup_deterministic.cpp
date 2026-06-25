@@ -336,10 +336,12 @@ double ComptonMultigroupKernel::compute_group_entry(
                 // the Compton peak location and FWHM. If the peak is narrow
                 // relative to the ξ interval, concentrate quadrature there.
                 if (std::abs(gamma_p - gamma) > gamma * constants::XI_PEAK_RATIO_THRESHOLD) {
-                    double const xi_c_raw = 1.0 - (gamma - gamma_p) / (gamma * gamma_p);
+                    double const xi_c_raw = 1.0 - std::abs(gamma - gamma_p) / (gamma * gamma_p);
                     double const xi_c = std::clamp(xi_c_raw, xi_lo, xi_hi);
-                    double const fwhm = 4.0 * std::sqrt(std::abs(gamma - gamma_p) / gamma_p)
-                                      * sqrt_tau / std::pow(gamma, 1.5);
+                    double const abs_dg = std::abs(gamma - gamma_p);
+                    double const fwhm = 2.0 * std::sqrt(2.0 * std::log(2.0))
+                                      * sqrt_tau * std::sqrt(abs_dg * (2.0 + abs_dg))
+                                      / (gamma * gamma_p);
                     double const half_w = xi_peak_k_ * fwhm;
 
                     double const peak_lo = std::max(xi_lo, xi_c - half_w);
