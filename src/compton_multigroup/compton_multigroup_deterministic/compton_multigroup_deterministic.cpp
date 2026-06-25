@@ -14,9 +14,9 @@ namespace compton {
 
 namespace constants {
 static constexpr double LOG_E_RATIO_THRESHOLD = 10.0;
-static constexpr double LOG_XI_EP_RATIO_THRESHOLD = 1.5;
 static constexpr double E_BOUNDARY_LAYER_MULTIPLIER = 10.0;
-static constexpr double XI_PEAK_RATIO_THRESHOLD = 0.05;
+static constexpr double XI_UPPER_EPS = 1e-10;
+static constexpr double ELASTIC_LIKE_D_THRESHOLD = 1e-12;
 } // namespace constants
 
 // ── MGIntegrationConfig ─────────────────────────────────────────────────
@@ -114,7 +114,6 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
     if (config.flat_ep.has_value()) {
         auto const& cfg = *config.flat_ep;
         flat_E_ = cfg.flat_E;
-        flat_xi_ = cfg.flat_xi;
         double const E_ref = std::sqrt(
             group_boundaries_.front() * group_boundaries_.back());
 
@@ -279,7 +278,6 @@ double ComptonMultigroupKernel::compute_group_entry(
 {
     int const G = num_groups();
     double const tau = T * units::k_boltz / units::me_c2;
-    double const sqrt_tau = std::sqrt(tau);
 
     // Incoming group [E_lo, E_hi] and target group [Ep_lo, Ep_hi].
     double const E_lo = group_boundaries_[g];
@@ -296,11 +294,10 @@ double ComptonMultigroupKernel::compute_group_entry(
     // division by zero in kinematic parameters.  Clamping the last bin
     // edge to 1 - XI_UPPER_EPS avoids this; the excluded sliver
     // [1-eps, 1] contributes O(eps / bin_width) ≈ 4e-10 relative error.
-    constexpr double XI_UPPER_EPS = 1e-10;
     for (int a = 0; a < num_angle_bins; ++a) {
         double const xi_lo = -1.0 + a * dxi;
         double const xi_hi = std::min(-1.0 + (a + 1) * dxi,
-                                      1.0 - XI_UPPER_EPS);
+                                      1.0 - constants::XI_UPPER_EPS);
 
         // --- E integrand (outermost axis) ---
         // For a given incoming energy E, this lambda computes:
@@ -324,60 +321,93 @@ double ComptonMultigroupKernel::compute_group_entry(
                     return multiplier(E_in, Ep, xi, T, Ne) *
                            (kernel.*eval)(E_in, Ep, xi, T, Ne).value;
                 };
-                if (flat_xi_) {
-                    return legendre_integrate(f, active_xi_rule, xi_lo, xi_hi);
-                }
 
                 double const gamma = E_in / units::me_c2;
                 double const gamma_p = Ep / units::me_c2;
-                double const r = gamma_p / gamma;
+                double const abs_dg = std::abs(gamma - gamma_p);
 
-                // Peak-focused splitting: for non-elastic scatter, compute
-                // the Compton peak location and FWHM. If the peak is narrow
-                // relative to the ξ interval, concentrate quadrature there.
-                if (std::abs(gamma_p - gamma) > gamma * constants::XI_PEAK_RATIO_THRESHOLD) {
-                    double const xi_c_raw = 1.0 - std::abs(gamma - gamma_p) / (gamma * gamma_p);
-                    double const xi_c = std::clamp(xi_c_raw, xi_lo, xi_hi);
-                    double const abs_dg = std::abs(gamma - gamma_p);
-                    double const fwhm = 2.0 * std::sqrt(2.0 * std::log(2.0))
-                                      * sqrt_tau * std::sqrt(abs_dg * (2.0 + abs_dg))
-                                      / (gamma * gamma_p);
-                    double const half_w = xi_peak_k_ * fwhm;
+                // Elastic-like: FWHM formula is degenerate when d ≈ 0
+                // or when the peak falls inside the excluded endpoint zone.
+                bool const elastic_like =
+                    abs_dg < constants::ELASTIC_LIKE_D_THRESHOLD ||
+                    abs_dg < gamma * gamma_p * constants::XI_UPPER_EPS;
 
-                    double const peak_lo = std::max(xi_lo, xi_c - half_w);
-                    double const peak_hi = std::min(xi_hi, xi_c + half_w);
+                if (elastic_like) {
+                    double const span = xi_hi - xi_lo;
+                    double const eps = span * 1e-14;
+                    return rlog_legendre_integrate(
+                        [&](double const s) { return f(xi_lo + s); },
+                        active_xi_rule, eps, span);
+                }
 
-                    if (peak_hi > peak_lo &&
-                        (peak_hi - peak_lo) < 0.8 * (xi_hi - xi_lo)) {
-                        double result = legendre_integrate(
-                            f, active_xi_rule, peak_lo, peak_hi);
-                        if (peak_lo > xi_lo)
-                            result += legendre_integrate(
-                                f, xi_tail_rule_, xi_lo, peak_lo);
-                        if (peak_hi < xi_hi)
-                            result += legendre_integrate(
-                                f, xi_tail_rule_, peak_hi, xi_hi);
-                        return result;
+                // Raw, unclamped peak location and curvature-based width.
+                double const xi_pk = 1.0 - abs_dg / (gamma * gamma_p);
+                double const sigma_xi =
+                    std::sqrt(tau * abs_dg * (2.0 + abs_dg))
+                    / (gamma * gamma_p);
+                double const fwhm =
+                    2.0 * std::sqrt(2.0 * std::log(2.0)) * sigma_xi;
+                // xi_peak_k_ is the half-width of the peak window in FWHMs.
+                // Total window = 2 * xi_peak_k_ * FWHM.
+                double const half_w = xi_peak_k_ * fwhm;
+
+                double const peak_lo = xi_pk - half_w;
+                double const peak_hi = xi_pk + half_w;
+
+                if (peak_hi <= xi_lo) {
+                    // Peak window entirely left: cluster near xi_lo.
+                    double const span = xi_hi - xi_lo;
+                    double const eps = span * 1e-14;
+                    return log_legendre_integrate(
+                        [&](double const s) { return f(xi_lo + s); },
+                        active_xi_rule, eps, span);
+                }
+
+                if (peak_lo >= xi_hi) {
+                    // Peak window entirely right: cluster near xi_hi.
+                    double const span = xi_hi - xi_lo;
+                    double const eps = span * 1e-14;
+                    return rlog_legendre_integrate(
+                        [&](double const s) { return f(xi_lo + s); },
+                        active_xi_rule, eps, span);
+                }
+
+                // Three-region split: clamp peak window to the bin.
+                double const core_lo = std::max(xi_lo, peak_lo);
+                double const core_hi = std::min(xi_hi, peak_hi);
+                double const bin_span = xi_hi - xi_lo;
+
+                double result = 0.0;
+
+                // Left tail: [xi_lo, core_lo] -- cluster near core_lo.
+                if (core_lo > xi_lo) {
+                    double const span = core_lo - xi_lo;
+                    if (span > 1e-14 * bin_span) {
+                        double const eps = span * 1e-14;
+                        result += rlog_legendre_integrate(
+                            [&](double const s) { return f(xi_lo + s); },
+                            xi_tail_rule_, eps, span);
                     }
                 }
 
-                // Fallback: log/rlog mapping for boundary-peaked cases
-                if (r > constants::LOG_XI_EP_RATIO_THRESHOLD) {
-                    double const dxi_span = xi_hi - xi_lo;
-                    double const eps = dxi_span * 1e-14;
-                    return log_legendre_integrate(
-                        [&](double const s) { return f(xi_lo + s); },
-                        active_xi_rule, eps, dxi_span);
-                }
-                if (r < 1.0 / constants::LOG_XI_EP_RATIO_THRESHOLD) {
-                    double const dxi_span = xi_hi - xi_lo;
-                    double const eps = dxi_span * 1e-14;
-                    return log_legendre_integrate(
-                        [&](double const s) { return f(xi_hi - s); },
-                        active_xi_rule, eps, dxi_span);
+                // Peak core: [core_lo, core_hi] -- ordinary GL.
+                if (core_hi > core_lo) {
+                    result += legendre_integrate(
+                        f, active_xi_rule, core_lo, core_hi);
                 }
 
-                return legendre_integrate(f, active_xi_rule, xi_lo, xi_hi);
+                // Right tail: [core_hi, xi_hi] -- cluster near core_hi.
+                if (core_hi < xi_hi) {
+                    double const span = xi_hi - core_hi;
+                    if (span > 1e-14 * bin_span) {
+                        double const eps = span * 1e-14;
+                        result += log_legendre_integrate(
+                            [&](double const s) { return f(core_hi + s); },
+                            xi_tail_rule_, eps, span);
+                    }
+                }
+
+                return result;
             };
 
             double inner;

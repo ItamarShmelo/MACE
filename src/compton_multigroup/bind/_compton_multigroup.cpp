@@ -32,19 +32,17 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .value("points_per_decade", FlatEpDensityMode::points_per_decade);
 
     py::class_<FlatEpConfig>(m, "FlatEpConfig")
-        .def(py::init<double, int, int, FlatEpDensityMode, bool, bool>(),
+        .def(py::init<double, int, int, FlatEpDensityMode, bool>(),
              "density"_a = 64.0,
              "min_points"_a = 8,
              "max_points"_a = 1024,
              "mode"_a = FlatEpDensityMode::points_per_decade,
-             "flat_E"_a = true,
-             "flat_xi"_a = true)
+             "flat_E"_a = true)
         .def_readwrite("density",    &FlatEpConfig::density)
         .def_readwrite("min_points", &FlatEpConfig::min_points)
         .def_readwrite("max_points", &FlatEpConfig::max_points)
         .def_readwrite("mode",       &FlatEpConfig::mode)
-        .def_readwrite("flat_E",     &FlatEpConfig::flat_E)
-        .def_readwrite("flat_xi",    &FlatEpConfig::flat_xi);
+        .def_readwrite("flat_E",     &FlatEpConfig::flat_E);
 
     py::class_<MGIntegrationConfig>(m, "MGIntegrationConfig")
         .def(py::init<int, double, double, int, int,
