@@ -1,21 +1,24 @@
 #include "compton_differential_cross_section/compton_kernel_solver/compton_kernel_solver.hpp"
 
 #include <cstdio>
-#include <limits>
 
 namespace compton {
 
 ComptonKernelSolver::ComptonKernelSolver(
     double const asymp_tau_alpha_threshold,
     double const power_series_self_tol,
-    double const asymp_self_tol)
+    double const asymp_self_tol,
+    double const dd_power_series_self_tol,
+    double const dd_asymp_self_tol)
     : asymp_tau_alpha_threshold_(asymp_tau_alpha_threshold)
     , power_series_self_tol_(power_series_self_tol)
     , asymp_self_tol_(asymp_self_tol)
+    , dd_power_series_self_tol_(dd_power_series_self_tol)
+    , dd_asymp_self_tol_(dd_asymp_self_tol)
     , asymp_series_(false)
     , asymp_series_dd_(true)
     , power_series_(false)
-    , power_series_dd_(true)
+    , power_series_dd_(true, 1e-8, 4, 500)
 {}
 
 namespace {
@@ -47,69 +50,42 @@ ComptonResult ComptonKernelSolver::dispatch(
     double const tau_alpha_max = std::max(tau * p.alpha_plus,
                                           tau * p.alpha_minus);
 
-    ComptonResult best;
-    double best_err = std::numeric_limits<double>::infinity();
-    bool tried_asymp_dd = false;
-
-    auto update_best = [&](ComptonResult const& r) {
-        if (r.estimated_rel_error < best_err) {
-            best = r;
-            best_err = r.estimated_rel_error;
-        }
-    };
-
-    // --- Asymptotic regime ---
     if (tau_alpha_max < asymp_tau_alpha_threshold_) {
+        // --- Asymptotic regime ---
+
         // A1: double asymptotic (roundoff estimator flags cancellation)
         try {
             auto const r = eval_kernel<Op>(asymp_series_, E, E_prime, xi, T, Ne);
             if (r.estimated_rel_error < asymp_self_tol_)
                 return r;
-            update_best(r);
         } catch (...) {}
 
         // A2: DD asymptotic
-        tried_asymp_dd = true;
         try {
             auto const r = eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T, Ne);
-            if (r.estimated_rel_error < asymp_self_tol_)
+            if (r.estimated_rel_error < dd_asymp_self_tol_)
                 return r;
-            update_best(r);
         } catch (...) {}
-    }
+    } else {
+        // --- Power series regime ---
 
-    // --- Power series regime (or asymptotic fallthrough) ---
-
-    // P1: double power series (only outside asymptotic regime)
-    if (tau_alpha_max >= asymp_tau_alpha_threshold_) {
+        // P1: double power series
         try {
             auto const r = eval_kernel<Op>(power_series_, E, E_prime, xi, T, Ne);
             if (r.estimated_rel_error < power_series_self_tol_
                 && (Op == KernelOp::dsigma_dT || r.value >= 0.0))
                 return r;
-            update_best(r);
         } catch (...) {}
-    }
 
-    // P2: DD power series
-    try {
-        auto const r = eval_kernel<Op>(power_series_dd_, E, E_prime, xi, T, Ne);
-        if (r.estimated_rel_error < power_series_self_tol_
-            && (Op == KernelOp::dsigma_dT || r.value >= 0.0))
-            return r;
-        update_best(r);
-    } catch (...) {}
-
-    // P3: DD asymptotic last resort (skip if already tried in A2)
-    if (!tried_asymp_dd) {
+        // P2: DD power series
         try {
-            auto const r = eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T, Ne);
-            update_best(r);
+            auto const r = eval_kernel<Op>(power_series_dd_, E, E_prime, xi, T, Ne);
+            if (r.estimated_rel_error < dd_power_series_self_tol_
+                && (Op == KernelOp::dsigma_dT || r.value >= 0.0))
+                return r;
         } catch (...) {}
     }
 
-    if (best_err < 1e-3)
-        return best;
     throw std::runtime_error("all kernel backends failed");
 }
 

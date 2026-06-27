@@ -89,17 +89,15 @@ struct FlatEpConfig {
     int max_points;
     FlatEpDensityMode mode;
     bool flat_E;
-    bool flat_xi;
 
     FlatEpConfig(double density = 64.0,
                  int min_points = 8,
                  int max_points = 1024,
                  FlatEpDensityMode mode = FlatEpDensityMode::points_per_decade,
-                 bool flat_E = true,
-                 bool flat_xi = true)
+                 bool flat_E = true)
         : density(density), min_points(min_points),
           max_points(max_points), mode(mode),
-          flat_E(flat_E), flat_xi(flat_xi) {}
+          flat_E(flat_E) {}
 };
 
 /**
@@ -133,7 +131,7 @@ struct MGIntegrationConfig {
      * @param tail_order              GL order for E' tail regions (defaults to base_order).
      * @param far_order               GL order for E' far-from-peak regions (defaults to base_order).
      * @param xi_order                GL order for the ξ axis (defaults to base_order).
-     * @param xi_peak_k               Number of FWHMs for ξ peak-focused splitting window.
+     * @param xi_peak_k               Half-width of the ξ peak window in FWHM units (total window = 2k · FWHM).
      * @param flat_ep                 Optional flat E' density config (disables adaptive E' recursion).
      * @throws std::invalid_argument on invalid parameters.
      */
@@ -175,12 +173,12 @@ struct MGIntegrationConfig {
      * @brief High-accuracy flat E' config for warm temperatures (T >= 0.1 keV).
      *
      * bo=96, xi_order=96, xi_peak_k=10, flat_ep(d=512, ppd, max=8192).
-     * flat_E=false, flat_xi=false (keeps boundary layers and peak-focused ξ).
+     * flat_E=false (keeps boundary layers and peak-focused ξ).
      * Achieves < 1e-4 row-sum accuracy at T >= 1 keV.
      * Runtime: ~30-120s per matrix depending on temperature.
      */
     static MGIntegrationConfig warm_flat() {
-        FlatEpConfig flat{512.0, 8, 8192, FlatEpDensityMode::points_per_decade, false, false};
+        FlatEpConfig flat{512.0, 8, 8192, FlatEpDensityMode::points_per_decade, false};
         return MGIntegrationConfig(
             96, 1e-6, 1e-12, 7, 96,
             96, 96, 96, 10.0, flat);
@@ -398,7 +396,6 @@ private:
     /// Per-group GL rules for flat E' mode (empty when adaptive mode is active).
     std::vector<GaussLegendreRule> flat_ep_rules_;
     bool flat_E_ = false;
-    bool flat_xi_ = false;
 
     double integration_tolerance_;
     double xi_peak_k_;

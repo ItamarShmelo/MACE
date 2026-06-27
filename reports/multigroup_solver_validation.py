@@ -422,7 +422,7 @@ def emit_header(lines):
     lines.append(f"- `ASYMP_TAU_ALPHA_THRESHOLD`: 0.035")
     lines.append(f"- `power_series_self_tol`: 1e-7")
     lines.append(f"- `asymp_self_tol`: 1e-7")
-    lines.append(f"- Dispatch: error-driven cascade (A1 -> A2 -> P1 -> P2 -> P3)")
+    lines.append(f"- Dispatch: error-driven cascade (A1 -> A2 -> P1 -> P2)")
     lines.append("")
     lines.append("## Test Matrix")
     lines.append("")

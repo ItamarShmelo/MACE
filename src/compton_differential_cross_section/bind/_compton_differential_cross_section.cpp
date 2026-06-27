@@ -23,7 +23,7 @@ PYBIND11_MODULE(_compton_differential_cross_section, m) {
              "high_precision"_a = false,
              "eps_rel"_a = 1e-8,
              "n_min"_a = 4,
-             "n_max"_a = 200)
+             "n_max"_a = 500)
         .def("sigma_E", &ComptonPowerSeries::sigma_E,
              "E"_a, "E_prime"_a, "xi"_a,
              "T"_a, "Ne"_a)
@@ -160,10 +160,12 @@ PYBIND11_MODULE(_compton_differential_cross_section, m) {
 
     // --- Solver ---
     py::class_<ComptonKernelSolver>(m, "ComptonKernelSolver")
-        .def(py::init<double, double, double>(),
-             "asymp_tau_alpha_threshold"_a = constants::ASYMP_TAU_ALPHA_THRESHOLD,
-             "power_series_self_tol"_a     = 1e-7,
-             "asymp_self_tol"_a            = 1e-7)
+        .def(py::init<double, double, double, double, double>(),
+             "asymp_tau_alpha_threshold"_a  = constants::ASYMP_TAU_ALPHA_THRESHOLD,
+             "power_series_self_tol"_a      = 1e-7,
+             "asymp_self_tol"_a             = 1e-7,
+             "dd_power_series_self_tol"_a   = 1e-3,
+             "dd_asymp_self_tol"_a          = 1e-3)
         .def("sigma_E", &ComptonKernelSolver::sigma_E,
              "E"_a, "E_prime"_a, "xi"_a, "T"_a, "Ne"_a)
         .def("dsigma_E_dT", &ComptonKernelSolver::dsigma_E_dT,

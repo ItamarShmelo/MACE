@@ -139,26 +139,36 @@ point via a purely error-driven cascade:
 ```
 tau_alpha_max = tau * max(alpha_+, alpha_-)
 
-Asymptotic regime (tau_alpha_max < 0.035):
+if tau_alpha_max < 0.035:              -- Asymptotic regime
     A1: try Asymptotic series (double)
         accept if self-error < asymp_self_tol (1e-7).
         The roundoff-aware error estimator naturally flags cancellation
         at ultra-low gamma, triggering escalation to DD.
     A2: try Asymptotic series (DD)
-        accept if self-error < asymp_self_tol.
-    Fall through to power series on failure.
-
-Power series regime (tau_alpha_max >= 0.035, or fallthrough):
-    P1: try Power series (double) -- only outside asymptotic regime
+        accept if self-error < dd_asymp_self_tol (1e-3).
+else:                                  -- Power series regime
+    P1: try Power series (double)
         accept if self-error < power_series_self_tol (1e-7)
         AND (dsigma_dT or value >= 0).
-    P2: try Power series (DD)
-        accept if self-error < power_series_self_tol
+    P2: try Power series (DD, n_max=500)
+        accept if self-error < dd_power_series_self_tol (1e-3)
         AND (dsigma_dT or value >= 0).
-    P3: try Asymptotic DD (last resort) -- skip if already tried in A2.
 
-Return best-seen result if error < 1e-3; throw otherwise.
+Throw if no backend passes its tolerance.
 ```
+
+**P3 removal and n_max increase.**  The previous dispatch included a P3 step
+that tried the asymptotic DD series as a last resort in the power-series regime.
+Analysis showed that at ultra-low $\gamma$ (< $10^{-6}$) the DD power series
+with the default `n_max=200` converged prematurely due to extreme cancellation
+in P+ − P−, reporting self-error just above $10^{-3}$.  The asymptotic DD
+happened to pass because it is geometrically accurate when $\gamma \to 0$
+(its expansion parameter $\tau\alpha$ is gamma-independent).  However, raising
+`n_max` to 500 allows the DD power series to converge properly at these points
+(reaching the DD roundoff floor of ~$10^{-6}$), eliminating the need for P3.
+This is preferable because the asymptotic series is a divergent expansion and
+its self-reported error is not a reliable bound outside its intended regime
+($\tau\alpha < 0.035$).
 
 **Error-driven DD escalation.**  The previous dispatch used a hard-coded
 $\gamma_{\min}$ threshold to decide when DD arithmetic was needed in the
@@ -434,7 +444,7 @@ the constructor so that invalid configurations are rejected early.
 | `tail_order` | `nullopt` → `base_order` | GL order for E' tail (log/rlog) regions |
 | `far_order` | `nullopt` → `base_order` | GL order for E' far-from-peak regions |
 | `xi_order` | `nullopt` → `base_order` | GL order for the ξ peak panel |
-| `xi_peak_k` | 10.0 | Number of FWHMs for the ξ peak-focused splitting window |
+| `xi_peak_k` | 10.0 | Half-width of the ξ peak window in FWHM units (total window = 2k · FWHM) |
 | `integration_tolerance` | 1e-3 | Overall relative tolerance for the outer integral |
 | `cutoff_ratio` | 1e-8 | Outward-from-peak early-termination ratio |
 | `flat_ep` | `nullopt` | Optional flat E' density config (replaces adaptive E' with single-pass GL) |
@@ -456,22 +466,79 @@ peak (log for groups above the peak, rlog for groups below).
 
 #### ξ Peak-Focused Splitting
 
-For non-elastic scattering (|E'/E − 1| > 0.05), the ξ integrand has a sharp
-peak at the Compton angle $\xi_c = 1 - (1/\gamma)(1/r - 1)$ where $r = E'/E$.
-The FWHM of this peak scales as:
+The ξ integrand has a sharp peak at the Compton angle
 
-$$\text{FWHM}(\xi) \approx 4\sqrt{|1-r|/r} \cdot \sqrt{\tau} / \gamma^{3/2}$$
+$$\xi_\text{pk} = 1 - \frac{|\gamma'-\gamma|}{\gamma\,\gamma'}$$
 
-The integrator splits the ξ interval into three panels:
-1. Left tail: [ξ_lo, ξ_c − k·FWHM/2] with 8-point GL
-2. Peak: [ξ_c − k·FWHM/2, ξ_c + k·FWHM/2] with `xi_order`-point GL
-3. Right tail: [ξ_c + k·FWHM/2, ξ_hi] with 8-point GL
+with curvature-based Gaussian width
 
-where k = `xi_peak_k` (default 10). This splitting is applied only when the
-peak window is narrower than 80% of the full ξ interval, ensuring the tails
-are exponentially small and well-resolved by just 8 points. For near-elastic
-scatter (|r − 1| < 0.05) or when the peak fills most of the interval, the
-integrator falls back to log/rlog mapping or standard linear GL.
+$$\sigma_\xi = \frac{\sqrt{\tau\,|\gamma'-\gamma|\,(2+|\gamma'-\gamma|)}}{\gamma\,\gamma'}$$
+
+and FWHM $= 2\sqrt{2\ln 2}\;\sigma_\xi$.  The peak window is
+$[\xi_\text{pk} - k \cdot \text{FWHM},\; \xi_\text{pk} + k \cdot \text{FWHM}]$
+where $k$ = `xi_peak_k` (default 10) is the half-width in FWHM units (total
+window = 2k · FWHM).  The raw, unclamped $\xi_\text{pk}$ determines
+which integration regime applies — it is not clamped to the bin domain.
+
+**Elastic-like guard.** When $d = |\gamma'-\gamma|$ is extremely small, the
+FWHM formula produces a degenerate (near-zero or denormalized) width.  A
+combined absolute + relative guard detects this:
+
+$$d < 10^{-12} \quad\text{or}\quad d < \gamma\gamma' \cdot \texttt{XI\_UPPER\_EPS}$$
+
+The absolute prong catches numerical degeneracy of the width formula.  The
+relative prong detects when $\xi_\text{pk}$ falls inside the excluded endpoint
+zone ($\xi > 1 - \texttt{XI\_UPPER\_EPS}$), making FWHM-based splitting
+pointless.  When elastic-like, the integrator uses `rlog_legendre_integrate` on
+shifted coordinates over the full bin, clustering nodes near $\xi_\text{hi}$
+(toward the elastic peak at ξ = 1).
+
+**Integration regimes (non-elastic):**
+
+1. **Peak window entirely left** ($\xi_\text{pk} + k\cdot\text{FWHM} \le \xi_\text{lo}$):
+   the integrand decays away from $\xi_\text{lo}$.
+   `log_legendre_integrate` on shifted coordinates clusters nodes near
+   $\xi_\text{lo}$.
+
+2. **Peak window entirely right** ($\xi_\text{pk} - k\cdot\text{FWHM} \ge \xi_\text{hi}$):
+   the integrand decays away from $\xi_\text{hi}$.
+   `rlog_legendre_integrate` on shifted coordinates clusters nodes near
+   $\xi_\text{hi}$.
+
+3. **Peak overlaps bin** (three-region split):
+   - Left tail $[\xi_\text{lo}, \text{core\_lo}]$: `rlog_legendre_integrate`
+     with 8-point GL, clustering near core_lo (toward peak).
+   - Peak core $[\text{core\_lo}, \text{core\_hi}]$: ordinary GL with
+     `xi_order`.
+   - Right tail $[\text{core\_hi}, \xi_\text{hi}]$: `log_legendre_integrate`
+     with 8-point GL, clustering near core_hi (toward peak).
+
+   When the peak window covers the entire bin (common at high temperature),
+   core_lo = ξ_lo and core_hi = ξ_hi, so no tail integrals are computed and
+   the result is a single GL pass — equivalent to plain linear GL.
+
+**Shifted coordinates.** The ξ domain includes negative values, but
+`log_legendre_integrate` and `rlog_legendre_integrate` require positive
+arguments.  Each interval is shifted to $[0, \text{span}]$ via
+$s = \xi - \xi_\text{base}$, with $\varepsilon = \text{span} \cdot 10^{-14}$
+as the lower bound to avoid $\log(0)$.
+
+**Defensive guards.** Each tail is skipped if its span is less than
+$10^{-14} \cdot \text{bin\_span}$ (prevents ill-conditioned log mapping on
+negligibly narrow intervals).  The peak core is skipped if
+core_hi $\le$ core_lo (floating-point edge case).
+
+**Removed mechanisms:**
+- The 5% ratio guard (`XI_PEAK_RATIO_THRESHOLD = 0.05`) is replaced by the
+  tighter elastic-like singularity guard.
+- The 80% width check is removed; splitting always applies and naturally
+  degrades when the peak window covers the bin.
+- The ratio-based log/rlog fallback (`LOG_XI_EP_RATIO_THRESHOLD = 1.5`) is
+  removed; the peak geometry (left/right/overlapping) handles all cases.
+- The `flat_xi` bypass is removed; peak-aware splitting always applies and
+  naturally degrades to full-bin GL when the peak window covers the entire bin.
+- Tail sub-intervals use log-spaced GL (instead of plain GL) to concentrate
+  nodes near the peak boundary where the integrand is largest.
 
 #### Recommended Production Configurations
 
@@ -483,8 +550,8 @@ Two factory methods provide validated high-accuracy configurations:
 |-----------|-------|-----------|
 | `base_order` | 192 | Resolves narrow Compton recoil band at cold T |
 | `peak_max_depth` | 9 | Deep recursion for extremely narrow E' peaks |
-| `xi_order` | 512 | Resolves sharp ξ peak (FWHM ∝ √τ/γ^1.5, very narrow at high E + cold T) |
-| `xi_peak_k` | 10 | 10× FWHM window captures >99.99% of ξ peak area |
+| `xi_order` | 512 | Resolves sharp ξ peak (FWHM ∝ √(τ·|Δγ|·(2+|Δγ|))/(γγ'), very narrow at high E + cold T) |
+| `xi_peak_k` | 10 | 10× FWHM half-width (20 FWHM total window) captures >99.99% of ξ peak area |
 | `integration_tolerance` | 1e-8 | Tight tolerance for adaptive refinement |
 | `cutoff_ratio` | 1e-12 | Conservative group cutoff |
 | `cold_temperature_order` | 192 | Matches base_order |
@@ -500,10 +567,9 @@ noise), element-wise RMS ~3e-3. Runtime: ~300–600s per 24-group matrix
 |-----------|-------|-----------|
 | `base_order` | 96 | High-order GL for E axis |
 | `xi_order` | 96 | Adequate for broader ξ peaks at warm T |
-| `xi_peak_k` | 10 | Standard peak window |
+| `xi_peak_k` | 10 | 10× FWHM half-width (20 FWHM total window) |
 | `flat_ep` | density=512, ppd, max=8192 | Dense flat E' (no adaptive recursion needed at warm T) |
 | `flat_E` | false | Keeps E-axis boundary layer log-mapping |
-| `flat_xi` | false | Keeps ξ peak-focused splitting |
 | `cutoff_ratio` | 1e-12 | Conservative group cutoff |
 
 Validated accuracy: MC converges as 1/√N with no bias. At N=10^9:
@@ -513,8 +579,8 @@ Runtime: ~30–120s per 24-group matrix.
 **Temperature switch at T = 0.1 keV:** Below this threshold, the Compton
 kernel narrows dramatically, requiring high adaptive resolution (bo=192) to
 resolve. Above, the kernel is broad enough that flat E' with 512 points/decade
-is sufficient and much faster. Both configs use `xi_peak_k=10` and keep
-`flat_xi=false` to leverage the analytically-derived FWHM peak splitting.
+is sufficient and much faster. Both configs use `xi_peak_k=10` to leverage
+the analytically-derived FWHM peak splitting.
 
 Python usage:
 ```python
@@ -639,14 +705,18 @@ $F_{n+1}$ subtraction, and the final error is `max(truncation, roundoff)`.
 In DD arithmetic, $\varepsilon_T \sim 10^{-32}$ makes the roundoff contribution
 negligible even after $G$-amplification, so DD results are unaffected.
 
-**Best-available return.**  Each step in the cascade is wrapped in
+**Strict regime dispatch.**  Each step in the cascade is wrapped in
 `try/catch` because any backend can throw on underflow or non-convergence at
-extreme parameters.  The solver tracks the best result seen so far (lowest
-self-error).  If no step's self-error falls below its respective acceptance
-threshold but the best-seen error is below 1.0, the best result is returned
---- a poorly-converged result is vastly more accurate than returning nothing.
-Only when all backends fail entirely (throw or self-error $\geq 1$) does the
-solver throw `runtime_error`.
+extreme parameters.  The asymptotic and power-series regimes are mutually
+exclusive (strict `if/else`): there is no fallthrough from the asymptotic
+regime to the power series.  If no backend within the selected regime passes
+its acceptance tolerance, the solver throws `runtime_error`.  The public
+`sigma_E` and `dsigma_E_dT` methods catch the throw and return
+`{value=0, error=1}` with a stderr warning, so callers in integration loops
+are not interrupted.  The DD power series uses a separate, looser tolerance
+(`dd_power_series_self_tol`, default $10^{-3}$) because it is the last resort
+in the power-series regime and its DD precision makes even modestly-converged
+results reliable.
 
 Tests anchor accuracy against Q256 post-IBP Gauss–Laguerre as the numerical
 ground truth.

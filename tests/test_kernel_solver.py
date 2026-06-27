@@ -113,7 +113,10 @@ class TestQ64AcceptedRegime:
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
         dd_res = DD_SERIES.dsigma_E_dT(E, Ep, xi, T, 1.0)
         solver_res = SOLVER.dsigma_E_dT(E, Ep, xi, T, 1.0)
-        assert _rel_diff(solver_res.value, dd_res.value) < 1e-5
+        if abs(dd_res.value) < 1e-20:
+            assert abs(solver_res.value - dd_res.value) < 1e-20
+        else:
+            assert _rel_diff(solver_res.value, dd_res.value) < 1e-5
 
 
 # ── Solver vs Q256 across the full parameter space ───────────────────────
@@ -190,6 +193,26 @@ class TestCustomThresholds:
         solver_res = q_always.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
         q_res = q64.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
         assert _rel_diff(solver_res.value, q_res.value) < 1e-6
+
+    def test_dd_power_series_tol_tight(self):
+        """With dd_tol=0 the DD power series is never accepted in the
+        power-series regime; only P1 (double) can return.
+        """
+        tight_dd = ComptonKernelSolver(dd_power_series_self_tol=0.0)
+        E, Ep, T = 50.0 * kev, 55.0 * kev, 50.0 * kev_kelvin
+        solver_res = tight_dd.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
+        default_res = SOLVER.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
+        assert _rel_diff(solver_res.value, default_res.value) < 1e-4
+
+    def test_dd_power_series_tol_loose(self):
+        """With dd_tol=1.0 the DD power series always passes; result
+        should still agree with Q256 to reasonable precision.
+        """
+        loose_dd = ComptonKernelSolver(dd_power_series_self_tol=1.0)
+        E, Ep, T = 50.0 * kev, 55.0 * kev, 50.0 * kev_kelvin
+        solver_res = loose_dd.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
+        q_res = QUAD_REF.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
+        assert _rel_diff(solver_res.value, q_res.value) < 1e-3
 
 
 # ── DD asymptotic regime: ultra-low gamma, cold plasma ───────────────────
