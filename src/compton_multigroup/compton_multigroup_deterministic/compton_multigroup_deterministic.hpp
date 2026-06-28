@@ -115,6 +115,7 @@ struct MGIntegrationConfig {
     std::optional<int> tail_order;
     std::optional<int> far_order;
     std::optional<int> xi_order;
+    std::optional<int> xi_tail_order;
     double integration_tolerance;
     double cutoff_ratio;
     double xi_peak_k;
@@ -130,8 +131,9 @@ struct MGIntegrationConfig {
      * @param cold_temperature_order  GL order for E/ξ when T < COLD_TEMPERATURE_THRESHOLD.
      * @param tail_order              GL order for E' tail regions (defaults to base_order).
      * @param far_order               GL order for E' far-from-peak regions (defaults to base_order).
-     * @param xi_order                GL order for the ξ axis (defaults to base_order).
-     * @param xi_peak_k               Half-width of the ξ peak window in FWHM units (total window = 2k · FWHM).
+     * @param xi_order                GL order for the ξ peak core (defaults to base_order).
+     * @param xi_peak_k               Half-width of the ξ peak window in sigma units.
+     * @param xi_tail_order           GL order for ξ tail sub-intervals (defaults to 16).
      * @param flat_ep                 Optional flat E' density config (disables adaptive E' recursion).
      * @throws std::invalid_argument on invalid parameters.
      */
@@ -144,7 +146,8 @@ struct MGIntegrationConfig {
         std::optional<int> tail_order = std::nullopt,
         std::optional<int> far_order = std::nullopt,
         std::optional<int> xi_order = std::nullopt,
-        double xi_peak_k = 10.0,
+        double xi_peak_k = 5.0,
+        std::optional<int> xi_tail_order = std::nullopt,
         std::optional<FlatEpConfig> flat_ep = std::nullopt);
 
     /** @brief Effective tail GL order (tail_order if set, otherwise base_order). */
@@ -156,17 +159,20 @@ struct MGIntegrationConfig {
     /** @brief Effective ξ GL order (xi_order if set, otherwise base_order). */
     int effective_xi_order() const { return xi_order.value_or(base_order); }
 
+    /** @brief Effective ξ tail GL order (xi_tail_order if set, otherwise 16). */
+    int effective_xi_tail_order() const { return xi_tail_order.value_or(16); }
+
     /**
      * @brief High-accuracy adaptive config for cold temperatures (T < 0.1 keV).
      *
-     * bo=192, pd=9, xi_order=512, xi_peak_k=10, tol=1e-8.
+     * bo=192, pd=9, xi_order=512, xi_peak_k=5, xi_tail_order=24, tol=1e-8.
      * Achieves < 1e-4 row-sum accuracy (MC-noise limited at N=1e9).
      * Runtime: ~600-1300s per matrix depending on temperature.
      */
     static MGIntegrationConfig cold_adaptive() {
         return MGIntegrationConfig(
             192, 1e-8, 1e-12, 9, 192,
-            192, 192, 512, 10.0, std::nullopt);
+            192, 192, 512, 5.0, 24, std::nullopt);
     }
 
     /**
@@ -181,7 +187,7 @@ struct MGIntegrationConfig {
         FlatEpConfig flat{512.0, 8, 8192, FlatEpDensityMode::points_per_decade, false};
         return MGIntegrationConfig(
             96, 1e-6, 1e-12, 7, 96,
-            96, 96, 96, 10.0, flat);
+            96, 96, 96, 5.0, 16, flat);
     }
 };
 

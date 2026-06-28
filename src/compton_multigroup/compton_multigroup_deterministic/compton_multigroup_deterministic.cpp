@@ -31,6 +31,7 @@ MGIntegrationConfig::MGIntegrationConfig(
     std::optional<int> const far_order,
     std::optional<int> const xi_order,
     double const xi_peak_k,
+    std::optional<int> const xi_tail_order,
     std::optional<FlatEpConfig> const flat_ep)
     : base_order(base_order)
     , cold_temperature_order(cold_temperature_order)
@@ -38,6 +39,7 @@ MGIntegrationConfig::MGIntegrationConfig(
     , tail_order(tail_order)
     , far_order(far_order)
     , xi_order(xi_order)
+    , xi_tail_order(xi_tail_order)
     , integration_tolerance(integration_tolerance)
     , cutoff_ratio(cutoff_ratio)
     , xi_peak_k(xi_peak_k)
@@ -84,7 +86,7 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
     , xi_rule_(compute_gauss_legendre(config.effective_xi_order()))
     , xi_cold_rule_(compute_gauss_legendre(
           std::max(config.cold_temperature_order, config.effective_xi_order())))
-    , xi_tail_rule_(compute_gauss_legendre(8))
+    , xi_tail_rule_(compute_gauss_legendre(config.effective_xi_tail_order()))
     , integration_tolerance_(config.integration_tolerance)
     , xi_peak_k_(config.xi_peak_k)
     , peak_max_depth_(config.peak_max_depth)
@@ -272,27 +274,17 @@ double ComptonMultigroupKernel::integrate_xi_bin(
     double const sigma_xi =
         std::sqrt(tau * abs_dg * (2.0 + abs_dg))
         / (gamma * gamma_p);
-    double const fwhm =
-        2.0 * std::sqrt(2.0 * std::log(2.0)) * sigma_xi;
-    double const half_w = xi_peak_k_ * fwhm;
+    double const half_w = xi_peak_k_ * sigma_xi;
 
     double const peak_lo = xi_pk - half_w;
     double const peak_hi = xi_pk + half_w;
 
     if (peak_hi <= xi_lo) {
-        double const span = xi_hi - xi_lo;
-        double const eps = span * 1e-14;
-        return log_legendre_integrate(
-            [&](double const s) { return f(xi_lo + s); },
-            active_xi_rule, eps, span);
+        return legendre_integrate(f, active_xi_rule, xi_lo, xi_hi);
     }
 
     if (peak_lo >= xi_hi) {
-        double const span = xi_hi - xi_lo;
-        double const eps = span * 1e-14;
-        return rlog_legendre_integrate(
-            [&](double const s) { return f(xi_lo + s); },
-            active_xi_rule, eps, span);
+        return legendre_integrate(f, active_xi_rule, xi_lo, xi_hi);
     }
 
     double const core_lo = std::max(xi_lo, peak_lo);
@@ -304,10 +296,7 @@ double ComptonMultigroupKernel::integrate_xi_bin(
     if (core_lo > xi_lo) {
         double const span = core_lo - xi_lo;
         if (span > 1e-14 * bin_span) {
-            double const eps = span * 1e-14;
-            result += rlog_legendre_integrate(
-                [&](double const s) { return f(xi_lo + s); },
-                xi_tail_rule_, eps, span);
+            result += legendre_integrate(f, xi_tail_rule_, xi_lo, core_lo);
         }
     }
 
@@ -319,10 +308,7 @@ double ComptonMultigroupKernel::integrate_xi_bin(
     if (core_hi < xi_hi) {
         double const span = xi_hi - core_hi;
         if (span > 1e-14 * bin_span) {
-            double const eps = span * 1e-14;
-            result += log_legendre_integrate(
-                [&](double const s) { return f(core_hi + s); },
-                xi_tail_rule_, eps, span);
+            result += legendre_integrate(f, xi_tail_rule_, core_hi, xi_hi);
         }
     }
 

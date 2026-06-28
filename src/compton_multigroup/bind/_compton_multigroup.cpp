@@ -48,6 +48,7 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .def(py::init<int, double, double, int, int,
                        std::optional<int>, std::optional<int>,
                        std::optional<int>, double,
+                       std::optional<int>,
                        std::optional<FlatEpConfig>>(),
              "base_order"_a = 24,
              "integration_tolerance"_a = 1e-3,
@@ -57,7 +58,8 @@ PYBIND11_MODULE(_compton_multigroup, m) {
              "tail_order"_a = std::nullopt,
              "far_order"_a = std::nullopt,
              "xi_order"_a = std::nullopt,
-             "xi_peak_k"_a = 10.0,
+             "xi_peak_k"_a = 5.0,
+             "xi_tail_order"_a = std::nullopt,
              "flat_ep"_a = std::nullopt)
         .def_readwrite("base_order",              &MGIntegrationConfig::base_order)
         .def_readwrite("cold_temperature_order",  &MGIntegrationConfig::cold_temperature_order)
@@ -65,6 +67,7 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .def_readwrite("tail_order",              &MGIntegrationConfig::tail_order)
         .def_readwrite("far_order",               &MGIntegrationConfig::far_order)
         .def_readwrite("xi_order",                &MGIntegrationConfig::xi_order)
+        .def_readwrite("xi_tail_order",           &MGIntegrationConfig::xi_tail_order)
         .def_readwrite("integration_tolerance",   &MGIntegrationConfig::integration_tolerance)
         .def_readwrite("cutoff_ratio",            &MGIntegrationConfig::cutoff_ratio)
         .def_readwrite("xi_peak_k",              &MGIntegrationConfig::xi_peak_k)
@@ -72,6 +75,7 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .def("effective_tail_order", &MGIntegrationConfig::effective_tail_order)
         .def("effective_far_order",  &MGIntegrationConfig::effective_far_order)
         .def("effective_xi_order",   &MGIntegrationConfig::effective_xi_order)
+        .def("effective_xi_tail_order", &MGIntegrationConfig::effective_xi_tail_order)
         .def_static("cold_adaptive", &MGIntegrationConfig::cold_adaptive,
             "High-accuracy adaptive config for T < 0.1 keV (bo=192, pd=9, xi=512)")
         .def_static("warm_flat", &MGIntegrationConfig::warm_flat,

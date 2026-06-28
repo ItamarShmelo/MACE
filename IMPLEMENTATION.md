@@ -475,9 +475,9 @@ with curvature-based Gaussian width
 $$\sigma_\xi = \frac{\sqrt{\tau\,|\gamma'-\gamma|\,(2+|\gamma'-\gamma|)}}{\gamma\,\gamma'}$$
 
 and FWHM $= 2\sqrt{2\ln 2}\;\sigma_\xi$.  The peak window is
-$[\xi_\text{pk} - k \cdot \text{FWHM},\; \xi_\text{pk} + k \cdot \text{FWHM}]$
-where $k$ = `xi_peak_k` (default 10) is the half-width in FWHM units (total
-window = 2k · FWHM).  The raw, unclamped $\xi_\text{pk}$ determines
+$[\xi_\text{pk} - k \cdot \sigma_\xi,\; \xi_\text{pk} + k \cdot \sigma_\xi]$
+where $k$ = `xi_peak_k` (default 5) is the half-width in $\sigma_\xi$ units
+(total window = $2k\,\sigma_\xi$).  The raw, unclamped $\xi_\text{pk}$ determines
 which integration regime applies — it is not clamped to the bin domain.
 
 **Elastic-like guard.** When $d = |\gamma'-\gamma|$ is extremely small, the
@@ -495,38 +495,39 @@ shifted coordinates over the full bin, clustering nodes near $\xi_\text{hi}$
 
 **Integration regimes (non-elastic):**
 
-1. **Peak window entirely left** ($\xi_\text{pk} + k\cdot\text{FWHM} \le \xi_\text{lo}$):
-   the integrand decays away from $\xi_\text{lo}$.
-   `log_legendre_integrate` on shifted coordinates clusters nodes near
-   $\xi_\text{lo}$.
+1. **Peak window entirely left** ($\xi_\text{pk} + k\cdot\sigma_\xi \le \xi_\text{lo}$):
+   the integrand decays away from $\xi_\text{lo}$.  Plain `legendre_integrate`
+   over the full bin $[\xi_\text{lo}, \xi_\text{hi}]$.
 
-2. **Peak window entirely right** ($\xi_\text{pk} - k\cdot\text{FWHM} \ge \xi_\text{hi}$):
-   the integrand decays away from $\xi_\text{hi}$.
-   `rlog_legendre_integrate` on shifted coordinates clusters nodes near
-   $\xi_\text{hi}$.
+2. **Peak window entirely right** ($\xi_\text{pk} - k\cdot\sigma_\xi \ge \xi_\text{hi}$):
+   the integrand decays away from $\xi_\text{hi}$.  Plain `legendre_integrate`
+   over the full bin $[\xi_\text{lo}, \xi_\text{hi}]$.
 
 3. **Peak overlaps bin** (three-region split):
-   - Left tail $[\xi_\text{lo}, \text{core\_lo}]$: `rlog_legendre_integrate`
-     with 8-point GL, clustering near core_lo (toward peak).
+   - Left tail $[\xi_\text{lo}, \text{core\_lo}]$: plain `legendre_integrate`
+     with `xi_tail_order` (default 16).
    - Peak core $[\text{core\_lo}, \text{core\_hi}]$: ordinary GL with
      `xi_order`.
-   - Right tail $[\text{core\_hi}, \xi_\text{hi}]$: `log_legendre_integrate`
-     with 8-point GL, clustering near core_hi (toward peak).
+   - Right tail $[\text{core\_hi}, \xi_\text{hi}]$: plain `legendre_integrate`
+     with `xi_tail_order` (default 16).
 
    When the peak window covers the entire bin (common at high temperature),
    core_lo = ξ_lo and core_hi = ξ_hi, so no tail integrals are computed and
    the result is a single GL pass — equivalent to plain linear GL.
 
-**Shifted coordinates.** The ξ domain includes negative values, but
-`log_legendre_integrate` and `rlog_legendre_integrate` require positive
-arguments.  Each interval is shifted to $[0, \text{span}]$ via
-$s = \xi - \xi_\text{base}$, with $\varepsilon = \text{span} \cdot 10^{-14}$
-as the lower bound to avoid $\log(0)$.
+**Rationale for plain GL on non-elastic branches.** The log/rlog coordinate
+mappings concentrate nodes near one endpoint, which in theory improves accuracy
+for exponentially decaying integrands.  However, the mappings require positive
+arguments (introducing shifted coordinates and eps guards), and the exp/log
+transforms can amplify floating-point noise on very narrow sub-intervals.
+Since the peak window already captures the dominant contribution (5σ on
+each side = 10σ total), the far-bin and tail integrands are smooth and small,
+making plain GL adequate with the existing quadrature orders.  This improves
+robustness without measurable accuracy loss.
 
 **Defensive guards.** Each tail is skipped if its span is less than
-$10^{-14} \cdot \text{bin\_span}$ (prevents ill-conditioned log mapping on
-negligibly narrow intervals).  The peak core is skipped if
-core_hi $\le$ core_lo (floating-point edge case).
+$10^{-14} \cdot \text{bin\_span}$ (prevents zero-width quadrature).
+The peak core is skipped if core_hi $\le$ core_lo (floating-point edge case).
 
 **Removed mechanisms:**
 - The 5% ratio guard (`XI_PEAK_RATIO_THRESHOLD = 0.05`) is replaced by the
@@ -537,8 +538,8 @@ core_hi $\le$ core_lo (floating-point edge case).
   removed; the peak geometry (left/right/overlapping) handles all cases.
 - The `flat_xi` bypass is removed; peak-aware splitting always applies and
   naturally degrades to full-bin GL when the peak window covers the entire bin.
-- Tail sub-intervals use log-spaced GL (instead of plain GL) to concentrate
-  nodes near the peak boundary where the integrand is largest.
+- Log/rlog mappings for non-elastic far-bin and tail sub-intervals are replaced
+  with plain GL for robustness (avoids exp/log transforms on narrow intervals).
 
 #### Recommended Production Configurations
 
@@ -550,8 +551,9 @@ Two factory methods provide validated high-accuracy configurations:
 |-----------|-------|-----------|
 | `base_order` | 192 | Resolves narrow Compton recoil band at cold T |
 | `peak_max_depth` | 9 | Deep recursion for extremely narrow E' peaks |
-| `xi_order` | 512 | Resolves sharp ξ peak (FWHM ∝ √(τ·|Δγ|·(2+|Δγ|))/(γγ'), very narrow at high E + cold T) |
-| `xi_peak_k` | 10 | 10× FWHM half-width (20 FWHM total window) captures >99.99% of ξ peak area |
+| `xi_order` | 512 | Resolves sharp ξ peak (σ_ξ very narrow at high E + cold T) |
+| `xi_peak_k` | 5 | 5σ half-width (10σ total window) captures >99.99% of ξ peak area |
+| `xi_tail_order` | 24 | Higher tail order for cold regime where tails carry more signal |
 | `integration_tolerance` | 1e-8 | Tight tolerance for adaptive refinement |
 | `cutoff_ratio` | 1e-12 | Conservative group cutoff |
 | `cold_temperature_order` | 192 | Matches base_order |
@@ -567,7 +569,8 @@ noise), element-wise RMS ~3e-3. Runtime: ~300–600s per 24-group matrix
 |-----------|-------|-----------|
 | `base_order` | 96 | High-order GL for E axis |
 | `xi_order` | 96 | Adequate for broader ξ peaks at warm T |
-| `xi_peak_k` | 10 | 10× FWHM half-width (20 FWHM total window) |
+| `xi_peak_k` | 5 | 5σ half-width (10σ total window) |
+| `xi_tail_order` | 16 | Default tail order (tails negligible at warm T) |
 | `flat_ep` | density=512, ppd, max=8192 | Dense flat E' (no adaptive recursion needed at warm T) |
 | `flat_E` | false | Keeps E-axis boundary layer log-mapping |
 | `cutoff_ratio` | 1e-12 | Conservative group cutoff |
@@ -579,8 +582,8 @@ Runtime: ~30–120s per 24-group matrix.
 **Temperature switch at T = 0.1 keV:** Below this threshold, the Compton
 kernel narrows dramatically, requiring high adaptive resolution (bo=192) to
 resolve. Above, the kernel is broad enough that flat E' with 512 points/decade
-is sufficient and much faster. Both configs use `xi_peak_k=10` to leverage
-the analytically-derived FWHM peak splitting.
+is sufficient and much faster. Both configs use `xi_peak_k=5` (5σ half-width)
+with configurable `xi_tail_order` for the peak-aware splitting.
 
 Python usage:
 ```python
