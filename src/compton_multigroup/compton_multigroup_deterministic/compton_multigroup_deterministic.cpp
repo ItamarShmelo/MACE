@@ -231,34 +231,149 @@ double integrate_Ep_group(
 
 } // anonymous namespace
 
-// ── Single (g, gp) entry ────────────────────────────────────────────────
-//
-// Evaluates the weighted multigroup scattering matrix element for one
-// incoming group g scattering into target group gp, across all angle bins.
-//
-// The integral is three-dimensional (E × E' × ξ) and evaluated inside-out:
-//
-//   1. Innermost: ξ integral via single-panel Gauss-Legendre over one angle bin.
-//   2. Middle:    E' integral via peak-aware three-region quadrature.
-//                 The cold-electron recoil band (thermally broadened by
-//                 peak_limits) splits E' into a peak region where the kernel
-//                 is strongest, exponentially suppressed tail regions on
-//                 either side, and far regions beyond.  Only the peak uses
-//                 adaptive refinement; tails use single-panel log/rlog GL
-//                 and far uses single-panel linear GL.
-//   3. Outermost: E integral over the incoming group [E_lo, E_hi].
-//                 Single-panel GL with mapping (linear / log / reflected-log)
-//                 chosen per angle bin based on the weight-function contrast:
-//                 when E_hi/E_lo exceeds LOG_E_RATIO_THRESHOLD,
-//                 a logarithmic change of variable clusters quadrature nodes near
-//                 the heavy-weight boundary.
-//
-// The final matrix element is:
-//
-//   result[g, gp, a] = 2π / D(g) · ∫ w(E) · [∫∫ f·Σ dξ dE'] dE
-//
-// Returns Σ_a |result[g, gp, a]| so the caller can apply the
-// outward-from-peak cutoff.
+// ── Layer 1: single ξ-bin integration for fixed (E, E') ─────────────────
+
+double ComptonMultigroupKernel::integrate_xi_bin(
+    ComptonKernelSolver const& kernel,
+    ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+    double const E,
+    double const Ep,
+    double const xi_lo,
+    double const xi_hi,
+    double const T,
+    double const Ne,
+    KernelMultiplier const& multiplier,
+    GaussLegendreRule const& active_xi_rule) const
+{
+    double const tau = T * units::k_boltz / units::me_c2;
+
+    auto f = [&](double const xi) {
+        return multiplier(E, Ep, xi, T, Ne) *
+               (kernel.*eval)(E, Ep, xi, T, Ne).value;
+    };
+
+    double const gamma = E / units::me_c2;
+    double const gamma_p = Ep / units::me_c2;
+    double const abs_dg = std::abs(gamma - gamma_p);
+
+    bool const elastic_like =
+        abs_dg < constants::ELASTIC_LIKE_D_THRESHOLD ||
+        abs_dg < gamma * gamma_p * constants::XI_UPPER_EPS;
+
+    if (elastic_like) {
+        double const span = xi_hi - xi_lo;
+        double const eps = span * 1e-14;
+        return rlog_legendre_integrate(
+            [&](double const s) { return f(xi_lo + s); },
+            active_xi_rule, eps, span);
+    }
+
+    double const xi_pk = 1.0 - abs_dg / (gamma * gamma_p);
+    double const sigma_xi =
+        std::sqrt(tau * abs_dg * (2.0 + abs_dg))
+        / (gamma * gamma_p);
+    double const fwhm =
+        2.0 * std::sqrt(2.0 * std::log(2.0)) * sigma_xi;
+    double const half_w = xi_peak_k_ * fwhm;
+
+    double const peak_lo = xi_pk - half_w;
+    double const peak_hi = xi_pk + half_w;
+
+    if (peak_hi <= xi_lo) {
+        double const span = xi_hi - xi_lo;
+        double const eps = span * 1e-14;
+        return log_legendre_integrate(
+            [&](double const s) { return f(xi_lo + s); },
+            active_xi_rule, eps, span);
+    }
+
+    if (peak_lo >= xi_hi) {
+        double const span = xi_hi - xi_lo;
+        double const eps = span * 1e-14;
+        return rlog_legendre_integrate(
+            [&](double const s) { return f(xi_lo + s); },
+            active_xi_rule, eps, span);
+    }
+
+    double const core_lo = std::max(xi_lo, peak_lo);
+    double const core_hi = std::min(xi_hi, peak_hi);
+    double const bin_span = xi_hi - xi_lo;
+
+    double result = 0.0;
+
+    if (core_lo > xi_lo) {
+        double const span = core_lo - xi_lo;
+        if (span > 1e-14 * bin_span) {
+            double const eps = span * 1e-14;
+            result += rlog_legendre_integrate(
+                [&](double const s) { return f(xi_lo + s); },
+                xi_tail_rule_, eps, span);
+        }
+    }
+
+    if (core_hi > core_lo) {
+        result += legendre_integrate(
+            f, active_xi_rule, core_lo, core_hi);
+    }
+
+    if (core_hi < xi_hi) {
+        double const span = xi_hi - core_hi;
+        if (span > 1e-14 * bin_span) {
+            double const eps = span * 1e-14;
+            result += log_legendre_integrate(
+                [&](double const s) { return f(core_hi + s); },
+                xi_tail_rule_, eps, span);
+        }
+    }
+
+    return result;
+}
+
+// ── Layer 2: E' + single ξ-bin integration for fixed E ──────────────────
+
+double ComptonMultigroupKernel::integrate_Ep_xi_bin(
+    ComptonKernelSolver const& kernel,
+    ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+    double const E,
+    double const Ep_lo,
+    double const Ep_hi,
+    double const xi_lo,
+    double const xi_hi,
+    double const T,
+    double const Ne,
+    KernelMultiplier const& multiplier,
+    GaussLegendreRule const& active_rule,
+    GaussLegendreRule const& active_xi_rule,
+    double const peak_tol,
+    GaussLegendreRule const* flat_ep_rule) const
+{
+    auto const [band_lo, band_hi] = peak_limits(E, xi_lo, xi_hi, T);
+
+    auto ep_integrand = [&](double const Ep) {
+        return integrate_xi_bin(
+            kernel, eval, E, Ep, xi_lo, xi_hi, T, Ne,
+            multiplier, active_xi_rule);
+    };
+
+    if (flat_ep_rule != nullptr) {
+        if (band_hi <= Ep_lo) {
+            return log_legendre_integrate(ep_integrand, *flat_ep_rule, Ep_lo, Ep_hi);
+        } else if (band_lo >= Ep_hi) {
+            return rlog_legendre_integrate(ep_integrand, *flat_ep_rule, Ep_lo, Ep_hi);
+        } else {
+            return legendre_integrate(ep_integrand, *flat_ep_rule, Ep_lo, Ep_hi);
+        }
+    }
+
+    return integrate_Ep_group(
+        ep_integrand,
+        Ep_lo, Ep_hi, band_lo, band_hi,
+        active_rule, peak_tol, peak_max_depth_,
+        tail_rule_,
+        far_rule_);
+}
+
+// ── Single (g, gp) entry (simplified) ───────────────────────────────────
 
 double ComptonMultigroupKernel::compute_group_entry(
     ComptonKernelSolver const& kernel,
@@ -277,184 +392,36 @@ double ComptonMultigroupKernel::compute_group_entry(
     std::vector<double>& result) const
 {
     int const G = num_groups();
-    double const tau = T * units::k_boltz / units::me_c2;
 
-    // Incoming group [E_lo, E_hi] and target group [Ep_lo, Ep_hi].
     double const E_lo = group_boundaries_[g];
     double const E_hi = group_boundaries_[g + 1];
     double const Ep_lo = group_boundaries_[gp];
     double const Ep_hi = group_boundaries_[gp + 1];
 
-    // Accumulates Σ_a |S(g,gp,a)| across angle bins for cutoff decisions.
+    GaussLegendreRule const* flat_ep_rule =
+        flat_ep_rules_.empty() ? nullptr : &flat_ep_rules_[gp];
+
     double group_sum = 0.0;
 
-    // --- Loop over angle bins ---
-    // Each bin [xi_lo, xi_hi] is an equal-width slice of [-1, 1].
-    // ξ = 1 is an integrable singularity where a = 1 - ξ = 0, causing
-    // division by zero in kinematic parameters.  Clamping the last bin
-    // edge to 1 - XI_UPPER_EPS avoids this; the excluded sliver
-    // [1-eps, 1] contributes O(eps / bin_width) ≈ 4e-10 relative error.
     for (int a = 0; a < num_angle_bins; ++a) {
         double const xi_lo = -1.0 + a * dxi;
         double const xi_hi = std::min(-1.0 + (a + 1) * dxi,
                                       1.0 - constants::XI_UPPER_EPS);
 
-        // --- E integrand (outermost axis) ---
-        // For a given incoming energy E, this lambda computes:
-        //   w(E, T) · ∫_{Ep_lo}^{Ep_hi} ∫_{xi_lo}^{xi_hi} f·Σ dξ dE'
         auto E_integrand = [&](double const E) {
             double const w = weight_func_->weight(E, T);
-
-            // Thermally broadened cold-recoil band: the E' interval where
-            // the kernel peaks for a cold electron.  Outside this band
-            // the kernel is exponentially suppressed ∝ exp(-(λ_min-1)/τ).
-            auto const [band_lo, band_hi] = peak_limits(E, xi_lo, xi_hi, T);
-
-            // --- E' integral (middle axis) ---
-            // integrate_Ep_group splits [Ep_lo, Ep_hi] into three regions
-            // relative to [band_lo, band_hi]:
-            //   peak: adaptive GL
-            //   tail: single-panel log/rlog GL
-            //   far:  single-panel linear GL
-            auto xi_integrand = [&](double const E_in, double const Ep) {
-                auto f = [&](double const xi) {
-                    return multiplier(E_in, Ep, xi, T, Ne) *
-                           (kernel.*eval)(E_in, Ep, xi, T, Ne).value;
-                };
-
-                double const gamma = E_in / units::me_c2;
-                double const gamma_p = Ep / units::me_c2;
-                double const abs_dg = std::abs(gamma - gamma_p);
-
-                // Elastic-like: FWHM formula is degenerate when d ≈ 0
-                // or when the peak falls inside the excluded endpoint zone.
-                bool const elastic_like =
-                    abs_dg < constants::ELASTIC_LIKE_D_THRESHOLD ||
-                    abs_dg < gamma * gamma_p * constants::XI_UPPER_EPS;
-
-                if (elastic_like) {
-                    double const span = xi_hi - xi_lo;
-                    double const eps = span * 1e-14;
-                    return rlog_legendre_integrate(
-                        [&](double const s) { return f(xi_lo + s); },
-                        active_xi_rule, eps, span);
-                }
-
-                // Raw, unclamped peak location and curvature-based width.
-                double const xi_pk = 1.0 - abs_dg / (gamma * gamma_p);
-                double const sigma_xi =
-                    std::sqrt(tau * abs_dg * (2.0 + abs_dg))
-                    / (gamma * gamma_p);
-                double const fwhm =
-                    2.0 * std::sqrt(2.0 * std::log(2.0)) * sigma_xi;
-                // xi_peak_k_ is the half-width of the peak window in FWHMs.
-                // Total window = 2 * xi_peak_k_ * FWHM.
-                double const half_w = xi_peak_k_ * fwhm;
-
-                double const peak_lo = xi_pk - half_w;
-                double const peak_hi = xi_pk + half_w;
-
-                if (peak_hi <= xi_lo) {
-                    // Peak window entirely left: cluster near xi_lo.
-                    double const span = xi_hi - xi_lo;
-                    double const eps = span * 1e-14;
-                    return log_legendre_integrate(
-                        [&](double const s) { return f(xi_lo + s); },
-                        active_xi_rule, eps, span);
-                }
-
-                if (peak_lo >= xi_hi) {
-                    // Peak window entirely right: cluster near xi_hi.
-                    double const span = xi_hi - xi_lo;
-                    double const eps = span * 1e-14;
-                    return rlog_legendre_integrate(
-                        [&](double const s) { return f(xi_lo + s); },
-                        active_xi_rule, eps, span);
-                }
-
-                // Three-region split: clamp peak window to the bin.
-                double const core_lo = std::max(xi_lo, peak_lo);
-                double const core_hi = std::min(xi_hi, peak_hi);
-                double const bin_span = xi_hi - xi_lo;
-
-                double result = 0.0;
-
-                // Left tail: [xi_lo, core_lo] -- cluster near core_lo.
-                if (core_lo > xi_lo) {
-                    double const span = core_lo - xi_lo;
-                    if (span > 1e-14 * bin_span) {
-                        double const eps = span * 1e-14;
-                        result += rlog_legendre_integrate(
-                            [&](double const s) { return f(xi_lo + s); },
-                            xi_tail_rule_, eps, span);
-                    }
-                }
-
-                // Peak core: [core_lo, core_hi] -- ordinary GL.
-                if (core_hi > core_lo) {
-                    result += legendre_integrate(
-                        f, active_xi_rule, core_lo, core_hi);
-                }
-
-                // Right tail: [core_hi, xi_hi] -- cluster near core_hi.
-                if (core_hi < xi_hi) {
-                    double const span = xi_hi - core_hi;
-                    if (span > 1e-14 * bin_span) {
-                        double const eps = span * 1e-14;
-                        result += log_legendre_integrate(
-                            [&](double const s) { return f(core_hi + s); },
-                            xi_tail_rule_, eps, span);
-                    }
-                }
-
-                return result;
-            };
-
-            double inner;
-            if (!flat_ep_rules_.empty()) {
-                auto ep_integrand = [&](double const Ep) {
-                    return xi_integrand(E, Ep);
-                };
-                GaussLegendreRule const& ep_rule = flat_ep_rules_[gp];
-                if (band_hi <= Ep_lo) {
-                    inner = log_legendre_integrate(ep_integrand, ep_rule, Ep_lo, Ep_hi);
-                } else if (band_lo >= Ep_hi) {
-                    inner = rlog_legendre_integrate(ep_integrand, ep_rule, Ep_lo, Ep_hi);
-                } else {
-                    inner = legendre_integrate(ep_integrand, ep_rule, Ep_lo, Ep_hi);
-                }
-            } else {
-                inner = integrate_Ep_group(
-                    [&](double const Ep) {
-                        return xi_integrand(E, Ep);
-                    },
-                    Ep_lo, Ep_hi, band_lo, band_hi,
-                    active_rule, peak_tol, peak_max_depth_,
-                    tail_rule_,
-                    far_rule_);
-            }
-
+            double const inner = integrate_Ep_xi_bin(
+                kernel, eval, E, Ep_lo, Ep_hi, xi_lo, xi_hi,
+                T, Ne, multiplier, active_rule, active_xi_rule,
+                peak_tol, flat_ep_rule);
             return w * inner;
         };
 
         double numerator = 0.0;
 
         if (flat_E_) {
-            // Flat E mode: single GL pass over [E_lo, E_hi], no boundary layers.
             numerator = legendre_integrate(E_integrand, active_rule, E_lo, E_hi);
         } else {
-            // --- E-axis boundary sub-panels ---
-            //
-            // The Compton kernel near a group boundary has a thermal peak of
-            // width ~thermal_half_width(E, T).  At cold T this width can be
-            // much smaller than the GL node spacing, causing the quadrature
-            // to miss the boundary-straddling contribution entirely.
-            //
-            // Split the E integral into up to three sub-panels:
-            //   [E_lo, E_lo + delta_lo]             -- left boundary  (linear GL)
-            //   [E_lo + delta_lo, E_hi - delta_hi]  -- interior       (existing mapping)
-            //   [E_hi - delta_hi, E_hi]             -- right boundary (linear GL)
-
             double const span = E_hi - E_lo;
             double const delta_lo = std::min(
                 constants::E_BOUNDARY_LAYER_MULTIPLIER * thermal_half_width(E_lo, T),
@@ -463,13 +430,11 @@ double ComptonMultigroupKernel::compute_group_entry(
                 constants::E_BOUNDARY_LAYER_MULTIPLIER * thermal_half_width(E_hi, T),
                 0.4 * span);
 
-            // Left boundary layer.
             if (delta_lo > 1e-14 * span) {
                 numerator += legendre_integrate(
                     E_integrand, active_rule, E_lo, E_lo + delta_lo);
             }
 
-            // Interior: existing mapping logic on the reduced interval.
             double const E_int_lo = E_lo + delta_lo;
             double const E_int_hi = E_hi - delta_hi;
             if (E_int_hi > E_int_lo) {
@@ -489,17 +454,12 @@ double ComptonMultigroupKernel::compute_group_entry(
                 }
             }
 
-            // Right boundary layer.
             if (delta_hi > 1e-14 * span) {
                 numerator += legendre_integrate(
                     E_integrand, active_rule, E_hi - delta_hi, E_hi);
             }
         }
 
-        // Store the final matrix element:
-        //   S(g, gp, a) = 2π · numerator / D(g)
-        // The 2π factor comes from the azimuthal symmetry of Compton
-        // scattering (∫_0^{2π} dφ = 2π).
         std::size_t const idx =
             static_cast<std::size_t>(g) * G * num_angle_bins +
             static_cast<std::size_t>(gp) * num_angle_bins +
@@ -508,6 +468,142 @@ double ComptonMultigroupKernel::compute_group_entry(
         group_sum += std::abs(result[idx]);
     }
     return group_sum;
+}
+
+// ── Public ξ-bin integral API ───────────────────────────────────────────
+
+std::vector<double> ComptonMultigroupKernel::compute_xi_integral_impl(
+    ComptonKernelSolver const& kernel,
+    ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+    double const E,
+    double const Ep,
+    int const num_xi_bins,
+    double const T,
+    double const Ne,
+    KernelMultiplier const& multiplier) const
+{
+    if (num_xi_bins < 1)
+        throw std::invalid_argument("num_xi_bins must be >= 1");
+    if (!(E > 0.0) || !std::isfinite(E))
+        throw std::invalid_argument("E must be finite and > 0");
+    if (!(Ep > 0.0) || !std::isfinite(Ep))
+        throw std::invalid_argument("Ep must be finite and > 0");
+
+    bool const is_cold = T < constants::COLD_TEMPERATURE_THRESHOLD;
+    GaussLegendreRule const& active_xi_rule = is_cold ? xi_cold_rule_ : xi_rule_;
+    double const dxi = 2.0 / static_cast<double>(num_xi_bins);
+
+    std::vector<double> result(num_xi_bins);
+    for (int a = 0; a < num_xi_bins; ++a) {
+        double const xi_lo = -1.0 + a * dxi;
+        double const xi_hi = std::min(-1.0 + (a + 1) * dxi,
+                                      1.0 - constants::XI_UPPER_EPS);
+        result[a] = integrate_xi_bin(
+            kernel, eval, E, Ep, xi_lo, xi_hi, T, Ne,
+            multiplier, active_xi_rule);
+    }
+    return result;
+}
+
+std::vector<double> ComptonMultigroupKernel::compute_xi_integral_sigma(
+    ComptonKernelSolver const& kernel,
+    double const E,
+    double const Ep,
+    int const num_xi_bins,
+    double const T,
+    double const Ne,
+    KernelMultiplier const& multiplier) const
+{
+    return compute_xi_integral_impl(
+        kernel, &ComptonKernelSolver::sigma_E,
+        E, Ep, num_xi_bins, T, Ne, multiplier);
+}
+
+std::vector<double> ComptonMultigroupKernel::compute_xi_integral_dsigma_dT(
+    ComptonKernelSolver const& kernel,
+    double const E,
+    double const Ep,
+    int const num_xi_bins,
+    double const T,
+    double const Ne,
+    KernelMultiplier const& multiplier) const
+{
+    return compute_xi_integral_impl(
+        kernel, &ComptonKernelSolver::dsigma_E_dT,
+        E, Ep, num_xi_bins, T, Ne, multiplier);
+}
+
+// ── Public E'+ξ-bin integral API ────────────────────────────────────────
+
+std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_impl(
+    ComptonKernelSolver const& kernel,
+    ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+    double const E,
+    double const Ep_lo,
+    double const Ep_hi,
+    int const num_xi_bins,
+    double const T,
+    double const Ne,
+    KernelMultiplier const& multiplier) const
+{
+    if (num_xi_bins < 1)
+        throw std::invalid_argument("num_xi_bins must be >= 1");
+    if (!(E > 0.0) || !std::isfinite(E))
+        throw std::invalid_argument("E must be finite and > 0");
+    if (!(Ep_lo > 0.0) || !std::isfinite(Ep_lo))
+        throw std::invalid_argument("Ep_lo must be finite and > 0");
+    if (!(Ep_hi > 0.0) || !std::isfinite(Ep_hi))
+        throw std::invalid_argument("Ep_hi must be finite and > 0");
+    if (Ep_lo >= Ep_hi)
+        throw std::invalid_argument("Ep_lo must be < Ep_hi");
+
+    bool const is_cold = T < constants::COLD_TEMPERATURE_THRESHOLD;
+    GaussLegendreRule const& active_rule = is_cold ? cold_rule_ : base_rule_;
+    GaussLegendreRule const& active_xi_rule = is_cold ? xi_cold_rule_ : xi_rule_;
+    double const peak_tol = integration_tolerance_ * 0.1;
+    double const dxi = 2.0 / static_cast<double>(num_xi_bins);
+
+    std::vector<double> result(num_xi_bins);
+    for (int a = 0; a < num_xi_bins; ++a) {
+        double const xi_lo = -1.0 + a * dxi;
+        double const xi_hi = std::min(-1.0 + (a + 1) * dxi,
+                                      1.0 - constants::XI_UPPER_EPS);
+        result[a] = integrate_Ep_xi_bin(
+            kernel, eval, E, Ep_lo, Ep_hi, xi_lo, xi_hi,
+            T, Ne, multiplier, active_rule, active_xi_rule,
+            peak_tol, nullptr);
+    }
+    return result;
+}
+
+std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_sigma(
+    ComptonKernelSolver const& kernel,
+    double const E,
+    double const Ep_lo,
+    double const Ep_hi,
+    int const num_xi_bins,
+    double const T,
+    double const Ne,
+    KernelMultiplier const& multiplier) const
+{
+    return compute_Ep_xi_integral_impl(
+        kernel, &ComptonKernelSolver::sigma_E,
+        E, Ep_lo, Ep_hi, num_xi_bins, T, Ne, multiplier);
+}
+
+std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_dsigma_dT(
+    ComptonKernelSolver const& kernel,
+    double const E,
+    double const Ep_lo,
+    double const Ep_hi,
+    int const num_xi_bins,
+    double const T,
+    double const Ne,
+    KernelMultiplier const& multiplier) const
+{
+    return compute_Ep_xi_integral_impl(
+        kernel, &ComptonKernelSolver::dsigma_E_dT,
+        E, Ep_lo, Ep_hi, num_xi_bins, T, Ne, multiplier);
 }
 
 // ── Core 3D integration ─────────────────────────────────────────────────

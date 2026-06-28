@@ -279,6 +279,72 @@ public:
         double T, double Ne,
         KernelMultiplier const& multiplier) const;
 
+    // ── ξ-bin integral for fixed (E, E') ────────────────────────────────
+    //
+    // Returns the raw kernel integral over each ξ bin:
+    //   result[a] = ∫_{ξ_a}^{ξ_{a+1}} multiplier(E,E',ξ,T,Ne) · Σ_E dξ
+    //
+    // No 2π, no weight function, no denominator normalisation.
+
+    /**
+     * @brief Integrate σ_E over ξ bins for fixed (E, E').
+     *
+     * @param kernel        Point-wise kernel evaluator.
+     * @param E             Incoming photon energy [erg], must be > 0.
+     * @param Ep            Scattered photon energy [erg], must be > 0.
+     * @param num_xi_bins   Number of equal-width bins on [−1, 1], must be >= 1.
+     * @param T             Electron temperature [K].
+     * @param Ne            Electron density [cm⁻³].
+     * @param multiplier    Pointwise kernel multiplier.
+     * @return Vector of length num_xi_bins.
+     */
+    std::vector<double> compute_xi_integral_sigma(
+        ComptonKernelSolver const& kernel,
+        double E, double Ep, int num_xi_bins,
+        double T, double Ne,
+        KernelMultiplier const& multiplier) const;
+
+    /** @brief Integrate ∂σ_E/∂T over ξ bins for fixed (E, E'). */
+    std::vector<double> compute_xi_integral_dsigma_dT(
+        ComptonKernelSolver const& kernel,
+        double E, double Ep, int num_xi_bins,
+        double T, double Ne,
+        KernelMultiplier const& multiplier) const;
+
+    // ── E' + ξ-bin integral for fixed E ─────────────────────────────────
+    //
+    // Returns the raw kernel integral over E' and each ξ bin:
+    //   result[a] = ∫_{Ep_lo}^{Ep_hi} [∫_{ξ_a}^{ξ_{a+1}} multiplier · Σ_E dξ] dE'
+    //
+    // Uses adaptive peak-aware E' quadrature (no flat_ep mode).
+    // No 2π, no weight function, no denominator normalisation.
+
+    /**
+     * @brief Integrate σ_E over E' and ξ bins for fixed E.
+     *
+     * @param kernel        Point-wise kernel evaluator.
+     * @param E             Incoming photon energy [erg], must be > 0.
+     * @param Ep_lo         Lower E' bound [erg], must be > 0.
+     * @param Ep_hi         Upper E' bound [erg], must be > Ep_lo.
+     * @param num_xi_bins   Number of equal-width bins on [−1, 1], must be >= 1.
+     * @param T             Electron temperature [K].
+     * @param Ne            Electron density [cm⁻³].
+     * @param multiplier    Pointwise kernel multiplier.
+     * @return Vector of length num_xi_bins.
+     */
+    std::vector<double> compute_Ep_xi_integral_sigma(
+        ComptonKernelSolver const& kernel,
+        double E, double Ep_lo, double Ep_hi, int num_xi_bins,
+        double T, double Ne,
+        KernelMultiplier const& multiplier) const;
+
+    /** @brief Integrate ∂σ_E/∂T over E' and ξ bins for fixed E. */
+    std::vector<double> compute_Ep_xi_integral_dsigma_dT(
+        ComptonKernelSolver const& kernel,
+        double E, double Ep_lo, double Ep_hi, int num_xi_bins,
+        double T, double Ne,
+        KernelMultiplier const& multiplier) const;
+
 private:
     /**
      * @brief Core driver: assemble the full G×G×num_angle_bins scattering matrix.
@@ -314,47 +380,52 @@ private:
         KernelMultiplier const& multiplier) const;
 
     /**
-     * @brief Evaluate one (g → gp) block of the scattering matrix.
+     * @brief Integrate the kernel over a single ξ bin for fixed (E, E').
      *
-     * For a fixed incoming energy group g and target energy group gp this
-     * method evaluates the weighted 3D integral
+     * Performs peak-focused GL quadrature with five branches:
+     * elastic-like, peak-left, peak-right, three-region split, full-bin.
      *
-     *     S(g, gp, a) = 2π / D(g) ∫_{E_lo}^{E_hi} w(E,T)
-     *                   ∫_{Ep_lo}^{Ep_hi} ∫_{xi_lo}^{xi_hi}
-     *                   f(E,E',ξ) · Σ_E(E,E',ξ,T,Ne) dξ dE' dE
+     * @return ∫_{xi_lo}^{xi_hi} multiplier · kernel dξ
+     */
+    double integrate_xi_bin(
+        ComptonKernelSolver const& kernel,
+        ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+        double E, double Ep,
+        double xi_lo, double xi_hi,
+        double T, double Ne,
+        KernelMultiplier const& multiplier,
+        GaussLegendreRule const& active_xi_rule) const;
+
+    /**
+     * @brief Integrate the kernel over E' and a single ξ bin for fixed E.
      *
-     * for each angle bin a ∈ [0, num_angle_bins).  Here D(g) is the weight
-     * function denominator for group g, and f is the optional multiplier.
+     * Computes peak_limits then dispatches to adaptive or flat E' quadrature,
+     * calling integrate_xi_bin at each E' node.
      *
-     * **Integration strategy (inside-out):**
-     *   1. ξ axis  -- adaptive Gauss-Legendre on [xi_lo, xi_hi].
-     *   2. E' axis -- peak-aware three-region quadrature (peak / tail / far),
-     *                 split around the thermally broadened cold-recoil band
-     *                 returned by peak_limits().
-     *   3. E axis  -- adaptive quadrature on [E_lo, E_hi] with mapping chosen
-     *                 by the weight-function contrast:
-     *                   • linear  when the group is narrow and the weight is
-     *                             smooth across it,
-     *                   • log     (clusters nodes near E_lo) when w(E_lo) ≫ w(E_hi),
-     *                   • rlog    (clusters nodes near E_hi) when w(E_hi) ≫ w(E_lo).
-     *                 The switch is governed by constants::LOG_E_RATIO_THRESHOLD.
+     * @param flat_ep_rule  If non-null, uses this GL rule for flat E' mode;
+     *                      otherwise uses adaptive peak/tail/far splitting.
+     * @return ∫_{Ep_lo}^{Ep_hi} [∫_{xi_lo}^{xi_hi} multiplier · kernel dξ] dE'
+     */
+    double integrate_Ep_xi_bin(
+        ComptonKernelSolver const& kernel,
+        ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+        double E,
+        double Ep_lo, double Ep_hi,
+        double xi_lo, double xi_hi,
+        double T, double Ne,
+        KernelMultiplier const& multiplier,
+        GaussLegendreRule const& active_rule,
+        GaussLegendreRule const& active_xi_rule,
+        double peak_tol,
+        GaussLegendreRule const* flat_ep_rule = nullptr) const;
+
+    /**
+     * @brief Evaluate one (g -> gp) block of the scattering matrix.
      *
-     * @return Sum of |S(g, gp, a)| over angle bins -- used by the
-     *         outward-from-peak cutoff in compute_matrix_impl().
+     * Loops over angle bins, integrating w(E,T) * integrate_Ep_xi_bin
+     * over the incoming E group with boundary-layer sub-panels.
      *
-     * @param kernel         Point-wise kernel evaluator.
-     * @param eval           Pointer-to-member returning ComptonResult.
-     * @param g              Incoming energy group index.
-     * @param gp             Target (scattered) energy group index.
-     * @param num_angle_bins Number of equal-width ξ bins.
-     * @param dxi            Bin width: 2 / num_angle_bins.
-     * @param T              Electron temperature [K].
-     * @param Ne             Electron density [cm⁻³].
-     * @param peak_tol       Tolerance for adaptive E' integration inside the recoil band.
-     * @param inv_denom      1 / D(g), precomputed weight-function denominator.
-     * @param multiplier     Pointwise factor f(E, E', ξ, T, Ne).
-     * @param[in,out] result Flat output vector; entries at the (g, gp, a)
-     *                       positions are written (row-major layout).
+     * @return Sum of |S(g, gp, a)| over angle bins (for cutoff).
      */
     double compute_group_entry(
         ComptonKernelSolver const& kernel,
@@ -371,6 +442,22 @@ private:
         GaussLegendreRule const& active_rule,
         GaussLegendreRule const& active_xi_rule,
         std::vector<double>& result) const;
+
+    /** @brief Dispatch impl for compute_xi_integral_sigma / _dsigma_dT. */
+    std::vector<double> compute_xi_integral_impl(
+        ComptonKernelSolver const& kernel,
+        ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+        double E, double Ep, int num_xi_bins,
+        double T, double Ne,
+        KernelMultiplier const& multiplier) const;
+
+    /** @brief Dispatch impl for compute_Ep_xi_integral_sigma / _dsigma_dT. */
+    std::vector<double> compute_Ep_xi_integral_impl(
+        ComptonKernelSolver const& kernel,
+        ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+        double E, double Ep_lo, double Ep_hi, int num_xi_bins,
+        double T, double Ne,
+        KernelMultiplier const& multiplier) const;
 
     std::vector<double> group_boundaries_;
     std::vector<double> group_centers_;

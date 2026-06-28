@@ -151,7 +151,85 @@ PYBIND11_MODULE(_compton_multigroup, m) {
                 });
             },
             "kernel"_a, "T"_a, "Ne"_a,
-            "multiplier"_a = ConstantMultiplier());
+            "multiplier"_a = ConstantMultiplier())
+
+        .def("compute_xi_integral_sigma",
+            [](ComptonMultigroupKernel const& self,
+               ComptonKernelSolver const& kernel,
+               double E, double Ep, int num_xi_bins,
+               double T, double Ne,
+               KernelMultiplier const& multiplier) {
+                auto v = self.compute_xi_integral_sigma(
+                    kernel, E, Ep, num_xi_bins, T, Ne, multiplier);
+                py::array_t<double> arr(v.size());
+                auto buf = arr.mutable_unchecked<1>();
+                for (py::ssize_t i = 0; i < static_cast<py::ssize_t>(v.size()); ++i)
+                    buf(i) = v[i];
+                return arr;
+            },
+            "kernel"_a, "E"_a, "Ep"_a, "num_xi_bins"_a,
+            "T"_a, "Ne"_a,
+            "multiplier"_a = ConstantMultiplier(),
+            "Integrate sigma_E over xi bins for fixed (E, E')")
+
+        .def("compute_xi_integral_dsigma_dT",
+            [](ComptonMultigroupKernel const& self,
+               ComptonKernelSolver const& kernel,
+               double E, double Ep, int num_xi_bins,
+               double T, double Ne,
+               KernelMultiplier const& multiplier) {
+                auto v = self.compute_xi_integral_dsigma_dT(
+                    kernel, E, Ep, num_xi_bins, T, Ne, multiplier);
+                py::array_t<double> arr(v.size());
+                auto buf = arr.mutable_unchecked<1>();
+                for (py::ssize_t i = 0; i < static_cast<py::ssize_t>(v.size()); ++i)
+                    buf(i) = v[i];
+                return arr;
+            },
+            "kernel"_a, "E"_a, "Ep"_a, "num_xi_bins"_a,
+            "T"_a, "Ne"_a,
+            "multiplier"_a = ConstantMultiplier(),
+            "Integrate dsigma_E/dT over xi bins for fixed (E, E')")
+
+        .def("compute_Ep_xi_integral_sigma",
+            [](ComptonMultigroupKernel const& self,
+               ComptonKernelSolver const& kernel,
+               double E, double Ep_lo, double Ep_hi,
+               int num_xi_bins,
+               double T, double Ne,
+               KernelMultiplier const& multiplier) {
+                auto v = self.compute_Ep_xi_integral_sigma(
+                    kernel, E, Ep_lo, Ep_hi, num_xi_bins, T, Ne, multiplier);
+                py::array_t<double> arr(v.size());
+                auto buf = arr.mutable_unchecked<1>();
+                for (py::ssize_t i = 0; i < static_cast<py::ssize_t>(v.size()); ++i)
+                    buf(i) = v[i];
+                return arr;
+            },
+            "kernel"_a, "E"_a, "Ep_lo"_a, "Ep_hi"_a,
+            "num_xi_bins"_a, "T"_a, "Ne"_a,
+            "multiplier"_a = ConstantMultiplier(),
+            "Integrate sigma_E over E' range and xi bins for fixed E")
+
+        .def("compute_Ep_xi_integral_dsigma_dT",
+            [](ComptonMultigroupKernel const& self,
+               ComptonKernelSolver const& kernel,
+               double E, double Ep_lo, double Ep_hi,
+               int num_xi_bins,
+               double T, double Ne,
+               KernelMultiplier const& multiplier) {
+                auto v = self.compute_Ep_xi_integral_dsigma_dT(
+                    kernel, E, Ep_lo, Ep_hi, num_xi_bins, T, Ne, multiplier);
+                py::array_t<double> arr(v.size());
+                auto buf = arr.mutable_unchecked<1>();
+                for (py::ssize_t i = 0; i < static_cast<py::ssize_t>(v.size()); ++i)
+                    buf(i) = v[i];
+                return arr;
+            },
+            "kernel"_a, "E"_a, "Ep_lo"_a, "Ep_hi"_a,
+            "num_xi_bins"_a, "T"_a, "Ne"_a,
+            "multiplier"_a = ConstantMultiplier(),
+            "Integrate dsigma_E/dT over E' range and xi bins for fixed E");
 
     py::class_<WeightFunction, std::shared_ptr<WeightFunction>>(m, "WeightFunction");
 
