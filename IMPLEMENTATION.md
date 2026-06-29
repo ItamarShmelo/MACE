@@ -296,27 +296,18 @@ The multigroup cross section
 $$\sigma(g \to g') = \frac{2\pi \int_{\Delta E_g} \int_{\Delta E_{g'}} \int_{\xi_i}^{\xi_{i+1}} w(E,T)\,\Sigma_E\, d\xi\, dE'\, dE}{\int_{\Delta E_g} w(E,T)\, dE}$$
 
 is evaluated by Gauss–Legendre quadrature on three finite intervals $(E, E', \xi)$.
-**Only the E' peak region uses adaptive refinement**; all other axes and sub-regions
-use single-panel GL quadrature with appropriate coordinate mappings.
+All axes use single-panel GL quadrature with appropriate coordinate mappings;
+the E' axis uses a ridge-based three-region split (see
+[Ridge-Based E' Integration](#ridge-based-e-integration) below).
 
-**Rationale:** The Compton kernel has a sharp recoil-band peak in $E'$ that benefits
-from adaptive bisection.  The tails decay smoothly (exponentially away from the
-peak boundary) and are well resolved by the log/rlog change of variable alone.
-The $E$ and $\xi$ integrands, being weighted integrals over the $E'$ axis result,
-are already smooth.  Removing adaptivity from these axes dramatically reduces
-function evaluations, allowing higher base quadrature orders without performance
-penalty.
-
-**Adaptive error estimation (E' peak only):** For each panel $[a, b]$, compute
-$I_\text{whole}$ using the base rule, then compute
-$I_\text{halves} = I_\text{left} + I_\text{right}$ by splitting at the midpoint.
-The error estimate is $|I_\text{halves} - I_\text{whole}|$.  If this exceeds
-`peak_tol * |I_halves|`, recurse independently on each half.  A maximum recursion
-depth (configurable via `MGIntegrationConfig::peak_max_depth`) prevents runaway
-subdivision.
-
-**Peak tolerance:** `integration_tolerance * 0.1` controls adaptive refinement of
-the E' peak region.  Accuracy of other axes is controlled by increasing `base_order`.
+**Rationale:** The Compton kernel has a sharp recoil-band peak in $E'$ that is
+well-localized around the cold-Compton ridge.  The ridge-based scheme exploits
+this structure by concentrating quadrature nodes in edge sub-intervals near the
+ridge boundaries where the integrand varies most rapidly, while using a coarser
+interior rule where the integrand is smooth.  The $E$ and $\xi$ integrands, being
+weighted integrals over the $E'$ axis result, are already smooth.  Convergence is
+controlled by increasing GL orders for edge and interior regions rather than
+adaptive bisection.
 
 **Cold-temperature regime:** Below 0.005 keV the Compton kernel narrows to
 near-Thomson scattering, requiring more quadrature nodes for convergence.
@@ -364,105 +355,193 @@ threshold the closed form is used, where cancellation is mild (< 1 digit lost at
 $x = 0.2$).
 
 
-### Peak-Aware E' Integration
+### Ridge-Based E' Integration
 
-The E' (middle) axis uses a peak-aware quadrature scheme that exploits Compton
+The E' (middle) axis uses a ridge-based quadrature scheme that exploits Compton
 kinematics to concentrate quadrature effort where the integrand is large.
 
-#### Cold Compton Recoil Band
+#### Cold Compton Ridge
 
 For an angle bin $[\xi_\text{lo}, \xi_\text{hi}]$ and incoming energy $E$, the
 cold-electron recoil band in $E'$ is
 
-$$a = \frac{E}{1 + \gamma(1 - \xi_\text{lo})}, \quad
-  b = \frac{E}{1 + \gamma(1 - \xi_\text{hi})}$$
+$$E'_\text{cold}(\xi) = \frac{E}{1 + \gamma(1 - \xi)}, \qquad \gamma = E / m_e c^2$$
 
-where $\gamma = E / m_e c^2$.  Inside this band there exists a scattering angle
-for which a cold (rest-frame) electron can produce the observed $E'$; outside,
-the kernel is exponentially suppressed by the Boltzmann factor
-$\sim\exp(-(\lambda_\mathrm{min} - 1)/\tau)$.  This kinematic band depends only on $E$
-and the $\xi$-bin endpoints, not on temperature.
+The cold ridge endpoints for the bin are:
 
-At finite temperature `peak_limits` extends each edge by one thermal Doppler
-half-width $\Delta E = E\sqrt{2\tau}$; below `COLD_TEMPERATURE_THRESHOLD` the
-padding is widened to $5\Delta E$ because the kernel is extremely narrow and the
-recoil band may not otherwise span a full group.
+$$\text{cold\_lo} = E'_\text{cold}(\xi_\text{lo}), \qquad \text{cold\_hi} = E'_\text{cold}(\xi_\text{hi})$$
 
-#### Direction-Aware Log-Space Integrators
+Inside this band there exists a scattering angle for which a cold (rest-frame)
+electron can produce the observed $E'$; outside, the kernel is exponentially
+suppressed by the Boltzmann factor $\sim\exp(-(\lambda_+ - 1)/\tau)$.
 
-Two single-panel log-space GL quadrature variants handle the exponentially
-decaying tails:
+#### Ridge Thermal Width
 
-- **`log_legendre_integrate`** (right tail): substitution $u = \log(x)$
-  clusters nodes near the lower end $a$ (the peak boundary).
-- **`rlog_legendre_integrate`** (left tail): reflected substitution
-  $u = \log(a + b - x)$ applied to $y = a + b - x$ clusters nodes near the
-  upper end $b$ (the peak boundary).
+The local thermal width at scattering angle $\xi$ is derived from the curvature
+of $\lambda_+$ at the cold-Compton saddle:
 
-Both accept the integrand in the original $E'$ space and handle the change of
-variable internally.  The log-space mapping alone concentrates quadrature nodes
-where the exponentially decaying integrand is largest, making adaptive refinement
-unnecessary for these smooth tails.
+$$\sigma_{\gamma'}(\xi) = \frac{\gamma}{[1+\gamma(1-\xi)]^2} \sqrt{\tau(1-\xi)\left[2 + 2\gamma(1-\xi) + \gamma^2(1-\xi)\right]}$$
 
-#### `integrate_Ep_group` Splitting Logic
+Converted to energy units: $\sigma_{E'}(\xi) = \sigma_{\gamma'}(\xi) \cdot m_e c^2$.
+This is implemented as `ridge_thermal_width(E, xi, T)`.
 
-Each target group $[E'_\text{lo}, E'_\text{hi}]$ is classified by its overlap
-with the recoil band $[a, b]$ using `std::clamp`:
+This is a local width (depends on $\xi$) and is Gaussian-curvature based, so it
+may be less accurate if prefactors vary strongly in the wings.
 
-```
-overlap_lo = clamp(a, Ep_lo, Ep_hi)
-overlap_hi = clamp(b, Ep_lo, Ep_hi)
-```
+The old `thermal_half_width` formula ($E\sqrt{2\tau}$, with a 5x cold multiplier)
+was an ad-hoc, $\xi$-independent estimate.  The new formula is derived from the
+kernel's curvature and provides a tighter, angle-dependent width.  The old
+function `thermal_half_width` remains in use for E-axis boundary layer sizing,
+which is independent of the E' integration scheme.
 
-- If `overlap_lo >= overlap_hi`: the group is **far** (no overlap with peak).
-  Uses single-panel **log or rlog** GL with the far rule: `log_legendre_integrate`
-  when the peak is below the group ($E'_\text{peak} \le E'_\text{lo}$), and
-  `rlog_legendre_integrate` otherwise.  The log-space mapping concentrates
-  nodes at the group edge closest to the peak, which is critical when the
-  kernel decays rapidly across the group width.
-- Otherwise the group is split into up to three sub-intervals:
-  - `[Ep_lo, overlap_lo]` **left tail**: single-panel reflected-log GL (nodes near peak boundary).
-  - `[overlap_lo, overlap_hi]` **peak**: adaptive GL with tight tolerance.
-  - `[overlap_hi, Ep_hi]` **right tail**: single-panel log GL (nodes near peak boundary).
+#### Retained Interval and Truncation
 
-The peak can span any number of groups: one group (both boundaries inside),
-two groups (boundary in each), or three+ groups (interior groups entirely within
-the peak).  All cases are handled uniformly by the clamp logic.
+The retained interval extends $k_\text{cut} \cdot \sigma$ outward from each
+cold ridge endpoint:
+
+$$[\text{cold\_lo} - k_\text{cut} \cdot \sigma_\text{lo},\; \text{cold\_hi} + k_\text{cut} \cdot \sigma_\text{hi}]$$
+
+clipped to the target group boundaries $[E'_\text{lo}, E'_\text{hi}]$.
+
+The truncation is justified by $\lambda_+ - 1 \ge N\tau$ where $N = k^2/2$:
+- $k_\text{cut} = 5$: $e^{-N} = e^{-12.5} \approx 3.7 \times 10^{-6}$
+- $k_\text{cut} = 6$: $e^{-18} \approx 1.5 \times 10^{-8}$
+
+The FWHM half-width is not used for truncation because it removes too much area.
+
+Groups entirely outside the retained interval return exactly zero in default mode.
+The outward-from-peak group cutoff (`cutoff_ratio`) breaks immediately on these
+zeros, providing an automatic performance benefit.
+
+#### Right-Tail Cap
+
+Beyond the retained interval, a right tail is always integrated from
+$\text{keep\_hi}$ up to $\min(E'_\text{hi},\; \max(\gamma'_C(\xi_\text{lo}) + k_\text{tail}\,\sigma_\text{lo},\; \gamma'_C(\xi_\text{hi}) + k_\text{tail}\,\sigma_\text{hi}))$
+using log Gauss-Legendre quadrature with `ep_edge_order` nodes.  The cap
+prevents the log-GL from spreading nodes over a huge dead zone where the
+integrand is zero, which caused poor convergence when the upper limit was
+the full group boundary $E'_\text{hi}$.
+
+The default `ep_k_tail = 10` (i.e. $2 \times k_\text{cut}$) suffices for
+T ≤ 10 keV; `warm_default()` uses 15 for reliable accuracy up to ~100 keV.
+
+#### Three-Region Split
+
+The retained interval is split into three sub-regions:
+
+- **Left edge**: $[\text{keep\_lo},\; \text{cold\_lo} + k_\text{in} \cdot \sigma_\text{lo}]$
+- **Ridge interior**: $[\text{cold\_lo} + k_\text{in} \cdot \sigma_\text{lo},\; \text{cold\_hi} - k_\text{in} \cdot \sigma_\text{hi}]$
+- **Right edge**: $[\text{cold\_hi} - k_\text{in} \cdot \sigma_\text{hi},\; \text{keep\_hi}]$
+
+All three use ordinary (linear) Gauss-Legendre quadrature in $E'$.  The edges
+contain the sharpest rolloffs, so convergence should be checked by increasing
+`ep_edge_order` first.
+
+**Overlap collapse**: when $\text{cold\_lo} + k_\text{in} \cdot \sigma_\text{lo} \ge
+\text{cold\_hi} - k_\text{in} \cdot \sigma_\text{hi}$, the three regions collapse
+to a single central region $[\text{keep\_lo}, \text{keep\_hi}]$ integrated with
+`ep_interior_order`.
+
+#### Double-Peak Elastic Endpoint Handling
+
+When the last angular bin includes near-forward scattering ($\xi_\text{hi} \to 1$),
+the $\xi$-integrated $E'$ integrand contains two numerical features at very
+different scales:
+
+1. A **broad thermally-broadened Compton ridge** centred near $\text{cold\_lo}$,
+   width $\sim \sigma_\text{lo}$ (order 0.1--3 keV depending on $T$).
+2. A **narrow near-forward elastic endpoint feature** centred at $\text{cold\_hi}$
+   ($\approx E$), width $\sim \sigma_\text{hi}$ (order 0.006--0.4 meV depending
+   on $T$ and $\xi_\text{hi}$).
+
+The standard three-region scheme collapses to a single interior GL panel when
+$\text{edge\_lo} \ge \text{edge\_hi}$, which always happens for the last bin
+because $\sigma_\text{hi} \ll \sigma_\text{lo}$.  A single GL panel spanning
+several keV cannot resolve a meV-scale feature.  As `ep_order` changes, GL nodes
+shift relative to this narrow feature, causing persistent 1--3% oscillation.
+
+**4-region scheme.**  When $\sigma_\text{lo} / \sigma_\text{hi} >$ `DOUBLE_PEAK_RATIO_THRESHOLD` (= 10) and the elastic-core panel
+$[\text{cold\_hi} - k_\text{cut} \cdot \sigma_\text{hi},\; \text{cold\_hi} + k_\text{cut} \cdot \sigma_\text{hi}]$
+intersects $[E'_\text{lo}, E'_\text{hi}]$, the integration switches from the
+three-region path to a four-region split:
+
+| Region | Bounds | Quadrature | Rule |
+|--------|--------|------------|------|
+| Broad-left | $[\text{keep\_lo}, \text{ec\_lo}]$ | linear GL | `ep_edge_order` |
+| Elastic-core | $[\text{ec\_lo}, \text{ec\_hi}]$ | linear GL | `ep_edge_order` |
+| Broad-right | $[\text{ec\_hi}, \text{keep\_hi}]$ | linear GL | `ep_interior_order` |
+| Far-tail | $[\text{keep\_hi}, \text{tail\_cap}]$ | log or linear GL | `ep_edge_order` |
+
+where $\text{ec\_lo} = \max(\text{keep\_lo},\; \text{cold\_hi} - k_\text{cut} \cdot \sigma_\text{hi})$
+and $\text{ec\_hi} = \min(\text{keep\_hi},\; \text{cold\_hi} + k_\text{cut} \cdot \sigma_\text{hi})$.
+
+The elastic-core spans only $2 \cdot k_\text{cut} \cdot \sigma_\text{hi}$ (0.02--0.4 meV),
+so even a modest GL order of 16 gives micro-eV node spacing that trivially
+resolves the narrow feature.  The remaining regions contain smooth integrands
+and converge normally.
+
+The far-tail uses log-GL when $\text{tail\_cap} / \text{keep\_hi} > 2$ (wide
+multiplicative range) and linear GL otherwise.
+
+**Activation conditions:**  The double-peak path activates when
+$\sigma_\text{lo} / \sigma_\text{hi} > 10$.  Non-last bins have a sigma ratio
+of 1--3 and remain on the standard three-region path unchanged.  All region
+boundaries are defensively clipped, and empty intervals are skipped.
+
+#### Diagnostic Tail Mode
+
+When `ep_diagnostic_tails` is true, the far tails $[E'_\text{lo}, \text{keep\_lo}]$
+and $[\text{keep\_hi}, E'_\text{hi}]$ are integrated using log Gauss-Legendre,
+clustering nodes near the boundary closest to the ridge.  This mode is for
+validation only -- it confirms that the truncated tails contribute negligibly.
 
 #### `MGIntegrationConfig`
 
-The `MGIntegrationConfig` struct consolidates all multigroup integration
-parameters: GL orders, adaptive refinement depth, integration tolerance, and
-the outward-from-peak cutoff ratio.  All parameter validation is performed by
-the constructor so that invalid configurations are rejected early.
-
 | Field | Default | Description |
 |-------|---------|-------------|
-| `base_order` | 24 | GL panel order for E, xi, and E'-peak axes |
-| `cold_temperature_order` | 48 | GL order for E/xi axes when T < 0.005 keV |
-| `peak_max_depth` | 5 | Maximum recursion depth for adaptive E' peak |
-| `tail_order` | `nullopt` → `base_order` | GL order for E' tail (log/rlog) regions |
-| `far_order` | `nullopt` → `base_order` | GL order for E' far-from-peak regions |
+| `base_order` | 24 | GL panel order for E axes |
+| `cold_temperature_order` | 48 | GL order for E/ξ axes when T < 0.005 keV |
 | `xi_order` | `nullopt` → `base_order` | GL order for the ξ peak panel |
-| `xi_peak_k` | 10.0 | Half-width of the ξ peak window in FWHM units (total window = 2k · FWHM) |
+| `xi_peak_k` | 5.0 | Half-width of the ξ peak window in sigma units |
+| `xi_tail_order` | `nullopt` → 16 | GL order for ξ tail sub-intervals |
 | `integration_tolerance` | 1e-3 | Overall relative tolerance for the outer integral |
 | `cutoff_ratio` | 1e-8 | Outward-from-peak early-termination ratio |
-| `flat_ep` | `nullopt` | Optional flat E' density config (replaces adaptive E' with single-pass GL) |
+| `ep_k_cut` | 5.0 | E' truncation width in sigma units (must be > 0) |
+| `ep_k_in` | 2.0 | E' interior-edge separator in sigma units (must be >= 0, < `ep_k_cut`) |
+| `ep_k_tail` | 10.0 | Right-tail extent in sigma units (must be >= `ep_k_cut`) |
+| `ep_edge_order` | `nullopt` → `base_order` | GL order for E' edge regions |
+| `ep_interior_order` | `nullopt` → `base_order` | GL order for E' ridge interior |
+| `ep_diagnostic_tails` | false | Include far tails via log-GL (validation only) |
+| `ep_diagnostic_tail_order` | `nullopt` → 16 | GL order for diagnostic tail integrations |
 
-Only the peak region uses adaptive quadrature; tails and far use single-panel
-GL with their respective coordinate mappings:
+All E' sub-regions use fixed-order GL (no adaptive refinement):
 
-| Region | Order | Quadrature | Adaptive |
-|--------|-------|------------|----------|
-| Peak   | `base_order` | linear GL | Yes (configurable depth) |
-| Tail   | `tail_order` (default: `base_order`) | log/rlog GL | No |
-| Far    | `far_order` (default: `base_order`) | log/rlog GL | No |
+| Region | Order | Quadrature | Notes |
+|--------|-------|------------|-------|
+| Left edge | `ep_edge_order` | linear GL | Standard 3-region path |
+| Interior | `ep_interior_order` | linear GL | Standard 3-region path |
+| Right edge | `ep_edge_order` | linear GL | Standard 3-region path |
+| Broad-left | `ep_edge_order` | linear GL | Double-peak 4-region path |
+| Elastic-core | `ep_edge_order` | linear GL | Double-peak 4-region path |
+| Broad-right | `ep_interior_order` | linear GL | Double-peak 4-region path |
+| Right tail (always-on) | `ep_edge_order` | log or linear GL | Both paths |
+| Diagnostic left tail | `ep_diagnostic_tail_order` | rlog GL | When `ep_diagnostic_tails` is true |
+| Diagnostic right tail | `ep_diagnostic_tail_order` | log GL | When `ep_diagnostic_tails` is true |
 
-The tail and far integrands decay exponentially away from the peak boundary.
-The log-space change of variable concentrates nodes where the integrand is
-largest, making adaptive refinement unnecessary.  For far groups the mapping
-direction is chosen so that nodes cluster at the group edge closest to the
-peak (log for groups above the peak, rlog for groups below).
+#### Migration from Previous Scheme
+
+The previous E' integration had two modes: adaptive (peak bisection + log/rlog
+tails + log/rlog far groups) and flat (single dense GL rule per target group,
+`FlatEpConfig`).  Both are superseded by the unified ridge scheme.
+
+| Old parameter | New parameter | Notes |
+|---|---|---|
+| `peak_max_depth` | removed | No adaptive E' refinement; convergence via GL order |
+| `tail_order` | `ep_edge_order` | Edge regions replace log/rlog tails |
+| `far_order` | `ep_diagnostic_tail_order` | Only used in diagnostic mode |
+| `flat_ep` (`FlatEpConfig`) | removed | Ridge scheme supersedes both adaptive and flat modes |
+| `flat_E` | removed | E-axis always uses boundary layers |
+| `warm_flat()` | `warm_default()` | Renamed; no longer implies flat E' mode |
 
 #### ξ Peak-Focused Splitting
 
@@ -492,6 +571,55 @@ zone ($\xi > 1 - \texttt{XI\_UPPER\_EPS}$), making FWHM-based splitting
 pointless.  When elastic-like, the integrator uses `rlog_legendre_integrate` on
 shifted coordinates over the full bin, clustering nodes near $\xi_\text{hi}$
 (toward the elastic peak at ξ = 1).
+
+**Temperature-dependent elastic-like threshold.**  Beyond the absolute/relative
+guard above, a broader elastic-like path activates when $|E'-E|/E$ is below a
+temperature-dependent threshold.  At these near-elastic $E'$ values, the $\xi$
+integrand develops a steep forward-scattering peak near $\xi = 1$ that the
+peak-splitting scheme (which centres on $\xi_\text{pk}$) cannot resolve
+efficiently, because the peak profile steepens as $E' \to E$.  The `rlog`
+quadrature, which clusters nodes at the upper endpoint, is far more effective
+in this regime.
+
+The optimal threshold varies with temperature because the location of $\xi_\text{pk}$
+relative to the bin boundary, and the peak's sharpness, both depend on the
+thermal broadening $\tau = kT / m_e c^2$.  If the threshold is too loose at
+cold temperatures, E' values whose $\xi_\text{pk}$ is well inside the bin
+(e.g.\ $\xi_\text{pk} = 0.85$ at $|E'-E|/E = 0.003$) get routed to the rlog
+path, which wastes nodes at $\xi = 1$ instead of near the actual peak.
+Conversely, if too tight at warm/hot T, the peak-splitting path must resolve
+a steep forward spike that rlog handles effortlessly.
+
+| Regime | $\tau$ boundary | Threshold ($|E'-E|/E$) | $\xi_\text{pk}$ cutoff | T range |
+|--------|----------------|----------------------|----------------------|---------|
+| **Very cold** | $\tau < 2 \times 10^{-8}$ | $10^{-5}$ | $> 0.99999$ | $T \lesssim 10$ eV |
+| **Cold** | $\tau < 2 \times 10^{-6}$ | $10^{-4}$ | $> 0.9999$ | $T \lesssim 1$ keV |
+| **Cool** | $\tau < 2 \times 10^{-4}$ | $10^{-3}$ | $> 0.999$ | $T \lesssim 100$ eV |
+| **Warm** | $\tau < 0.02$ | $0.01$ | $> 0.99$ | $T \lesssim 10$ keV |
+| **Moderate** | $\tau < 0.2$ | $0.05$ | $> 0.95$ | $T \lesssim 100$ keV |
+| **Hot** | $\tau \ge 0.2$ | $0.3$ | $> 0.7$ | $T \gtrsim 100$ keV |
+
+These thresholds were determined by sweeping the threshold parameter uniformly
+at each temperature and measuring bin-3 (last angular bin) convergence at
+$\xi$-order 48 vs a reference at $\xi$-order 512.  With 6 regimes, every
+temperature from $10^{-5}$ to $10^3$ keV achieves better than $10^{-5}$
+relative convergence in bin 3 at $\xi$-order 48.
+
+The constants are defined in `compton_multigroup_deterministic.cpp`:
+
+```
+XI_ELASTIC_TAU_VCOLD = 2e-8   // τ boundary: very cold → cold
+XI_ELASTIC_TAU_COLD  = 2e-6   // τ boundary: cold → cool
+XI_ELASTIC_TAU_COOL  = 2e-4   // τ boundary: cool → warm
+XI_ELASTIC_TAU_WARM  = 0.02   // τ boundary: warm → moderate
+XI_ELASTIC_TAU_HOT   = 0.2    // τ boundary: moderate → hot
+XI_ELASTIC_VCOLD_THR = 1e-5   // |E'-E|/E threshold: very cold
+XI_ELASTIC_COLD_THR  = 1e-4   // |E'-E|/E threshold: cold
+XI_ELASTIC_COOL_THR  = 1e-3   // |E'-E|/E threshold: cool
+XI_ELASTIC_WARM_THR  = 0.01   // |E'-E|/E threshold: warm
+XI_ELASTIC_MOD_THR   = 0.05   // |E'-E|/E threshold: moderate
+XI_ELASTIC_HOT_THR   = 0.3    // |E'-E|/E threshold: hot
+```
 
 **Integration regimes (non-elastic):**
 
@@ -550,20 +678,23 @@ Two factory methods provide validated high-accuracy configurations:
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
 | `base_order` | 192 | Resolves narrow Compton recoil band at cold T |
-| `peak_max_depth` | 9 | Deep recursion for extremely narrow E' peaks |
 | `xi_order` | 512 | Resolves sharp ξ peak (σ_ξ very narrow at high E + cold T) |
 | `xi_peak_k` | 5 | 5σ half-width (10σ total window) captures >99.99% of ξ peak area |
 | `xi_tail_order` | 24 | Higher tail order for cold regime where tails carry more signal |
-| `integration_tolerance` | 1e-8 | Tight tolerance for adaptive refinement |
+| `ep_k_cut` | 5 | Truncation at 5σ from cold-Compton ridge |
+| `ep_k_in` | 2 | Interior/edge boundary at 2σ |
+| `ep_k_tail` | 10 | Right-tail cap at 10σ (sufficient for T < 0.1 keV) |
+| `ep_edge_order` | 48 | Higher order for narrow edge sub-intervals |
+| `ep_interior_order` | 32 | Interior GL order |
+| `integration_tolerance` | 1e-8 | Tight tolerance |
 | `cutoff_ratio` | 1e-12 | Conservative group cutoff |
 | `cold_temperature_order` | 192 | Matches base_order |
 
 Validated accuracy: MC converges as 1/√N against this reference with no
 detectable det bias. At N=10^9: mid-group row-sum error ~5e-5 (pure MC
-noise), element-wise RMS ~3e-3. Runtime: ~300–600s per 24-group matrix
-(with bo=48; full bo=192 takes ~600–1300s).
+noise), element-wise RMS ~3e-3.
 
-**`MGIntegrationConfig::warm_flat()`** — for T ≥ 0.1 keV:
+**`MGIntegrationConfig::warm_default()`** — for T ≥ 0.1 keV:
 
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
@@ -571,19 +702,20 @@ noise), element-wise RMS ~3e-3. Runtime: ~300–600s per 24-group matrix
 | `xi_order` | 96 | Adequate for broader ξ peaks at warm T |
 | `xi_peak_k` | 5 | 5σ half-width (10σ total window) |
 | `xi_tail_order` | 16 | Default tail order (tails negligible at warm T) |
-| `flat_ep` | density=512, ppd, max=8192 | Dense flat E' (no adaptive recursion needed at warm T) |
-| `flat_E` | false | Keeps E-axis boundary layer log-mapping |
+| `ep_k_cut` | 5 | Truncation at 5σ from cold-Compton ridge |
+| `ep_k_in` | 2 | Interior/edge boundary at 2σ |
+| `ep_k_tail` | 15 | Right-tail cap at 15σ (needed for T ≤ 100 keV) |
 | `cutoff_ratio` | 1e-12 | Conservative group cutoff |
 
 Validated accuracy: MC converges as 1/√N with no bias. At N=10^9:
 mid-group row-sum error < 1e-4 for T ≥ 1 keV, ~5e-4 at T=0.1 keV.
-Runtime: ~30–120s per 24-group matrix.
 
 **Temperature switch at T = 0.1 keV:** Below this threshold, the Compton
-kernel narrows dramatically, requiring high adaptive resolution (bo=192) to
-resolve. Above, the kernel is broad enough that flat E' with 512 points/decade
-is sufficient and much faster. Both configs use `xi_peak_k=5` (5σ half-width)
-with configurable `xi_tail_order` for the peak-aware splitting.
+kernel narrows dramatically, requiring high GL order (bo=192) to
+resolve. Above, the kernel is broad enough that moderate orders suffice.
+Both configs use `xi_peak_k=5` (5σ half-width) with configurable
+`xi_tail_order` for the ξ peak-aware splitting, and the ridge-based E'
+scheme with `ep_k_cut=5`, `ep_k_in=2`, `ep_k_tail=10` (cold) or `15` (warm).
 
 Python usage:
 ```python
@@ -593,7 +725,7 @@ import _compton_multigroup as cm
 if T_kev < 0.1:
     cfg = cm.MGIntegrationConfig.cold_adaptive()
 else:
-    cfg = cm.MGIntegrationConfig.warm_flat()
+    cfg = cm.MGIntegrationConfig.warm_default()
 
 det = cm.ComptonMultigroupKernel(bounds_erg, wf, cfg)
 S = det.compute_sigma_matrix(kernel=kernel, T=T_K, Ne=1.0)
