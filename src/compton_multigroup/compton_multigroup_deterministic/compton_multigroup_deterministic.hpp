@@ -58,6 +58,7 @@
 #include "compton_differential_cross_section/compton_kernel_solver/compton_kernel_solver.hpp"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <memory>
 #include <numbers>
@@ -73,121 +74,108 @@ namespace constants {
 constexpr double COLD_TEMPERATURE_THRESHOLD = 0.005 * units::kev_kelvin;
 } // namespace constants
 
-/// Density scaling strategy for the flat E' integration mode.
-enum class FlatEpDensityMode { log_proportional, linear_proportional, points_per_decade };
-
-/**
- * @brief Configuration for the density-based flat E' integration mode.
- *
- * When attached to MGIntegrationConfig, replaces the adaptive peak/tail/far
- * E' recursion with a single GL rule per target group whose order is
- * proportional to the group's width.
- */
-struct FlatEpConfig {
-    double density;
-    int min_points;
-    int max_points;
-    FlatEpDensityMode mode;
-    bool flat_E;
-
-    FlatEpConfig(double density = 64.0,
-                 int min_points = 8,
-                 int max_points = 1024,
-                 FlatEpDensityMode mode = FlatEpDensityMode::points_per_decade,
-                 bool flat_E = true)
-        : density(density), min_points(min_points),
-          max_points(max_points), mode(mode),
-          flat_E(flat_E) {}
-};
-
 /**
  * @brief Consolidated configuration for multigroup integration.
  *
  * Controls the GL order for each integration axis and E' sub-region,
- * adaptive refinement depth, overall tolerance, and the outward-from-peak
- * group cutoff ratio.  All parameter validation is performed by the
- * constructor so that invalid configurations are rejected early.
+ * the ridge-based E' truncation parameters, overall tolerance, and
+ * the outward-from-peak group cutoff ratio.  All parameter validation
+ * is performed by the constructor so that invalid configurations are
+ * rejected early.
  */
 struct MGIntegrationConfig {
     int base_order;
     int cold_temperature_order;
-    int peak_max_depth;
-    std::optional<int> tail_order;
-    std::optional<int> far_order;
     std::optional<int> xi_order;
     std::optional<int> xi_tail_order;
     double integration_tolerance;
     double cutoff_ratio;
     double xi_peak_k;
-    std::optional<FlatEpConfig> flat_ep;
+
+    double ep_k_cut;
+    double ep_k_in;
+    double ep_k_tail;
+    std::optional<int> ep_edge_order;
+    std::optional<int> ep_interior_order;
+    bool ep_diagnostic_tails;
+    std::optional<int> ep_diagnostic_tail_order;
 
     /**
      * @brief Construct with validated defaults.
      *
-     * @param base_order              GL panel order for E and E'-peak axes.
+     * @param base_order              GL panel order for E axes.
      * @param integration_tolerance   Overall relative tolerance for the outer integral.
      * @param cutoff_ratio            Outward-from-peak early-termination ratio.
-     * @param peak_max_depth          Maximum recursion depth for adaptive E' peak.
      * @param cold_temperature_order  GL order for E/ξ when T < COLD_TEMPERATURE_THRESHOLD.
-     * @param tail_order              GL order for E' tail regions (defaults to base_order).
-     * @param far_order               GL order for E' far-from-peak regions (defaults to base_order).
      * @param xi_order                GL order for the ξ peak core (defaults to base_order).
      * @param xi_peak_k               Half-width of the ξ peak window in sigma units.
      * @param xi_tail_order           GL order for ξ tail sub-intervals (defaults to 16).
-     * @param flat_ep                 Optional flat E' density config (disables adaptive E' recursion).
+     * @param ep_k_cut                E' truncation width in sigma units (must be > 0).
+     * @param ep_k_in                 E' interior-edge separator in sigma units (must be >= 0, < ep_k_cut).
+     * @param ep_k_tail               Right-tail extent in sigma units (must be >= ep_k_cut).
+     * @param ep_edge_order           GL order for E' edge regions (defaults to base_order).
+     * @param ep_interior_order       GL order for E' ridge interior (defaults to base_order).
+     * @param ep_diagnostic_tails     Whether to include far tails via log-GL (validation only).
+     * @param ep_diagnostic_tail_order GL order for diagnostic tail integrations (defaults to 16).
      * @throws std::invalid_argument on invalid parameters.
      */
     MGIntegrationConfig(
         int base_order = 24,
         double integration_tolerance = 1e-3,
         double cutoff_ratio = 1e-8,
-        int peak_max_depth = 5,
         int cold_temperature_order = 48,
-        std::optional<int> tail_order = std::nullopt,
-        std::optional<int> far_order = std::nullopt,
         std::optional<int> xi_order = std::nullopt,
         double xi_peak_k = 5.0,
         std::optional<int> xi_tail_order = std::nullopt,
-        std::optional<FlatEpConfig> flat_ep = std::nullopt);
+        double ep_k_cut = 5.0,
+        double ep_k_in = 2.0,
+        double ep_k_tail = 10.0,
+        std::optional<int> ep_edge_order = std::nullopt,
+        std::optional<int> ep_interior_order = std::nullopt,
+        bool ep_diagnostic_tails = false,
+        std::optional<int> ep_diagnostic_tail_order = std::nullopt);
 
-    /** @brief Effective tail GL order (tail_order if set, otherwise base_order). */
-    int effective_tail_order() const { return tail_order.value_or(base_order); }
-
-    /** @brief Effective far GL order (far_order if set, otherwise base_order). */
-    int effective_far_order() const { return far_order.value_or(base_order); }
-
-    /** @brief Effective ξ GL order (xi_order if set, otherwise base_order). */
-    int effective_xi_order() const { return xi_order.value_or(base_order); }
+    /** @brief Effective ξ GL order (xi_order if set, otherwise 48). */
+    int effective_xi_order() const { return xi_order.value_or(48); }
 
     /** @brief Effective ξ tail GL order (xi_tail_order if set, otherwise 16). */
     int effective_xi_tail_order() const { return xi_tail_order.value_or(16); }
 
+    /** @brief Effective E' edge GL order (ep_edge_order if set, otherwise base_order). */
+    int effective_ep_edge_order() const { return ep_edge_order.value_or(base_order); }
+
+    /** @brief Effective E' interior GL order (ep_interior_order if set, otherwise base_order). */
+    int effective_ep_interior_order() const { return ep_interior_order.value_or(base_order); }
+
+    /** @brief Effective diagnostic tail GL order (ep_diagnostic_tail_order if set, otherwise 16). */
+    int effective_ep_diagnostic_tail_order() const { return ep_diagnostic_tail_order.value_or(16); }
+
     /**
-     * @brief High-accuracy adaptive config for cold temperatures (T < 0.1 keV).
+     * @brief High-accuracy config for cold temperatures (T < 0.1 keV).
      *
-     * bo=192, pd=9, xi_order=512, xi_peak_k=5, xi_tail_order=24, tol=1e-8.
-     * Achieves < 1e-4 row-sum accuracy (MC-noise limited at N=1e9).
-     * Runtime: ~600-1300s per matrix depending on temperature.
+     * bo=192, xi_order=512, xi_peak_k=5, xi_tail_order=24, tol=1e-8.
+     * ep_k_cut=5, ep_k_in=2, ep_edge/interior_order=192.
      */
     static MGIntegrationConfig cold_adaptive() {
         return MGIntegrationConfig(
-            192, 1e-8, 1e-12, 9, 192,
-            192, 192, 512, 5.0, 24, std::nullopt);
+            192, 1e-8, 1e-12, 192,
+            512, 5.0, 24,
+            5.0, 2.0, 10.0, 192, 192,
+            false, std::nullopt);
     }
 
     /**
-     * @brief High-accuracy flat E' config for warm temperatures (T >= 0.1 keV).
+     * @brief High-accuracy config for warm temperatures (T >= 0.1 keV).
      *
-     * bo=96, xi_order=96, xi_peak_k=10, flat_ep(d=512, ppd, max=8192).
-     * flat_E=false (keeps boundary layers and peak-focused ξ).
-     * Achieves < 1e-4 row-sum accuracy at T >= 1 keV.
-     * Runtime: ~30-120s per matrix depending on temperature.
+     * bo=96, xi_order=96, xi_peak_k=5, xi_tail_order=16, tol=1e-6.
+     * ep_k_cut=5, ep_k_in=2, ep_edge/interior_order=96.
      */
-    static MGIntegrationConfig warm_flat() {
-        FlatEpConfig flat{512.0, 8, 8192, FlatEpDensityMode::points_per_decade, false};
+    static MGIntegrationConfig warm_default() {
         return MGIntegrationConfig(
-            96, 1e-6, 1e-12, 7, 96,
-            96, 96, 96, 5.0, 16, flat);
+            96, 1e-6, 1e-12, 96,
+            96, 5.0, 16,
+            5.0, 2.0, 15.0, 96, 96,
+            false, std::nullopt);
     }
 };
 
@@ -405,11 +393,9 @@ private:
     /**
      * @brief Integrate the kernel over E' and a single ξ bin for fixed E.
      *
-     * Computes peak_limits then dispatches to adaptive or flat E' quadrature,
+     * Computes ridge bounds then dispatches to integrate_Ep_ridge,
      * calling integrate_xi_bin at each E' node.
      *
-     * @param flat_ep_rule  If non-null, uses this GL rule for flat E' mode;
-     *                      otherwise uses adaptive peak/tail/far splitting.
      * @return ∫_{Ep_lo}^{Ep_hi} [∫_{xi_lo}^{xi_hi} multiplier · kernel dξ] dE'
      */
     double integrate_Ep_xi_bin(
@@ -420,10 +406,7 @@ private:
         double xi_lo, double xi_hi,
         double T, double Ne,
         KernelMultiplier const& multiplier,
-        GaussLegendreRule const& active_rule,
-        GaussLegendreRule const& active_xi_rule,
-        double peak_tol,
-        GaussLegendreRule const* flat_ep_rule = nullptr) const;
+        GaussLegendreRule const& active_xi_rule) const;
 
     /**
      * @brief Evaluate one (g -> gp) block of the scattering matrix.
@@ -442,7 +425,6 @@ private:
         double dxi,
         double T,
         double Ne,
-        double peak_tol,
         double inv_denom,
         KernelMultiplier const& multiplier,
         GaussLegendreRule const& active_rule,
@@ -471,14 +453,10 @@ private:
     /// Shared weight function for the Planck/Wien/Uniform numerator and denominator.
     std::shared_ptr<WeightFunction const> weight_func_;
 
-    /// GL rule for E and E'-peak axes.
+    /// GL rule for E axes.
     GaussLegendreRule base_rule_;
     /// GL rule for E axes when T < COLD_TEMPERATURE_THRESHOLD.
     GaussLegendreRule cold_rule_;
-    /// GL rule for E' tail (log/rlog) sub-regions.
-    GaussLegendreRule tail_rule_;
-    /// GL rule for E' far-from-peak sub-regions.
-    GaussLegendreRule far_rule_;
     /// GL rule for the ξ (scattering-angle) axis.
     GaussLegendreRule xi_rule_;
     /// GL rule for ξ when T < COLD_TEMPERATURE_THRESHOLD.
@@ -486,13 +464,21 @@ private:
     /// GL rule for ξ tails in peak-focused splitting (low order, tails are exponentially small).
     GaussLegendreRule xi_tail_rule_;
 
-    /// Per-group GL rules for flat E' mode (empty when adaptive mode is active).
-    std::vector<GaussLegendreRule> flat_ep_rules_;
-    bool flat_E_ = false;
+    /// GL rule for E' left and right edge regions.
+    GaussLegendreRule ep_edge_rule_;
+    /// GL rule for the E' ridge interior region.
+    GaussLegendreRule ep_interior_rule_;
+    /// Fixed low-order GL rule for the double-peak elastic-core panel.
+    GaussLegendreRule ep_elastic_core_rule_;
+    /// GL rule for diagnostic log-GL tail integrations.
+    GaussLegendreRule ep_diagnostic_tail_rule_;
 
     double integration_tolerance_;
     double xi_peak_k_;
-    int peak_max_depth_;
+    double ep_k_cut_;
+    double ep_k_in_;
+    double ep_k_tail_;
+    bool ep_diagnostic_tails_;
     double group_cutoff_ratio_;
 };
 
@@ -518,30 +504,65 @@ inline double thermal_half_width(double const E, double const T)
 }
 
 /**
- * @brief E' limits for peak-aware quadrature in an angle bin [xi_lo, xi_hi].
+ * @brief Local thermal width of the Compton ridge in E' at scattering angle xi.
  *
- * Starts from the cold-electron recoil band:
+ * Derived from the curvature of lambda_+ at the cold-Compton saddle:
  *
- *     E'(ξ) = E / (1 + gamma * (1 - ξ)),    gamma = E / (m_e c^2)
+ *     sigma_gamma'(xi) = gamma / [1+gamma(1-xi)]^2
+ *                        * sqrt(tau(1-xi) [2 + 2gamma(1-xi) + gamma^2(1-xi)])
  *
- * and extends each edge by thermal_half_width(E, T).
+ * Converted to energy units: sigma_E'(xi) = sigma_gamma'(xi) * m_e c^2.
  *
- * @param E     Incoming photon energy [erg].
- * @param xi_lo Lower edge of the ξ bin.
- * @param xi_hi Upper edge of the ξ bin.
- * @param T     Electron temperature [K].
- * @return      {lo, hi} in [erg], thermally broadened.
+ * @param E   Incoming photon energy [erg].
+ * @param xi  Cosine of the scattering angle, in [-1, 1).
+ * @param T   Electron temperature [K].
+ * @return    Thermal width in E' [erg]. Zero when T <= 0 or xi >= 1.
  */
-inline std::pair<double, double> peak_limits(
-    double const E,
-    double const xi_lo,
-    double const xi_hi,
-    double const T)
+inline double ridge_thermal_width(double const E, double const xi, double const T)
 {
     double const gamma = E / units::me_c2;
-    double const dE = thermal_half_width(E, T);
-    return {E / (1.0 + gamma * (1.0 - xi_lo)) - dE,
-            E / (1.0 + gamma * (1.0 - xi_hi)) + dE};
+    double const tau   = T * units::k_boltz / units::me_c2;
+    double const u     = std::max(0.0, 1.0 - xi);
+    if (tau <= 0.0 || u <= 0.0) return 0.0;
+    double const d     = 1.0 + gamma * u;
+    return (E / (d * d))
+         * std::sqrt(tau * u * (2.0 + 2.0 * gamma * u + gamma * gamma * u));
+}
+
+/**
+ * @brief Cold-Compton ridge endpoints and local thermal widths for a xi bin.
+ *
+ * All values are in energy units [erg].
+ */
+struct RidgeBounds {
+    double cold_lo;    ///< E'_cold(xi_lo) = E / (1 + gamma*(1-xi_lo)) [erg]
+    double cold_hi;    ///< E'_cold(xi_hi) = E / (1 + gamma*(1-xi_hi)) [erg]
+    double sigma_lo;   ///< ridge_thermal_width(E, xi_lo, T) [erg]
+    double sigma_hi;   ///< ridge_thermal_width(E, xi_hi, T) [erg]
+};
+
+/**
+ * @brief Compute ridge bounds for peak-aware E' quadrature.
+ *
+ * All callers guarantee E > 0 (enforced by group boundary validation).
+ *
+ * @param E     Incoming photon energy [erg].
+ * @param xi_lo Lower edge of the xi bin (must be <= xi_hi, in [-1, 1]).
+ * @param xi_hi Upper edge of the xi bin (in [-1, 1]).
+ * @param T     Electron temperature [K].
+ * @return      RidgeBounds with cold endpoints and thermal widths.
+ */
+inline RidgeBounds compute_ridge_bounds(
+    double const E, double const xi_lo, double const xi_hi, double const T)
+{
+    assert(xi_lo <= xi_hi);
+    assert(xi_lo >= -1.0);
+    assert(xi_hi <= 1.0);
+    double const gamma = E / units::me_c2;
+    return { E / (1.0 + gamma * (1.0 - xi_lo)),
+             E / (1.0 + gamma * (1.0 - xi_hi)),
+             ridge_thermal_width(E, xi_lo, T),
+             ridge_thermal_width(E, xi_hi, T) };
 }
 
 } // namespace compton
