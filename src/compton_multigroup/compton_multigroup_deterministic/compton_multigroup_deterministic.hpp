@@ -74,6 +74,20 @@ namespace constants {
 constexpr double COLD_TEMPERATURE_THRESHOLD = 0.005 * units::kev_kelvin;
 } // namespace constants
 
+/// Coordinate mapping for an E-axis integration panel.
+enum class EPanelMap {
+    Linear,     ///< legendre_integrate (uniform node spacing)
+    LogLower,   ///< log_legendre_integrate (nodes clustered near lower end)
+    LogUpper    ///< rlog_legendre_integrate (nodes clustered near upper end)
+};
+
+/// Descriptor for one E-axis integration sub-panel.
+struct EPanel {
+    double lo;       ///< Lower panel boundary [erg].
+    double hi;       ///< Upper panel boundary [erg].
+    EPanelMap map;   ///< Coordinate mapping for this panel.
+};
+
 /**
  * @brief Consolidated configuration for multigroup integration.
  *
@@ -94,11 +108,14 @@ struct MGIntegrationConfig {
 
     double ep_k_cut;
     double ep_k_in;
-    double ep_k_tail;
     std::optional<int> ep_edge_order;
     std::optional<int> ep_interior_order;
     bool ep_diagnostic_tails;
     std::optional<int> ep_diagnostic_tail_order;
+
+    std::optional<int> e_panel_order;
+    double log_e_panel_ratio;
+    double e_boundary_k;
 
     /**
      * @brief Construct with validated defaults.
@@ -112,11 +129,13 @@ struct MGIntegrationConfig {
      * @param xi_tail_order           GL order for ξ tail sub-intervals (defaults to 16).
      * @param ep_k_cut                E' truncation width in sigma units (must be > 0).
      * @param ep_k_in                 E' interior-edge separator in sigma units (must be >= 0, < ep_k_cut).
-     * @param ep_k_tail               Right-tail extent in sigma units (must be >= ep_k_cut).
      * @param ep_edge_order           GL order for E' edge regions (defaults to base_order).
      * @param ep_interior_order       GL order for E' ridge interior (defaults to base_order).
      * @param ep_diagnostic_tails     Whether to include far tails via log-GL (validation only).
      * @param ep_diagnostic_tail_order GL order for diagnostic tail integrations (defaults to 16).
+     * @param e_panel_order           GL order for E-axis sub-panels (defaults to 12).
+     * @param log_e_panel_ratio       Panel width ratio threshold for log/rlog mapping (must be > 1).
+     * @param e_boundary_k            E-panel boundary-layer width in sigma units (must be > 0).
      * @throws std::invalid_argument on invalid parameters.
      */
     MGIntegrationConfig(
@@ -129,11 +148,13 @@ struct MGIntegrationConfig {
         std::optional<int> xi_tail_order = std::nullopt,
         double ep_k_cut = 5.0,
         double ep_k_in = 2.0,
-        double ep_k_tail = 10.0,
         std::optional<int> ep_edge_order = std::nullopt,
         std::optional<int> ep_interior_order = std::nullopt,
         bool ep_diagnostic_tails = false,
-        std::optional<int> ep_diagnostic_tail_order = std::nullopt);
+        std::optional<int> ep_diagnostic_tail_order = std::nullopt,
+        std::optional<int> e_panel_order = std::nullopt,
+        double log_e_panel_ratio = 2.0,
+        double e_boundary_k = 5.0);
 
     /** @brief Effective ξ GL order (xi_order if set, otherwise 48). */
     int effective_xi_order() const { return xi_order.value_or(48); }
@@ -150,6 +171,9 @@ struct MGIntegrationConfig {
     /** @brief Effective diagnostic tail GL order (ep_diagnostic_tail_order if set, otherwise 16). */
     int effective_ep_diagnostic_tail_order() const { return ep_diagnostic_tail_order.value_or(16); }
 
+    /** @brief Effective E-axis per-panel GL order (e_panel_order if set, otherwise 12). */
+    int effective_e_panel_order() const { return e_panel_order.value_or(12); }
+
     /**
      * @brief High-accuracy config for cold temperatures (T < 0.1 keV).
      *
@@ -160,8 +184,9 @@ struct MGIntegrationConfig {
         return MGIntegrationConfig(
             192, 1e-8, 1e-12, 192,
             512, 5.0, 24,
-            5.0, 2.0, 10.0, 192, 192,
-            false, std::nullopt);
+            5.0, 2.0, 192, 192,
+            false, std::nullopt,
+            std::nullopt, 2.0, 5.0);
     }
 
     /**
@@ -174,8 +199,9 @@ struct MGIntegrationConfig {
         return MGIntegrationConfig(
             96, 1e-6, 1e-12, 96,
             96, 5.0, 16,
-            5.0, 2.0, 15.0, 96, 96,
-            false, std::nullopt);
+            5.0, 2.0, 96, 96,
+            false, std::nullopt,
+            std::nullopt, 2.0, 5.0);
     }
 };
 
@@ -387,8 +413,7 @@ private:
         double E, double Ep,
         double xi_lo, double xi_hi,
         double T, double Ne,
-        KernelMultiplier const& multiplier,
-        GaussLegendreRule const& active_xi_rule) const;
+        KernelMultiplier const& multiplier) const;
 
     /**
      * @brief Integrate the kernel over E' and a single ξ bin for fixed E.
@@ -405,14 +430,13 @@ private:
         double Ep_lo, double Ep_hi,
         double xi_lo, double xi_hi,
         double T, double Ne,
-        KernelMultiplier const& multiplier,
-        GaussLegendreRule const& active_xi_rule) const;
+        KernelMultiplier const& multiplier) const;
 
     /**
      * @brief Evaluate one (g -> gp) block of the scattering matrix.
      *
      * Loops over angle bins, integrating w(E,T) * integrate_Ep_xi_bin
-     * over the incoming E group with boundary-layer sub-panels.
+     * over the incoming E group using feature-aware E-axis panels.
      *
      * @return Sum of |S(g, gp, a)| over angle bins (for cutoff).
      */
@@ -427,9 +451,14 @@ private:
         double Ne,
         double inv_denom,
         KernelMultiplier const& multiplier,
-        GaussLegendreRule const& active_rule,
-        GaussLegendreRule const& active_xi_rule,
+        std::vector<EPanel> const& panels,
         std::vector<double>& result) const;
+
+    /// Build E-axis panel descriptors for incoming group g.
+    /// Splits at the weight-function peak (if inside the group),
+    /// then assigns per-panel coordinate mappings
+    /// (Linear, LogLower, or LogUpper).
+    std::vector<EPanel> compute_E_panels(int g, double T) const;
 
     /** @brief Dispatch impl for compute_xi_integral_sigma / _dsigma_dT. */
     std::vector<double> compute_xi_integral_impl(
@@ -455,12 +484,8 @@ private:
 
     /// GL rule for E axes.
     GaussLegendreRule base_rule_;
-    /// GL rule for E axes when T < COLD_TEMPERATURE_THRESHOLD.
-    GaussLegendreRule cold_rule_;
     /// GL rule for the ξ (scattering-angle) axis.
     GaussLegendreRule xi_rule_;
-    /// GL rule for ξ when T < COLD_TEMPERATURE_THRESHOLD.
-    GaussLegendreRule xi_cold_rule_;
     /// GL rule for ξ tails in peak-focused splitting (low order, tails are exponentially small).
     GaussLegendreRule xi_tail_rule_;
 
@@ -473,13 +498,21 @@ private:
     /// GL rule for diagnostic log-GL tail integrations.
     GaussLegendreRule ep_diagnostic_tail_rule_;
 
+    /// GL rule for E-axis sub-panels (per panel, typically 12 points).
+    GaussLegendreRule e_panel_rule_;
+
     double integration_tolerance_;
     double xi_peak_k_;
     double ep_k_cut_;
     double ep_k_in_;
-    double ep_k_tail_;
     bool ep_diagnostic_tails_;
     double group_cutoff_ratio_;
+
+    /// Panel width ratio threshold for switching to log/rlog-E quadrature.
+    double log_e_panel_ratio_;
+
+    /// Boundary-layer width multiplier for E-panel edge splitting.
+    double e_boundary_k_;
 };
 
 /**

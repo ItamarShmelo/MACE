@@ -30,9 +30,10 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .def(py::init<int, double, double, int,
                        std::optional<int>, double,
                        std::optional<int>,
-                       double, double, double,
+                       double, double,
                        std::optional<int>, std::optional<int>,
-                       bool, std::optional<int>>(),
+                       bool, std::optional<int>,
+                       std::optional<int>, double, double>(),
              "base_order"_a = 24,
              "integration_tolerance"_a = 1e-3,
              "cutoff_ratio"_a = 1e-8,
@@ -42,11 +43,13 @@ PYBIND11_MODULE(_compton_multigroup, m) {
              "xi_tail_order"_a = std::nullopt,
              "ep_k_cut"_a = 5.0,
              "ep_k_in"_a = 2.0,
-             "ep_k_tail"_a = 10.0,
              "ep_edge_order"_a = std::nullopt,
              "ep_interior_order"_a = std::nullopt,
              "ep_diagnostic_tails"_a = false,
-              "ep_diagnostic_tail_order"_a = std::nullopt)
+             "ep_diagnostic_tail_order"_a = std::nullopt,
+             "e_panel_order"_a = std::nullopt,
+             "log_e_panel_ratio"_a = 2.0,
+             "e_boundary_k"_a = 5.0)
         .def_readwrite("base_order",              &MGIntegrationConfig::base_order)
         .def_readwrite("cold_temperature_order",  &MGIntegrationConfig::cold_temperature_order)
         .def_readwrite("xi_order",                &MGIntegrationConfig::xi_order)
@@ -56,16 +59,19 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .def_readwrite("xi_peak_k",              &MGIntegrationConfig::xi_peak_k)
         .def_readwrite("ep_k_cut",               &MGIntegrationConfig::ep_k_cut)
         .def_readwrite("ep_k_in",                &MGIntegrationConfig::ep_k_in)
-        .def_readwrite("ep_k_tail",              &MGIntegrationConfig::ep_k_tail)
         .def_readwrite("ep_edge_order",           &MGIntegrationConfig::ep_edge_order)
         .def_readwrite("ep_interior_order",       &MGIntegrationConfig::ep_interior_order)
         .def_readwrite("ep_diagnostic_tails",     &MGIntegrationConfig::ep_diagnostic_tails)
         .def_readwrite("ep_diagnostic_tail_order", &MGIntegrationConfig::ep_diagnostic_tail_order)
+        .def_readwrite("e_panel_order",           &MGIntegrationConfig::e_panel_order)
+        .def_readwrite("log_e_panel_ratio",       &MGIntegrationConfig::log_e_panel_ratio)
+        .def_readwrite("e_boundary_k",           &MGIntegrationConfig::e_boundary_k)
         .def("effective_xi_order",   &MGIntegrationConfig::effective_xi_order)
         .def("effective_xi_tail_order", &MGIntegrationConfig::effective_xi_tail_order)
         .def("effective_ep_edge_order", &MGIntegrationConfig::effective_ep_edge_order)
         .def("effective_ep_interior_order", &MGIntegrationConfig::effective_ep_interior_order)
         .def("effective_ep_diagnostic_tail_order", &MGIntegrationConfig::effective_ep_diagnostic_tail_order)
+        .def("effective_e_panel_order", &MGIntegrationConfig::effective_e_panel_order)
         .def_static("cold_adaptive", &MGIntegrationConfig::cold_adaptive,
             "High-accuracy config for T < 0.1 keV (bo=192, xi=512, ep_k_cut=5)")
         .def_static("warm_default", &MGIntegrationConfig::warm_default,
@@ -232,21 +238,24 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .def(py::init<double>(), py::kw_only(), "cap_x"_a)
         .def("weight", &PlanckWeightFunction::weight, "E"_a, "T"_a)
         .def("compute_denominator", &PlanckWeightFunction::compute_denominator,
-             "E_left"_a, "E_right"_a, "T"_a);
+             "E_left"_a, "E_right"_a, "T"_a)
+        .def("peak_energy", &PlanckWeightFunction::peak_energy, "T"_a);
 
     py::class_<UniformWeightFunction, WeightFunction,
                 std::shared_ptr<UniformWeightFunction>>(m, "UniformWeightFunction")
         .def(py::init<>())
         .def("weight", &UniformWeightFunction::weight, "E"_a, "T"_a)
         .def("compute_denominator", &UniformWeightFunction::compute_denominator,
-             "E_left"_a, "E_right"_a, "T"_a);
+             "E_left"_a, "E_right"_a, "T"_a)
+        .def("peak_energy", &UniformWeightFunction::peak_energy, "T"_a);
 
     py::class_<WienWeightFunction, WeightFunction,
                 std::shared_ptr<WienWeightFunction>>(m, "WienWeightFunction")
         .def(py::init<double>(), py::kw_only(), "cap_x"_a)
         .def("weight", &WienWeightFunction::weight, "E"_a, "T"_a)
         .def("compute_denominator", &WienWeightFunction::compute_denominator,
-             "E_left"_a, "E_right"_a, "T"_a);
+             "E_left"_a, "E_right"_a, "T"_a)
+        .def("peak_energy", &WienWeightFunction::peak_energy, "T"_a);
 
     m.def("gauss_legendre_rule", [](int N) {
         auto rule = compton::compute_gauss_legendre(N);

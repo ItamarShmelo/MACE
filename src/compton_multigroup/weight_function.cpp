@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <numbers>
+#include <optional>
 #include <stdexcept>
 
 namespace compton {
@@ -46,6 +47,11 @@ double PlanckWeightFunction::compute_denominator(
     return kT * (planck_part + const_part);
 }
 
+std::optional<double> PlanckWeightFunction::peak_energy(double const T) const {
+    static constexpr double PLANCK_PEAK_X = 2.821439372122078893;
+    return units::k_boltz * T * PLANCK_PEAK_X;
+}
+
 double UniformWeightFunction::weight(double const /*E*/, double const /*T*/) const {
     return 1.0;
 }
@@ -54,6 +60,10 @@ double UniformWeightFunction::compute_denominator(
     double const E_left, double const E_right, double const /*T*/) const
 {
     return E_right - E_left;
+}
+
+std::optional<double> UniformWeightFunction::peak_energy(double const /*T*/) const {
+    return std::nullopt;
 }
 
 WienWeightFunction::WienWeightFunction(double const cap_x)
@@ -100,6 +110,10 @@ double WienWeightFunction::compute_denominator(
     double const wien_part = wien_antideriv(cap_x_) - wien_antideriv(x_lo);
     double const const_part = w0_ * (x_hi - cap_x_);
     return kT * (wien_part + const_part);
+}
+
+std::optional<double> WienWeightFunction::peak_energy(double const T) const {
+    return units::k_boltz * T * 3.0;
 }
 
 } // namespace compton

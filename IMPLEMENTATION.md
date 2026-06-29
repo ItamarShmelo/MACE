@@ -296,26 +296,45 @@ The multigroup cross section
 $$\sigma(g \to g') = \frac{2\pi \int_{\Delta E_g} \int_{\Delta E_{g'}} \int_{\xi_i}^{\xi_{i+1}} w(E,T)\,\Sigma_E\, d\xi\, dE'\, dE}{\int_{\Delta E_g} w(E,T)\, dE}$$
 
 is evaluated by Gauss–Legendre quadrature on three finite intervals $(E, E', \xi)$.
-All axes use single-panel GL quadrature with appropriate coordinate mappings;
-the E' axis uses a ridge-based three-region split (see
-[Ridge-Based E' Integration](#ridge-based-e-integration) below).
+The E axis uses **feature-aware multi-panel GL** with per-panel coordinate
+mapping selection (linear, log, or rlog).  The E' axis uses a ridge-based
+three-region split (see [Ridge-Based E' Integration](#ridge-based-e-integration)
+below).  The $\xi$ axis uses peak-focused splitting.
 
-**Rationale:** The Compton kernel has a sharp recoil-band peak in $E'$ that is
-well-localized around the cold-Compton ridge.  The ridge-based scheme exploits
-this structure by concentrating quadrature nodes in edge sub-intervals near the
-ridge boundaries where the integrand varies most rapidly, while using a coarser
-interior rule where the integrand is smooth.  The $E$ and $\xi$ integrands, being
-weighted integrals over the $E'$ axis result, are already smooth.  Convergence is
-controlled by increasing GL orders for edge and interior regions rather than
-adaptive bisection.
+**E-axis panel splitting.**  For each incoming energy group $g$, the integration
+domain $[E_\text{lo}, E_\text{hi}]$ is subdivided at feature points from three
+sources:
 
-**Cold-temperature regime:** Below 0.005 keV the Compton kernel narrows to
-near-Thomson scattering, requiring more quadrature nodes for convergence.
-When $T <$ `COLD_TEMPERATURE_THRESHOLD` (defined in `compton_common.hpp`),
-the integrator automatically substitutes `cold_temperature_order` (default 48)
-for `base_order` on the E and $\xi$ axes.  The threshold was determined
-empirically: `base_order=24` produces < 0.05% self-convergence error above
-0.002 keV but degrades to ~8% at 0.0001 keV.
+1. **Group edges** (always present).
+2. **Weight function peak**: the energy at which $w(E,T)$ attains its maximum
+   (e.g. $E = 2.821 k_B T$ for Planck, $3 k_B T$ for Wien, none for Uniform),
+   obtained via `WeightFunction::peak_energy(T)`.
+3. **Cold Compton edge crossings**: incoming energies $E$ at which the
+   cold-Compton scattered energy $E'_\text{cold}(E, \mu)$ crosses an outgoing
+   group boundary, creating a sharp transition (kink) in the integrand.
+   The scattering-angle candidates $\mu$ include angle-bin edges and the
+   `xi_tail_rule_` GL nodes mapped into each bin.
+
+Split points are sorted, deduplicated (merging points closer than
+$10^{-10} \cdot \text{span}$), and each resulting panel $[a, b]$ is assigned a
+coordinate mapping:
+
+| Condition | Mapping | Rationale |
+|-----------|---------|-----------|
+| $b/a \le$ `log_e_panel_ratio` | **Linear** | Narrow panel; uniform nodes adequate |
+| $w(a,T) \ge w(b,T)$ | **LogLower** | Weight falls toward $b$; cluster nodes near $a$ |
+| $w(a,T) < w(b,T)$ | **LogUpper** | Weight rises toward $b$; cluster nodes near $b$ |
+
+Each panel is integrated with `e_panel_order` GL points (default 12).  Splitting
+at the weight peak creates monotone panels where log/rlog quadrature is most
+effective.  At cold temperatures, the number of Compton edge crossings inside
+the group increases, automatically adding resolution where the integrand has
+sharp transitions — no special cold E-axis rule is needed.
+
+**Cold-temperature ξ regime:** Below 0.005 keV the Compton kernel narrows to
+near-Thomson scattering, requiring more quadrature nodes for the ξ axis.
+When $T <$ `COLD_TEMPERATURE_THRESHOLD`, the integrator substitutes
+`xi_cold_rule_` for `xi_rule_`.
 
 Group centers are placed at the geometric mean $\sqrt{E_\text{lo} \cdot E_\text{hi}}$.
 Angle bins partition $[-1, 1]$ into $N$ equal segments of width $2/N$.  The $2\pi$
@@ -326,16 +345,26 @@ group-to-group cross section.
 
 Three weight functions are supported:
 
-| Weight | $w(E,T)$ | Denominator |
-|--------|-----------|-------------|
-| **Planck** | $x^3/(e^x - 1)$, capped at $x = $ `cap_x` | Clark (1987) polylogarithm series |
-| **Wien** | $x^3 e^{-x}$, capped at `cap_x` | Taylor / closed-form (see below) |
-| **Uniform** | 1 | $E_\text{right} - E_\text{left}$ |
+| Weight | $w(E,T)$ | Peak energy | Analytic denominator |
+|--------|-----------|-------------|---------------------|
+| **Planck** | $x^3/(e^x - 1)$, capped at $x = $ `cap_x` | $2.821439 \cdot k_B T$ | Clark (1987) polylogarithm series |
+| **Wien** | $x^3 e^{-x}$, capped at `cap_x` | $3.0 \cdot k_B T$ | Taylor / closed-form (see below) |
+| **Uniform** | 1 | none (`std::nullopt`) | $E_\text{right} - E_\text{left}$ |
 
 The Planck cap avoids evaluating $x^3/(e^x - 1)$ in the exponential tail where
 it underflows; above `cap_x` the weight is held constant at its value at the cap.
-The denominator is computed **analytically** (not by quadrature) to avoid
-introducing quadrature noise into the normalization.
+
+Each weight function provides a `peak_energy(T)` method that returns the energy
+at which $w(E,T)$ attains its maximum (or `std::nullopt` for the uniform weight).
+This is used by the E-axis panel splitting to place a panel boundary at the
+weight peak, ensuring each panel has a monotone weight function.
+
+**Numerical denominator.**  The denominator $D(g) = \int_{\Delta E_g} w(E,T)\,dE$
+is computed **numerically** using the same panel structure, GL nodes, and
+coordinate mappings as the numerator.  This ensures that when the kernel is
+identically 1, the discrete group average $\langle K \rangle = 1$ exactly (up
+to roundoff).  The analytic `compute_denominator()` method is retained for
+validation and diagnostics but is not called in the production matrix path.
 
 #### Wien Denominator — Taylor Series for Small x
 
@@ -391,8 +420,9 @@ may be less accurate if prefactors vary strongly in the wings.
 The old `thermal_half_width` formula ($E\sqrt{2\tau}$, with a 5x cold multiplier)
 was an ad-hoc, $\xi$-independent estimate.  The new formula is derived from the
 kernel's curvature and provides a tighter, angle-dependent width.  The old
-function `thermal_half_width` remains in use for E-axis boundary layer sizing,
-which is independent of the E' integration scheme.
+function `thermal_half_width` remains available in the codebase but is no longer
+used for E-axis panel sizing (which now uses feature-aware panel splitting).
+It may still be useful for E' ridge-based integration diagnostics.
 
 #### Retained Interval and Truncation
 
@@ -513,6 +543,8 @@ validation only -- it confirms that the truncated tails contribute negligibly.
 | `ep_interior_order` | `nullopt` → `base_order` | GL order for E' ridge interior |
 | `ep_diagnostic_tails` | false | Include far tails via log-GL (validation only) |
 | `ep_diagnostic_tail_order` | `nullopt` → 16 | GL order for diagnostic tail integrations |
+| `e_panel_order` | `nullopt` → 12 | GL order for E-axis sub-panels (per panel) |
+| `log_e_panel_ratio` | 2.0 | Panel width ratio threshold for log/rlog-E mapping (must be > 1) |
 
 All E' sub-regions use fixed-order GL (no adaptive refinement):
 

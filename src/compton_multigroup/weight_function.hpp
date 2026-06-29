@@ -1,6 +1,8 @@
 #ifndef WEIGHT_FUNCTION_HPP
 #define WEIGHT_FUNCTION_HPP
 
+#include <optional>
+
 namespace compton {
 
 /**
@@ -18,6 +20,11 @@ public:
 
     virtual double compute_denominator(
         double E_left, double E_right, double T) const = 0;
+
+    /// Energy [erg] at which w(E,T) attains its maximum, or nullopt if the
+    /// weight has no interior peak (e.g. uniform).  Used by the multigroup
+    /// integrator to place a panel boundary at the weight peak.
+    virtual std::optional<double> peak_energy(double T) const = 0;
 };
 
 /**
@@ -43,6 +50,8 @@ public:
     double compute_denominator(
         double E_left, double E_right, double T) const override;
 
+    std::optional<double> peak_energy(double T) const override;
+
 private:
     double cap_x_;
     double w0_;
@@ -59,6 +68,8 @@ public:
 
     double compute_denominator(
         double E_left, double E_right, double T) const override;
+
+    std::optional<double> peak_energy(double T) const override;
 };
 
 /**
@@ -79,6 +90,8 @@ public:
 
     double compute_denominator(
         double E_left, double E_right, double T) const override;
+
+    std::optional<double> peak_energy(double T) const override;
 
 private:
     double cap_x_;
