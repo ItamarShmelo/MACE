@@ -27,17 +27,15 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .def(py::init<>());
 
     py::class_<MGIntegrationConfig>(m, "MGIntegrationConfig")
-        .def(py::init<int, double, double, int,
+        .def(py::init<double, double,
                        std::optional<int>, double,
                        std::optional<int>,
                        double, double,
                        std::optional<int>, std::optional<int>,
                        bool, std::optional<int>,
                        std::optional<int>, double, double>(),
-             "base_order"_a = 24,
              "integration_tolerance"_a = 1e-3,
              "cutoff_ratio"_a = 1e-8,
-             "cold_temperature_order"_a = 48,
              "xi_order"_a = std::nullopt,
              "xi_peak_k"_a = 5.0,
              "xi_tail_order"_a = std::nullopt,
@@ -50,8 +48,6 @@ PYBIND11_MODULE(_compton_multigroup, m) {
              "e_panel_order"_a = std::nullopt,
              "log_e_panel_ratio"_a = 2.0,
              "e_boundary_k"_a = 5.0)
-        .def_readwrite("base_order",              &MGIntegrationConfig::base_order)
-        .def_readwrite("cold_temperature_order",  &MGIntegrationConfig::cold_temperature_order)
         .def_readwrite("xi_order",                &MGIntegrationConfig::xi_order)
         .def_readwrite("xi_tail_order",           &MGIntegrationConfig::xi_tail_order)
         .def_readwrite("integration_tolerance",   &MGIntegrationConfig::integration_tolerance)

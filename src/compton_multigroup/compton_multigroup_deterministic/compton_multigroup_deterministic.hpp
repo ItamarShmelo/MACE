@@ -69,8 +69,8 @@
 namespace compton {
 
 namespace constants {
-/// Temperature [K] below which the multigroup integrator switches to
-/// cold_temperature_order for the E and ξ axes (0.005 keV).
+/// Temperature [K] below which ridge_thermal_width applies a 5x
+/// multiplier to capture the narrow recoil band (0.005 keV).
 constexpr double COLD_TEMPERATURE_THRESHOLD = 0.005 * units::kev_kelvin;
 } // namespace constants
 
@@ -98,8 +98,6 @@ struct EPanel {
  * rejected early.
  */
 struct MGIntegrationConfig {
-    int base_order;
-    int cold_temperature_order;
     std::optional<int> xi_order;
     std::optional<int> xi_tail_order;
     double integration_tolerance;
@@ -120,17 +118,15 @@ struct MGIntegrationConfig {
     /**
      * @brief Construct with validated defaults.
      *
-     * @param base_order              GL panel order for E axes.
      * @param integration_tolerance   Overall relative tolerance for the outer integral.
      * @param cutoff_ratio            Outward-from-peak early-termination ratio.
-     * @param cold_temperature_order  GL order for E/ξ when T < COLD_TEMPERATURE_THRESHOLD.
-     * @param xi_order                GL order for the ξ peak core (defaults to base_order).
+     * @param xi_order                GL order for the ξ peak core (defaults to 48).
      * @param xi_peak_k               Half-width of the ξ peak window in sigma units.
      * @param xi_tail_order           GL order for ξ tail sub-intervals (defaults to 16).
      * @param ep_k_cut                E' truncation width in sigma units (must be > 0).
      * @param ep_k_in                 E' interior-edge separator in sigma units (must be >= 0, < ep_k_cut).
-     * @param ep_edge_order           GL order for E' edge regions (defaults to base_order).
-     * @param ep_interior_order       GL order for E' ridge interior (defaults to base_order).
+     * @param ep_edge_order           GL order for E' edge regions (defaults to 24).
+     * @param ep_interior_order       GL order for E' ridge interior (defaults to 24).
      * @param ep_diagnostic_tails     Whether to include far tails via log-GL (validation only).
      * @param ep_diagnostic_tail_order GL order for diagnostic tail integrations (defaults to 16).
      * @param e_panel_order           GL order for E-axis sub-panels (defaults to 12).
@@ -139,10 +135,8 @@ struct MGIntegrationConfig {
      * @throws std::invalid_argument on invalid parameters.
      */
     MGIntegrationConfig(
-        int base_order = 24,
         double integration_tolerance = 1e-3,
         double cutoff_ratio = 1e-8,
-        int cold_temperature_order = 48,
         std::optional<int> xi_order = std::nullopt,
         double xi_peak_k = 5.0,
         std::optional<int> xi_tail_order = std::nullopt,
@@ -162,11 +156,11 @@ struct MGIntegrationConfig {
     /** @brief Effective ξ tail GL order (xi_tail_order if set, otherwise 16). */
     int effective_xi_tail_order() const { return xi_tail_order.value_or(16); }
 
-    /** @brief Effective E' edge GL order (ep_edge_order if set, otherwise base_order). */
-    int effective_ep_edge_order() const { return ep_edge_order.value_or(base_order); }
+    /** @brief Effective E' edge GL order (ep_edge_order if set, otherwise 24). */
+    int effective_ep_edge_order() const { return ep_edge_order.value_or(24); }
 
-    /** @brief Effective E' interior GL order (ep_interior_order if set, otherwise base_order). */
-    int effective_ep_interior_order() const { return ep_interior_order.value_or(base_order); }
+    /** @brief Effective E' interior GL order (ep_interior_order if set, otherwise 24). */
+    int effective_ep_interior_order() const { return ep_interior_order.value_or(24); }
 
     /** @brief Effective diagnostic tail GL order (ep_diagnostic_tail_order if set, otherwise 16). */
     int effective_ep_diagnostic_tail_order() const { return ep_diagnostic_tail_order.value_or(16); }
@@ -182,7 +176,7 @@ struct MGIntegrationConfig {
      */
     static MGIntegrationConfig cold_adaptive() {
         return MGIntegrationConfig(
-            192, 1e-8, 1e-12, 192,
+            1e-8, 1e-12,
             512, 5.0, 24,
             5.0, 2.0, 192, 192,
             false, std::nullopt,
@@ -197,7 +191,7 @@ struct MGIntegrationConfig {
      */
     static MGIntegrationConfig warm_default() {
         return MGIntegrationConfig(
-            96, 1e-6, 1e-12, 96,
+            1e-6, 1e-12,
             96, 5.0, 16,
             5.0, 2.0, 96, 96,
             false, std::nullopt,
@@ -482,8 +476,6 @@ private:
     /// Shared weight function for the Planck/Wien/Uniform numerator and denominator.
     std::shared_ptr<WeightFunction const> weight_func_;
 
-    /// GL rule for E axes.
-    GaussLegendreRule base_rule_;
     /// GL rule for the ξ (scattering-angle) axis.
     GaussLegendreRule xi_rule_;
     /// GL rule for ξ tails in peak-focused splitting (low order, tails are exponentially small).

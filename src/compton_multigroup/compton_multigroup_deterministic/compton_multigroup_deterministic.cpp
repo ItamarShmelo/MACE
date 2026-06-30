@@ -53,10 +53,8 @@ static constexpr double XI_ELASTIC_HOT_THR   = 0.3;
 // ── MGIntegrationConfig ─────────────────────────────────────────────────
 
 MGIntegrationConfig::MGIntegrationConfig(
-    int const base_order,
     double const integration_tolerance,
     double const cutoff_ratio,
-    int const cold_temperature_order,
     std::optional<int> const xi_order,
     double const xi_peak_k,
     std::optional<int> const xi_tail_order,
@@ -69,9 +67,7 @@ MGIntegrationConfig::MGIntegrationConfig(
     std::optional<int> const e_panel_order,
     double const log_e_panel_ratio,
     double const e_boundary_k)
-    : base_order(base_order)
-    , cold_temperature_order(cold_temperature_order)
-    , xi_order(xi_order)
+    : xi_order(xi_order)
     , xi_tail_order(xi_tail_order)
     , integration_tolerance(integration_tolerance)
     , cutoff_ratio(cutoff_ratio)
@@ -86,14 +82,10 @@ MGIntegrationConfig::MGIntegrationConfig(
     , log_e_panel_ratio(log_e_panel_ratio)
     , e_boundary_k(e_boundary_k)
 {
-    if (base_order < 1)
-        throw std::invalid_argument("base_order must be >= 1");
-    if (cold_temperature_order < base_order)
-        throw std::invalid_argument("cold_temperature_order must be >= base_order");
     if (!(integration_tolerance > 0.0))
         throw std::invalid_argument("integration_tolerance must be > 0");
-    if (!(cutoff_ratio > 0.0))
-        throw std::invalid_argument("cutoff_ratio must be > 0");
+    if (cutoff_ratio < 0.0)
+        throw std::invalid_argument("cutoff_ratio must be >= 0");
     if (xi_order.has_value() && xi_order.value() < 1)
         throw std::invalid_argument("xi_order must be >= 1");
     if (!(xi_peak_k > 0.0))
@@ -126,7 +118,6 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
     MGIntegrationConfig const& config)
     : group_boundaries_(energy_group_boundaries)
     , weight_func_(std::move(weight_function))
-    , base_rule_(compute_gauss_legendre(config.base_order))
     , xi_rule_(compute_gauss_legendre(config.effective_xi_order()))
     , xi_tail_rule_(compute_gauss_legendre(config.effective_xi_tail_order()))
     , ep_edge_rule_(compute_gauss_legendre(config.effective_ep_edge_order()))
@@ -733,15 +724,20 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
 
         double const peak_sum = do_group(gp_peak);
 
-        double const cutoff = group_cutoff_ratio_ * peak_sum;
+        if (group_cutoff_ratio_ > 0.0) {
+            double const cutoff = group_cutoff_ratio_ * peak_sum;
 
-        // Expand rightward (higher E' groups) until below cutoff.
-        for (int gp = gp_peak + 1; gp < G; ++gp) {
-            if (do_group(gp) < cutoff) break;
-        }
-        // Expand leftward (lower E' groups) until below cutoff.
-        for (int gp = gp_peak - 1; gp >= 0; --gp) {
-            if (do_group(gp) < cutoff) break;
+            // Expand rightward (higher E' groups) until below cutoff.
+            for (int gp = gp_peak + 1; gp < G; ++gp) {
+                if (do_group(gp) < cutoff) break;
+            }
+            // Expand leftward (lower E' groups) until below cutoff.
+            for (int gp = gp_peak - 1; gp >= 0; --gp) {
+                if (do_group(gp) < cutoff) break;
+            }
+        } else {
+            for (int gp = gp_peak + 1; gp < G; ++gp) do_group(gp);
+            for (int gp = gp_peak - 1; gp >= 0; --gp) do_group(gp);
         }
     }
 
