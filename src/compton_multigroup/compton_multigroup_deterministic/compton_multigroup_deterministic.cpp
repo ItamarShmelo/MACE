@@ -13,7 +13,6 @@
 namespace compton {
 
 namespace constants {
-static constexpr double E_PANEL_DEDUP_EPS = 1e-10;
 static constexpr double XI_UPPER_EPS = 1e-10;
 static constexpr double DOUBLE_PEAK_RATIO_THRESHOLD = 10.0;
 
@@ -53,7 +52,6 @@ static constexpr double XI_ELASTIC_HOT_THR   = 0.3;
 // ── MGIntegrationConfig ─────────────────────────────────────────────────
 
 MGIntegrationConfig::MGIntegrationConfig(
-    double const integration_tolerance,
     double const cutoff_ratio,
     std::optional<int> const xi_order,
     double const xi_peak_k,
@@ -62,28 +60,21 @@ MGIntegrationConfig::MGIntegrationConfig(
     double const ep_k_in,
     std::optional<int> const ep_edge_order,
     std::optional<int> const ep_interior_order,
-    bool const ep_diagnostic_tails,
-    std::optional<int> const ep_diagnostic_tail_order,
     std::optional<int> const e_panel_order,
     double const log_e_panel_ratio,
     double const e_boundary_k)
     : xi_order(xi_order)
     , xi_tail_order(xi_tail_order)
-    , integration_tolerance(integration_tolerance)
     , cutoff_ratio(cutoff_ratio)
     , xi_peak_k(xi_peak_k)
     , ep_k_cut(ep_k_cut)
     , ep_k_in(ep_k_in)
     , ep_edge_order(ep_edge_order)
     , ep_interior_order(ep_interior_order)
-    , ep_diagnostic_tails(ep_diagnostic_tails)
-    , ep_diagnostic_tail_order(ep_diagnostic_tail_order)
     , e_panel_order(e_panel_order)
     , log_e_panel_ratio(log_e_panel_ratio)
     , e_boundary_k(e_boundary_k)
 {
-    if (!(integration_tolerance > 0.0))
-        throw std::invalid_argument("integration_tolerance must be > 0");
     if (cutoff_ratio < 0.0)
         throw std::invalid_argument("cutoff_ratio must be >= 0");
     if (xi_order.has_value() && xi_order.value() < 1)
@@ -102,8 +93,6 @@ MGIntegrationConfig::MGIntegrationConfig(
         throw std::invalid_argument("ep_edge_order must be >= 1");
     if (ep_interior_order.has_value() && ep_interior_order.value() < 1)
         throw std::invalid_argument("ep_interior_order must be >= 1");
-    if (ep_diagnostic_tail_order.has_value() && ep_diagnostic_tail_order.value() < 1)
-        throw std::invalid_argument("ep_diagnostic_tail_order must be >= 1");
     if (e_panel_order.has_value() && e_panel_order.value() < 1)
         throw std::invalid_argument("e_panel_order must be >= 1");
     if (!(log_e_panel_ratio > 1.0))
@@ -123,13 +112,10 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
     , ep_edge_rule_(compute_gauss_legendre(config.effective_ep_edge_order()))
     , ep_interior_rule_(compute_gauss_legendre(config.effective_ep_interior_order()))
     , ep_elastic_core_rule_(compute_gauss_legendre(8))
-    , ep_diagnostic_tail_rule_(compute_gauss_legendre(config.effective_ep_diagnostic_tail_order()))
     , e_panel_rule_(compute_gauss_legendre(config.effective_e_panel_order()))
-    , integration_tolerance_(config.integration_tolerance)
     , xi_peak_k_(config.xi_peak_k)
     , ep_k_cut_(config.ep_k_cut)
     , ep_k_in_(config.ep_k_in)
-    , ep_diagnostic_tails_(config.ep_diagnostic_tails)
     , group_cutoff_ratio_(config.cutoff_ratio)
     , log_e_panel_ratio_(config.log_e_panel_ratio)
     , e_boundary_k_(config.e_boundary_k)
@@ -147,15 +133,8 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
         if (energy_group_boundaries[i] >= energy_group_boundaries[i + 1])
             throw std::invalid_argument("boundaries must be strictly increasing");
     }
-
-    int const G = static_cast<int>(energy_group_boundaries.size()) - 1;
-    group_centers_.resize(G);
-    for (int g = 0; g < G; ++g) {
-        group_centers_[g] = std::sqrt(group_boundaries_[g] * group_boundaries_[g + 1]);
-    }
 }
 
-// ── E' ridge-based integration ──────────────────────────────────────────
 
 namespace {
 
@@ -296,8 +275,6 @@ double integrate_E_panels(
 
 } // anonymous namespace
 
-// ── Layer 1: single ξ-bin integration for fixed (E, E') ─────────────────
-
 double ComptonMultigroupKernel::integrate_xi_bin(
     ComptonKernelSolver const& kernel,
     ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
@@ -382,8 +359,6 @@ double ComptonMultigroupKernel::integrate_xi_bin(
     return result;
 }
 
-// ── Layer 2: E' + single ξ-bin integration for fixed E ──────────────────
-
 double ComptonMultigroupKernel::integrate_Ep_xi_bin(
     ComptonKernelSolver const& kernel,
     ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
@@ -465,8 +440,6 @@ std::vector<EPanel> ComptonMultigroupKernel::compute_E_panels(
     return panels;
 }
 
-// ── Single (g, gp) entry ────────────────────────────────────────────────
-
 double ComptonMultigroupKernel::compute_group_entry(
     ComptonKernelSolver const& kernel,
     ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
@@ -514,8 +487,6 @@ double ComptonMultigroupKernel::compute_group_entry(
     return group_sum;
 }
 
-// ── Public ξ-bin integral API ───────────────────────────────────────────
-
 std::vector<double> ComptonMultigroupKernel::compute_xi_integral_impl(
     ComptonKernelSolver const& kernel,
     ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
@@ -546,36 +517,6 @@ std::vector<double> ComptonMultigroupKernel::compute_xi_integral_impl(
     }
     return result;
 }
-
-std::vector<double> ComptonMultigroupKernel::compute_xi_integral_sigma(
-    ComptonKernelSolver const& kernel,
-    double const E,
-    double const Ep,
-    int const num_xi_bins,
-    double const T,
-    double const Ne,
-    KernelMultiplier const& multiplier) const
-{
-    return compute_xi_integral_impl(
-        kernel, &ComptonKernelSolver::sigma_E,
-        E, Ep, num_xi_bins, T, Ne, multiplier);
-}
-
-std::vector<double> ComptonMultigroupKernel::compute_xi_integral_dsigma_dT(
-    ComptonKernelSolver const& kernel,
-    double const E,
-    double const Ep,
-    int const num_xi_bins,
-    double const T,
-    double const Ne,
-    KernelMultiplier const& multiplier) const
-{
-    return compute_xi_integral_impl(
-        kernel, &ComptonKernelSolver::dsigma_E_dT,
-        E, Ep, num_xi_bins, T, Ne, multiplier);
-}
-
-// ── Public E'+ξ-bin integral API ────────────────────────────────────────
 
 std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_impl(
     ComptonKernelSolver const& kernel,
@@ -611,36 +552,6 @@ std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_impl(
             T, Ne, multiplier);
     }
     return result;
-}
-
-std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_sigma(
-    ComptonKernelSolver const& kernel,
-    double const E,
-    double const Ep_lo,
-    double const Ep_hi,
-    int const num_xi_bins,
-    double const T,
-    double const Ne,
-    KernelMultiplier const& multiplier) const
-{
-    return compute_Ep_xi_integral_impl(
-        kernel, &ComptonKernelSolver::sigma_E,
-        E, Ep_lo, Ep_hi, num_xi_bins, T, Ne, multiplier);
-}
-
-std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_dsigma_dT(
-    ComptonKernelSolver const& kernel,
-    double const E,
-    double const Ep_lo,
-    double const Ep_hi,
-    int const num_xi_bins,
-    double const T,
-    double const Ne,
-    KernelMultiplier const& multiplier) const
-{
-    return compute_Ep_xi_integral_impl(
-        kernel, &ComptonKernelSolver::dsigma_E_dT,
-        E, Ep_lo, Ep_hi, num_xi_bins, T, Ne, multiplier);
 }
 
 // ── Core 3D integration ─────────────────────────────────────────────────
@@ -707,9 +618,8 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     for (int g = 0; g < G; ++g) {
         auto const panels = compute_E_panels(g, T);
 
-        double const denom = integrate_E_panels(
-            [&](double const E) { return weight_func_->weight(E, T); },
-            panels, e_panel_rule_);
+        double const denom = weight_func_->compute_denominator(
+            group_boundaries_[g], group_boundaries_[g + 1], T);
         double const inv_denom = 1.0 / denom;
 
         auto do_group = [&](int const gp) {

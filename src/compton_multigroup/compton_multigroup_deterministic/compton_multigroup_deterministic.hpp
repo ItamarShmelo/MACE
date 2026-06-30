@@ -68,12 +68,6 @@
 
 namespace compton {
 
-namespace constants {
-/// Temperature [K] below which ridge_thermal_width applies a 5x
-/// multiplier to capture the narrow recoil band (0.005 keV).
-constexpr double COLD_TEMPERATURE_THRESHOLD = 0.005 * units::kev_kelvin;
-} // namespace constants
-
 /// Coordinate mapping for an E-axis integration panel.
 enum class EPanelMap {
     Linear,     ///< legendre_integrate (uniform node spacing)
@@ -92,7 +86,7 @@ struct EPanel {
  * @brief Consolidated configuration for multigroup integration.
  *
  * Controls the GL order for each integration axis and E' sub-region,
- * the ridge-based E' truncation parameters, overall tolerance, and
+ * the ridge-based E' truncation parameters, and
  * the outward-from-peak group cutoff ratio.  All parameter validation
  * is performed by the constructor so that invalid configurations are
  * rejected early.
@@ -100,7 +94,6 @@ struct EPanel {
 struct MGIntegrationConfig {
     std::optional<int> xi_order;
     std::optional<int> xi_tail_order;
-    double integration_tolerance;
     double cutoff_ratio;
     double xi_peak_k;
 
@@ -108,8 +101,6 @@ struct MGIntegrationConfig {
     double ep_k_in;
     std::optional<int> ep_edge_order;
     std::optional<int> ep_interior_order;
-    bool ep_diagnostic_tails;
-    std::optional<int> ep_diagnostic_tail_order;
 
     std::optional<int> e_panel_order;
     double log_e_panel_ratio;
@@ -118,7 +109,6 @@ struct MGIntegrationConfig {
     /**
      * @brief Construct with validated defaults.
      *
-     * @param integration_tolerance   Overall relative tolerance for the outer integral.
      * @param cutoff_ratio            Outward-from-peak early-termination ratio.
      * @param xi_order                GL order for the ξ peak core (defaults to 48).
      * @param xi_peak_k               Half-width of the ξ peak window in sigma units.
@@ -127,15 +117,12 @@ struct MGIntegrationConfig {
      * @param ep_k_in                 E' interior-edge separator in sigma units (must be >= 0, < ep_k_cut).
      * @param ep_edge_order           GL order for E' edge regions (defaults to 24).
      * @param ep_interior_order       GL order for E' ridge interior (defaults to 24).
-     * @param ep_diagnostic_tails     Whether to include far tails via log-GL (validation only).
-     * @param ep_diagnostic_tail_order GL order for diagnostic tail integrations (defaults to 16).
      * @param e_panel_order           GL order for E-axis sub-panels (defaults to 12).
      * @param log_e_panel_ratio       Panel width ratio threshold for log/rlog mapping (must be > 1).
      * @param e_boundary_k            E-panel boundary-layer width in sigma units (must be > 0).
      * @throws std::invalid_argument on invalid parameters.
      */
     MGIntegrationConfig(
-        double integration_tolerance = 1e-3,
         double cutoff_ratio = 1e-8,
         std::optional<int> xi_order = std::nullopt,
         double xi_peak_k = 5.0,
@@ -144,8 +131,6 @@ struct MGIntegrationConfig {
         double ep_k_in = 2.0,
         std::optional<int> ep_edge_order = std::nullopt,
         std::optional<int> ep_interior_order = std::nullopt,
-        bool ep_diagnostic_tails = false,
-        std::optional<int> ep_diagnostic_tail_order = std::nullopt,
         std::optional<int> e_panel_order = std::nullopt,
         double log_e_panel_ratio = 2.0,
         double e_boundary_k = 5.0);
@@ -162,41 +147,8 @@ struct MGIntegrationConfig {
     /** @brief Effective E' interior GL order (ep_interior_order if set, otherwise 24). */
     int effective_ep_interior_order() const { return ep_interior_order.value_or(24); }
 
-    /** @brief Effective diagnostic tail GL order (ep_diagnostic_tail_order if set, otherwise 16). */
-    int effective_ep_diagnostic_tail_order() const { return ep_diagnostic_tail_order.value_or(16); }
-
     /** @brief Effective E-axis per-panel GL order (e_panel_order if set, otherwise 12). */
     int effective_e_panel_order() const { return e_panel_order.value_or(12); }
-
-    /**
-     * @brief High-accuracy config for cold temperatures (T < 0.1 keV).
-     *
-     * bo=192, xi_order=512, xi_peak_k=5, xi_tail_order=24, tol=1e-8.
-     * ep_k_cut=5, ep_k_in=2, ep_edge/interior_order=192.
-     */
-    static MGIntegrationConfig cold_adaptive() {
-        return MGIntegrationConfig(
-            1e-8, 1e-12,
-            512, 5.0, 24,
-            5.0, 2.0, 192, 192,
-            false, std::nullopt,
-            std::nullopt, 2.0, 5.0);
-    }
-
-    /**
-     * @brief High-accuracy config for warm temperatures (T >= 0.1 keV).
-     *
-     * bo=96, xi_order=96, xi_peak_k=5, xi_tail_order=16, tol=1e-6.
-     * ep_k_cut=5, ep_k_in=2, ep_edge/interior_order=96.
-     */
-    static MGIntegrationConfig warm_default() {
-        return MGIntegrationConfig(
-            1e-6, 1e-12,
-            96, 5.0, 16,
-            5.0, 2.0, 96, 96,
-            false, std::nullopt,
-            std::nullopt, 2.0, 5.0);
-    }
 };
 
 /**
@@ -225,15 +177,11 @@ public:
 
 /**
  * @brief Computes the weighted multigroup-multiangle Compton scattering
- *        matrix by adaptive recursive Gauss-Legendre quadrature.
+ *        matrix by fixed-order Gauss-Legendre quadrature.
  *
  * Construct once with the energy group structure, weight function,
- * tolerance, and base quadrature order; then call compute_sigma_matrix /
+ * and quadrature configuration; then call compute_sigma_matrix /
  * compute_dsigma_dT_matrix at any temperature and angular resolution.
- *
- * The 3D integral is evaluated adaptively: each axis recursively bisects
- * until the relative error estimate is below its tolerance.  Inner axes
- * use progressively tighter tolerances (E: tol, E': tol*0.1, ξ: tol*0.01).
  */
 class ComptonMultigroupKernel {
 public:
@@ -251,10 +199,7 @@ public:
         MGIntegrationConfig const& config);
 
     /** @brief Number of energy groups G. */
-    int num_groups() const { return static_cast<int>(group_centers_.size()); }
-
-    /** @brief Geometric-mean group centers √(E_lo · E_hi) [erg]. */
-    std::vector<double> const& group_centers() const { return group_centers_; }
+    int num_groups() const { return static_cast<int>(group_boundaries_.size()) - 1; }
 
     /** @brief Energy group boundaries [erg], length G+1. */
     std::vector<double> const& group_boundaries() const { return group_boundaries_; }
@@ -293,72 +238,6 @@ public:
         double T, double Ne,
         KernelMultiplier const& multiplier) const;
 
-    // ── ξ-bin integral for fixed (E, E') ────────────────────────────────
-    //
-    // Returns the raw kernel integral over each ξ bin:
-    //   result[a] = ∫_{ξ_a}^{ξ_{a+1}} multiplier(E,E',ξ,T,Ne) · Σ_E dξ
-    //
-    // No 2π, no weight function, no denominator normalisation.
-
-    /**
-     * @brief Integrate σ_E over ξ bins for fixed (E, E').
-     *
-     * @param kernel        Point-wise kernel evaluator.
-     * @param E             Incoming photon energy [erg], must be > 0.
-     * @param Ep            Scattered photon energy [erg], must be > 0.
-     * @param num_xi_bins   Number of equal-width bins on [−1, 1], must be >= 1.
-     * @param T             Electron temperature [K].
-     * @param Ne            Electron density [cm⁻³].
-     * @param multiplier    Pointwise kernel multiplier.
-     * @return Vector of length num_xi_bins.
-     */
-    std::vector<double> compute_xi_integral_sigma(
-        ComptonKernelSolver const& kernel,
-        double E, double Ep, int num_xi_bins,
-        double T, double Ne,
-        KernelMultiplier const& multiplier) const;
-
-    /** @brief Integrate ∂σ_E/∂T over ξ bins for fixed (E, E'). */
-    std::vector<double> compute_xi_integral_dsigma_dT(
-        ComptonKernelSolver const& kernel,
-        double E, double Ep, int num_xi_bins,
-        double T, double Ne,
-        KernelMultiplier const& multiplier) const;
-
-    // ── E' + ξ-bin integral for fixed E ─────────────────────────────────
-    //
-    // Returns the raw kernel integral over E' and each ξ bin:
-    //   result[a] = ∫_{Ep_lo}^{Ep_hi} [∫_{ξ_a}^{ξ_{a+1}} multiplier · Σ_E dξ] dE'
-    //
-    // Uses adaptive peak-aware E' quadrature (no flat_ep mode).
-    // No 2π, no weight function, no denominator normalisation.
-
-    /**
-     * @brief Integrate σ_E over E' and ξ bins for fixed E.
-     *
-     * @param kernel        Point-wise kernel evaluator.
-     * @param E             Incoming photon energy [erg], must be > 0.
-     * @param Ep_lo         Lower E' bound [erg], must be > 0.
-     * @param Ep_hi         Upper E' bound [erg], must be > Ep_lo.
-     * @param num_xi_bins   Number of equal-width bins on [−1, 1], must be >= 1.
-     * @param T             Electron temperature [K].
-     * @param Ne            Electron density [cm⁻³].
-     * @param multiplier    Pointwise kernel multiplier.
-     * @return Vector of length num_xi_bins.
-     */
-    std::vector<double> compute_Ep_xi_integral_sigma(
-        ComptonKernelSolver const& kernel,
-        double E, double Ep_lo, double Ep_hi, int num_xi_bins,
-        double T, double Ne,
-        KernelMultiplier const& multiplier) const;
-
-    /** @brief Integrate ∂σ_E/∂T over E' and ξ bins for fixed E. */
-    std::vector<double> compute_Ep_xi_integral_dsigma_dT(
-        ComptonKernelSolver const& kernel,
-        double E, double Ep_lo, double Ep_hi, int num_xi_bins,
-        double T, double Ne,
-        KernelMultiplier const& multiplier) const;
-
 private:
     /**
      * @brief Core driver: assemble the full G×G×num_angle_bins scattering matrix.
@@ -370,11 +249,6 @@ private:
      * below group_cutoff_ratio_ × peak_value.
      *
      * Each (g, gp) pair is evaluated by compute_group_entry().
-     *
-     * **Tolerance hierarchy** (set once here and forwarded):
-     *   - E  axis:  integration_tolerance_
-     *   - E' axis:  integration_tolerance_ × 0.1
-     *   - ξ  axis:  integration_tolerance_ × 0.01
      *
      * @param kernel         Point-wise kernel evaluator.
      * @param eval           Pointer-to-member: sigma_E or dsigma_E_dT.
@@ -454,7 +328,8 @@ private:
     /// (Linear, LogLower, or LogUpper).
     std::vector<EPanel> compute_E_panels(int g, double T) const;
 
-    /** @brief Dispatch impl for compute_xi_integral_sigma / _dsigma_dT. */
+public:
+    /** @brief Integrate the kernel over ξ bins for fixed (E, E'). */
     std::vector<double> compute_xi_integral_impl(
         ComptonKernelSolver const& kernel,
         ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
@@ -462,7 +337,7 @@ private:
         double T, double Ne,
         KernelMultiplier const& multiplier) const;
 
-    /** @brief Dispatch impl for compute_Ep_xi_integral_sigma / _dsigma_dT. */
+    /** @brief Integrate the kernel over E' and ξ bins for fixed E. */
     std::vector<double> compute_Ep_xi_integral_impl(
         ComptonKernelSolver const& kernel,
         ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
@@ -470,8 +345,8 @@ private:
         double T, double Ne,
         KernelMultiplier const& multiplier) const;
 
+private:
     std::vector<double> group_boundaries_;
-    std::vector<double> group_centers_;
 
     /// Shared weight function for the Planck/Wien/Uniform numerator and denominator.
     std::shared_ptr<WeightFunction const> weight_func_;
@@ -487,17 +362,13 @@ private:
     GaussLegendreRule ep_interior_rule_;
     /// Fixed low-order GL rule for the double-peak elastic-core panel.
     GaussLegendreRule ep_elastic_core_rule_;
-    /// GL rule for diagnostic log-GL tail integrations.
-    GaussLegendreRule ep_diagnostic_tail_rule_;
 
     /// GL rule for E-axis sub-panels (per panel, typically 12 points).
     GaussLegendreRule e_panel_rule_;
 
-    double integration_tolerance_;
     double xi_peak_k_;
     double ep_k_cut_;
     double ep_k_in_;
-    bool ep_diagnostic_tails_;
     double group_cutoff_ratio_;
 
     /// Panel width ratio threshold for switching to log/rlog-E quadrature.
@@ -506,27 +377,6 @@ private:
     /// Boundary-layer width multiplier for E-panel edge splitting.
     double e_boundary_k_;
 };
-
-/**
- * @brief Thermal Doppler half-width of the Compton kernel at energy E.
- *
- *     dE = E * sqrt(2 k_B T / m_e c^2)
- *
- * Below COLD_TEMPERATURE_THRESHOLD a 5x multiplier is applied to ensure
- * the extremely narrow recoil band is fully captured.
- *
- * @param E  Photon energy [erg].
- * @param T  Electron temperature [K].
- * @return   Thermal half-width [erg].
- */
-inline double thermal_half_width(double const E, double const T)
-{
-    double const tau = T * units::k_boltz / units::me_c2;
-    double dE = E * std::sqrt(2.0 * tau);
-    if (T < constants::COLD_TEMPERATURE_THRESHOLD)
-        dE *= 5.0;
-    return dE;
-}
 
 /**
  * @brief Local thermal width of the Compton ridge in E' at scattering angle xi.

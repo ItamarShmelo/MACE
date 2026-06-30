@@ -27,14 +27,12 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .def(py::init<>());
 
     py::class_<MGIntegrationConfig>(m, "MGIntegrationConfig")
-        .def(py::init<double, double,
+        .def(py::init<double,
                        std::optional<int>, double,
                        std::optional<int>,
                        double, double,
                        std::optional<int>, std::optional<int>,
-                       bool, std::optional<int>,
                        std::optional<int>, double, double>(),
-             "integration_tolerance"_a = 1e-3,
              "cutoff_ratio"_a = 1e-8,
              "xi_order"_a = std::nullopt,
              "xi_peak_k"_a = 5.0,
@@ -43,22 +41,17 @@ PYBIND11_MODULE(_compton_multigroup, m) {
              "ep_k_in"_a = 2.0,
              "ep_edge_order"_a = std::nullopt,
              "ep_interior_order"_a = std::nullopt,
-             "ep_diagnostic_tails"_a = false,
-             "ep_diagnostic_tail_order"_a = std::nullopt,
              "e_panel_order"_a = std::nullopt,
              "log_e_panel_ratio"_a = 2.0,
              "e_boundary_k"_a = 5.0)
         .def_readwrite("xi_order",                &MGIntegrationConfig::xi_order)
         .def_readwrite("xi_tail_order",           &MGIntegrationConfig::xi_tail_order)
-        .def_readwrite("integration_tolerance",   &MGIntegrationConfig::integration_tolerance)
         .def_readwrite("cutoff_ratio",            &MGIntegrationConfig::cutoff_ratio)
         .def_readwrite("xi_peak_k",              &MGIntegrationConfig::xi_peak_k)
         .def_readwrite("ep_k_cut",               &MGIntegrationConfig::ep_k_cut)
         .def_readwrite("ep_k_in",                &MGIntegrationConfig::ep_k_in)
         .def_readwrite("ep_edge_order",           &MGIntegrationConfig::ep_edge_order)
         .def_readwrite("ep_interior_order",       &MGIntegrationConfig::ep_interior_order)
-        .def_readwrite("ep_diagnostic_tails",     &MGIntegrationConfig::ep_diagnostic_tails)
-        .def_readwrite("ep_diagnostic_tail_order", &MGIntegrationConfig::ep_diagnostic_tail_order)
         .def_readwrite("e_panel_order",           &MGIntegrationConfig::e_panel_order)
         .def_readwrite("log_e_panel_ratio",       &MGIntegrationConfig::log_e_panel_ratio)
         .def_readwrite("e_boundary_k",           &MGIntegrationConfig::e_boundary_k)
@@ -66,12 +59,7 @@ PYBIND11_MODULE(_compton_multigroup, m) {
         .def("effective_xi_tail_order", &MGIntegrationConfig::effective_xi_tail_order)
         .def("effective_ep_edge_order", &MGIntegrationConfig::effective_ep_edge_order)
         .def("effective_ep_interior_order", &MGIntegrationConfig::effective_ep_interior_order)
-        .def("effective_ep_diagnostic_tail_order", &MGIntegrationConfig::effective_ep_diagnostic_tail_order)
-        .def("effective_e_panel_order", &MGIntegrationConfig::effective_e_panel_order)
-        .def_static("cold_adaptive", &MGIntegrationConfig::cold_adaptive,
-            "High-accuracy config for T < 0.1 keV (bo=192, xi=512, ep_k_cut=5)")
-        .def_static("warm_default", &MGIntegrationConfig::warm_default,
-            "High-accuracy config for T >= 0.1 keV (bo=96, xi=96, ep_k_cut=5)");
+        .def("effective_e_panel_order", &MGIntegrationConfig::effective_e_panel_order);
 
     py::class_<ComptonMultigroupKernel>(m, "ComptonMultigroupKernel")
         .def(py::init<std::vector<double> const&,
@@ -82,15 +70,6 @@ PYBIND11_MODULE(_compton_multigroup, m) {
              "config"_a = MGIntegrationConfig{})
 
         .def_property_readonly("num_groups", &ComptonMultigroupKernel::num_groups)
-
-        .def_property_readonly("group_centers", [](ComptonMultigroupKernel const& self) {
-            auto const& c = self.group_centers();
-            py::array_t<double> arr(c.size());
-            auto buf = arr.mutable_unchecked<1>();
-            for (py::ssize_t i = 0; i < static_cast<py::ssize_t>(c.size()); ++i)
-                buf(i) = c[i];
-            return arr;
-        })
 
         .def_property_readonly("group_boundaries", [](ComptonMultigroupKernel const& self) {
             auto const& b = self.group_boundaries();
@@ -155,8 +134,9 @@ PYBIND11_MODULE(_compton_multigroup, m) {
                double E, double Ep, int num_xi_bins,
                double T, double Ne,
                KernelMultiplier const& multiplier) {
-                auto v = self.compute_xi_integral_sigma(
-                    kernel, E, Ep, num_xi_bins, T, Ne, multiplier);
+                auto v = self.compute_xi_integral_impl(
+                    kernel, &ComptonKernelSolver::sigma_E,
+                    E, Ep, num_xi_bins, T, Ne, multiplier);
                 py::array_t<double> arr(v.size());
                 auto buf = arr.mutable_unchecked<1>();
                 for (py::ssize_t i = 0; i < static_cast<py::ssize_t>(v.size()); ++i)
@@ -174,8 +154,9 @@ PYBIND11_MODULE(_compton_multigroup, m) {
                double E, double Ep, int num_xi_bins,
                double T, double Ne,
                KernelMultiplier const& multiplier) {
-                auto v = self.compute_xi_integral_dsigma_dT(
-                    kernel, E, Ep, num_xi_bins, T, Ne, multiplier);
+                auto v = self.compute_xi_integral_impl(
+                    kernel, &ComptonKernelSolver::dsigma_E_dT,
+                    E, Ep, num_xi_bins, T, Ne, multiplier);
                 py::array_t<double> arr(v.size());
                 auto buf = arr.mutable_unchecked<1>();
                 for (py::ssize_t i = 0; i < static_cast<py::ssize_t>(v.size()); ++i)
@@ -194,8 +175,9 @@ PYBIND11_MODULE(_compton_multigroup, m) {
                int num_xi_bins,
                double T, double Ne,
                KernelMultiplier const& multiplier) {
-                auto v = self.compute_Ep_xi_integral_sigma(
-                    kernel, E, Ep_lo, Ep_hi, num_xi_bins, T, Ne, multiplier);
+                auto v = self.compute_Ep_xi_integral_impl(
+                    kernel, &ComptonKernelSolver::sigma_E,
+                    E, Ep_lo, Ep_hi, num_xi_bins, T, Ne, multiplier);
                 py::array_t<double> arr(v.size());
                 auto buf = arr.mutable_unchecked<1>();
                 for (py::ssize_t i = 0; i < static_cast<py::ssize_t>(v.size()); ++i)
@@ -214,8 +196,9 @@ PYBIND11_MODULE(_compton_multigroup, m) {
                int num_xi_bins,
                double T, double Ne,
                KernelMultiplier const& multiplier) {
-                auto v = self.compute_Ep_xi_integral_dsigma_dT(
-                    kernel, E, Ep_lo, Ep_hi, num_xi_bins, T, Ne, multiplier);
+                auto v = self.compute_Ep_xi_integral_impl(
+                    kernel, &ComptonKernelSolver::dsigma_E_dT,
+                    E, Ep_lo, Ep_hi, num_xi_bins, T, Ne, multiplier);
                 py::array_t<double> arr(v.size());
                 auto buf = arr.mutable_unchecked<1>();
                 for (py::ssize_t i = 0; i < static_cast<py::ssize_t>(v.size()); ++i)

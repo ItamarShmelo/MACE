@@ -55,8 +55,8 @@ public:
         double asymp_tau_alpha_threshold  = constants::ASYMP_TAU_ALPHA_THRESHOLD,
         double power_series_self_tol      = 1e-7,
         double asymp_self_tol             = 1e-7,
-        double dd_power_series_self_tol   = 1e-3,
-        double dd_asymp_self_tol          = 1e-3);
+        double dd_power_series_self_tol   = 0.5,
+        double dd_asymp_self_tol          = 0.5);
 
     ComptonResult sigma_E(
         double E,
