@@ -1,6 +1,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 
+#include "compton_common/compton_common.hpp"
 #include "compton_differential_cross_section/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.hpp"
 #include "compton_differential_cross_section/compton_kernel_power_series/compton_kernel_power_series.hpp"
 #include "compton_differential_cross_section/compton_kernel_quadrature/compton_kernel_quadrature.hpp"
@@ -12,7 +13,7 @@ namespace py = pybind11;
 using namespace pybind11::literals;
 using namespace compton;
 
-PYBIND11_MODULE(_compton_differential_cross_section, m)
+PYBIND11_MODULE(_compton_differential_cross_section, m) // NOLINT(misc-include-cleaner)
 {
     m.doc() = "Compton differential cross-section kernels: power series, "
               "asymptotic series, quadrature, and adaptive solver";
@@ -23,7 +24,7 @@ PYBIND11_MODULE(_compton_differential_cross_section, m)
     py::class_<ComptonPowerSeries>(m, "ComptonPowerSeries")
         .def(
             py::init<bool, double, int, int>(),
-            "high_precision"_a = false,
+            "high_precision"_a = false, // NOLINT(misc-include-cleaner)
             "eps_rel"_a = 1e-8,
             "n_min"_a = 4,
             "n_max"_a = 500)
@@ -47,7 +48,7 @@ PYBIND11_MODULE(_compton_differential_cross_section, m)
             "sigma_E_vec",
             [](ComptonPowerSeries const& self,
                double E,
-               py::array_t<double, py::array::c_style | py::array::forcecast>
+               py::array_t<double, py::array::c_style | py::array::forcecast> const&
                    E_prime_arr,
                double xi,
                double T,
@@ -78,7 +79,7 @@ PYBIND11_MODULE(_compton_differential_cross_section, m)
             "dsigma_E_dT_vec",
             [](ComptonPowerSeries const& self,
                double E,
-               py::array_t<double, py::array::c_style | py::array::forcecast>
+               py::array_t<double, py::array::c_style | py::array::forcecast> const&
                    E_prime_arr,
                double xi,
                double T,
@@ -144,7 +145,7 @@ PYBIND11_MODULE(_compton_differential_cross_section, m)
             "sigma_E_vec",
             [](ComptonKernelAsymptoticSeries const& self,
                double E,
-               py::array_t<double, py::array::c_style | py::array::forcecast>
+               py::array_t<double, py::array::c_style | py::array::forcecast> const&
                    E_prime_arr,
                double xi,
                double T,
@@ -175,7 +176,7 @@ PYBIND11_MODULE(_compton_differential_cross_section, m)
             "dsigma_E_dT_vec",
             [](ComptonKernelAsymptoticSeries const& self,
                double E,
-               py::array_t<double, py::array::c_style | py::array::forcecast>
+               py::array_t<double, py::array::c_style | py::array::forcecast> const&
                    E_prime_arr,
                double xi,
                double T,
@@ -225,7 +226,7 @@ PYBIND11_MODULE(_compton_differential_cross_section, m)
             "sigma_E_vec",
             [](ComptonKernelQuadrature const& self,
                double E,
-               py::array_t<double, py::array::c_style | py::array::forcecast>
+               py::array_t<double, py::array::c_style | py::array::forcecast> const&
                    E_prime_arr,
                double xi,
                double T,
@@ -256,7 +257,7 @@ PYBIND11_MODULE(_compton_differential_cross_section, m)
             "dsigma_E_dT_vec",
             [](ComptonKernelQuadrature const& self,
                double E,
-               py::array_t<double, py::array::c_style | py::array::forcecast>
+               py::array_t<double, py::array::c_style | py::array::forcecast> const&
                    E_prime_arr,
                double xi,
                double T,
@@ -299,20 +300,20 @@ PYBIND11_MODULE(_compton_differential_cross_section, m)
         [](int N) {
             auto rule = compton::compute_gauss_laguerre(N);
 
-            py::array_t<double> nodes(rule.nodes.size());
-            py::array_t<double> weights(rule.weights.size());
+            py::array_t<double> nodes(static_cast<py::ssize_t>(rule.nodes.size())); // NOLINT(misc-include-cleaner)
+            py::array_t<double> weights(static_cast<py::ssize_t>(rule.weights.size()));
 
             auto nodes_buf = nodes.mutable_unchecked<1>();
             auto weights_buf = weights.mutable_unchecked<1>();
 
-            for (py::ssize_t i = 0;
+            for (py::ssize_t i = 0; // NOLINT(misc-include-cleaner)
                  i < static_cast<py::ssize_t>(rule.nodes.size());
                  ++i) {
                 nodes_buf(i) = rule.nodes[i];
                 weights_buf(i) = rule.weights[i];
             }
 
-            return py::make_tuple(nodes, weights);
+            return py::make_tuple(nodes, weights); // NOLINT(misc-include-cleaner)
         },
         "N"_a,
         "Compute N-point Gauss-Laguerre nodes and weights");
@@ -347,7 +348,7 @@ PYBIND11_MODULE(_compton_differential_cross_section, m)
             "sigma_E_vec",
             [](ComptonKernelSolver const& self,
                double E,
-               py::array_t<double, py::array::c_style | py::array::forcecast>
+               py::array_t<double, py::array::c_style | py::array::forcecast> const&
                    E_prime_arr,
                double xi,
                double T,
@@ -370,7 +371,7 @@ PYBIND11_MODULE(_compton_differential_cross_section, m)
             "dsigma_E_dT_vec",
             [](ComptonKernelSolver const& self,
                double E,
-               py::array_t<double, py::array::c_style | py::array::forcecast>
+               py::array_t<double, py::array::c_style | py::array::forcecast> const&
                    E_prime_arr,
                double xi,
                double T,

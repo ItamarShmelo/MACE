@@ -1,5 +1,10 @@
 #include "compton_differential_cross_section/compton_kernel_quadrature/compton_kernel_quadrature.hpp"
+#include "compton_common/compton_common.hpp"
 #include "utilities/gauss_laguerre.hpp"
+#include "utilities/units.hpp"
+
+#include <cmath>
+#include <stdexcept>
 
 namespace compton {
 

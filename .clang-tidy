@@ -8,7 +8,9 @@ Checks: >
   bugprone-*,
   -bugprone-easily-swappable-parameters,
   performance-*,
+  -performance-enum-size,
   misc-*,
+  -misc-non-private-member-variables-in-classes,
 
 # Phase 2 -- uncomment individually when ready:
 #  readability-*,

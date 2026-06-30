@@ -1,13 +1,15 @@
-#include <pybind11/numpy.h>
+#include <pybind11/numpy.h>  // NOLINT(misc-include-cleaner) -- implicit numpy converters
 #include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+#include <pybind11/stl.h> // NOLINT(misc-include-cleaner) -- implicit STL converters
 
-#include "compton_common/compton_common.hpp"
 #include "compton_multigroup/compton_multigroup_deterministic/compton_multigroup_deterministic.hpp"
 #include "compton_multigroup/compton_multigroup_monte_carlo/compton_multigroup_monte_carlo.hpp"
 #include "compton_multigroup/weight_function.hpp"
 #include "utilities/bind_helpers.hpp"
 #include "utilities/gauss_legendre.hpp"
+
+#include <cstddef>
+#include <optional>
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -15,7 +17,7 @@ using namespace compton;
 using compton::bind::flat_to_numpy_2d;
 using compton::bind::flat_to_numpy_3d;
 
-PYBIND11_MODULE(_compton_multigroup, m)
+PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
 {
     m.doc() = "Weighted multigroup-multiangle Compton scattering matrix";
 
@@ -41,8 +43,8 @@ PYBIND11_MODULE(_compton_multigroup, m)
                 std::optional<int>,
                 double,
                 double>(),
-            "cutoff_ratio"_a = 1e-8,
-            "xi_order"_a = std::nullopt,
+            "cutoff_ratio"_a = 1e-8, // NOLINT(misc-include-cleaner)
+            "xi_order"_a = std::nullopt, // NOLINT(misc-include-cleaner)
             "xi_peak_k"_a = 5.0,
             "xi_tail_order"_a = std::nullopt,
             "ep_k_cut"_a = 5.0,
@@ -101,7 +103,8 @@ PYBIND11_MODULE(_compton_multigroup, m)
                 auto const& b = self.group_boundaries();
                 py::array_t<double> arr(b.size());
                 auto buf = arr.mutable_unchecked<1>();
-                for (py::ssize_t i = 0; i < static_cast<py::ssize_t>(b.size());
+                for (py::ssize_t i = 0; // NOLINT(misc-include-cleaner)
+                     i < static_cast<py::ssize_t>(b.size());
                      ++i)
                     buf(i) = b[i];
                 return arr;
@@ -383,11 +386,13 @@ PYBIND11_MODULE(_compton_multigroup, m)
         "gauss_legendre_rule",
         [](int N) {
             auto rule = compton::compute_gauss_legendre(N);
-            py::array_t<double> nodes(rule.nodes.size());
-            py::array_t<double> weights(rule.weights.size());
+            py::array_t<double> nodes(
+                static_cast<py::ssize_t>(rule.nodes.size())); // NOLINT(misc-include-cleaner)
+            py::array_t<double> weights(
+                static_cast<py::ssize_t>(rule.weights.size()));
             auto nodes_buf = nodes.mutable_unchecked<1>();
             auto weights_buf = weights.mutable_unchecked<1>();
-            for (py::ssize_t i = 0;
+            for (py::ssize_t i = 0; // NOLINT(misc-include-cleaner)
                  i < static_cast<py::ssize_t>(rule.nodes.size());
                  ++i) {
                 nodes_buf(i) = rule.nodes[i];
@@ -400,7 +405,7 @@ PYBIND11_MODULE(_compton_multigroup, m)
 
     m.def(
         "adaptive_legendre_integrate",
-        [](py::function integrand,
+        [](py::function const& integrand, // NOLINT(misc-include-cleaner)
            int base_order,
            double a,
            double b,
@@ -425,7 +430,7 @@ PYBIND11_MODULE(_compton_multigroup, m)
 
     m.def(
         "adaptive_log_legendre_integrate",
-        [](py::function integrand,
+        [](py::function const& integrand,
            int base_order,
            double a,
            double b,
@@ -451,7 +456,7 @@ PYBIND11_MODULE(_compton_multigroup, m)
 
     m.def(
         "adaptive_rlog_legendre_integrate",
-        [](py::function integrand,
+        [](py::function const& integrand,
            int base_order,
            double a,
            double b,
@@ -523,7 +528,7 @@ PYBIND11_MODULE(_compton_multigroup, m)
     // --- Monte Carlo ---
     py::class_<MCIntegrationConfig>(m, "MCIntegrationConfig")
         .def(
-            py::init<std::size_t, int, bool>(),
+            py::init<std::size_t, int, bool>(), // NOLINT(misc-include-cleaner)
             "num_samples"_a = 1'000'000,
             "seed"_a = -1,
             "discard_out_of_grid"_a = true)

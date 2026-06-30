@@ -5,7 +5,7 @@
 namespace py = pybind11;
 using namespace compton;
 
-PYBIND11_MODULE(_compton_common, m)
+PYBIND11_MODULE(_compton_common, m) // NOLINT(misc-include-cleaner)
 {
     m.doc() = "Shared types for Compton scattering kernel modules";
 

@@ -1,10 +1,13 @@
 #include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+#include <pybind11/stl.h> // NOLINT(misc-include-cleaner) -- implicit STL converters
 
 #include "compton_multigroup/compton_multigroup_deterministic/compton_multigroup_deterministic.hpp"
 
 #include <algorithm>
+#include <cstddef>
+#include <iterator>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace py = pybind11;
@@ -34,8 +37,8 @@ class EnergyTransferMultiplier : public KernelMultiplier {
         auto it_g = std::upper_bound(boundaries_.begin(), boundaries_.end(), E);
         auto it_gp =
             std::upper_bound(boundaries_.begin(), boundaries_.end(), Ep);
-        int g = static_cast<int>(std::distance(boundaries_.begin(), it_g)) - 1;
-        int gp =
+        int const g = static_cast<int>(std::distance(boundaries_.begin(), it_g)) - 1;
+        int const gp =
             static_cast<int>(std::distance(boundaries_.begin(), it_gp)) - 1;
         if (g == gp)
             return 1.0;
@@ -47,7 +50,7 @@ class EnergyTransferMultiplier : public KernelMultiplier {
     std::vector<double> centers_;
 };
 
-PYBIND11_MODULE(_compton_kernel_multipliers, m)
+PYBIND11_MODULE(_compton_kernel_multipliers, m) // NOLINT(misc-include-cleaner)
 {
     m.doc() = "Concrete kernel multipliers for multigroup Compton integrals";
 
@@ -58,6 +61,6 @@ PYBIND11_MODULE(_compton_kernel_multipliers, m)
         "EnergyTransferMultiplier")
         .def(
             py::init<std::vector<double>, std::vector<double>>(),
-            "energy_group_boundaries"_a,
+            "energy_group_boundaries"_a, // NOLINT(misc-include-cleaner)
             "energy_group_centers"_a);
 }

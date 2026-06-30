@@ -1,6 +1,10 @@
 #include "compton_differential_cross_section/compton_kernel_solver/compton_kernel_solver.hpp"
+#include "compton_common/compton_common.hpp"
+#include "utilities/units.hpp"
 
+#include <algorithm>
 #include <cstdio>
+#include <stdexcept>
 
 namespace compton {
 
@@ -66,7 +70,7 @@ ComptonResult ComptonKernelSolver::dispatch(
                 eval_kernel<Op>(asymp_series_, E, E_prime, xi, T, Ne);
             if (r.estimated_rel_error < asymp_self_tol_)
                 return r;
-        } catch (...) {
+        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next backend
         }
 
         // A2: DD asymptotic
@@ -75,7 +79,7 @@ ComptonResult ComptonKernelSolver::dispatch(
                 eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T, Ne);
             if (r.estimated_rel_error < dd_asymp_self_tol_)
                 return r;
-        } catch (...) {
+        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next backend
         }
     } else {
         // --- Power series regime ---
@@ -87,7 +91,7 @@ ComptonResult ComptonKernelSolver::dispatch(
             if (r.estimated_rel_error < power_series_self_tol_ &&
                 (Op == KernelOp::dsigma_dT || r.value >= 0.0))
                 return r;
-        } catch (...) {
+        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next backend
         }
 
         // P2: DD power series
@@ -97,7 +101,7 @@ ComptonResult ComptonKernelSolver::dispatch(
             if (r.estimated_rel_error < dd_power_series_self_tol_ &&
                 (Op == KernelOp::dsigma_dT || r.value >= 0.0))
                 return r;
-        } catch (...) {
+        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next backend
         }
     }
 
