@@ -3,60 +3,26 @@ Language: Cpp
 BasedOnStyle: LLVM
 
 IndentWidth: 4
-TabWidth: 4
-UseTab: Never
-ColumnLimit: 120
+ColumnLimit: 80
 
 QualifierAlignment: Custom
 QualifierOrder: ['inline', 'static', 'constexpr', 'type', 'const', 'volatile', 'restrict']
 
 BreakBeforeBraces: Custom
 BraceWrapping:
-  AfterCaseLabel: false
-  AfterClass: false
-  AfterControlStatement: Never
-  AfterEnum: false
   AfterFunction: true
-  AfterNamespace: false
-  AfterStruct: false
-  AfterUnion: false
-  AfterExternBlock: false
-  BeforeCatch: false
-  BeforeElse: false
-  BeforeLambdaBody: false
-  BeforeWhile: false
-  IndentBraces: false
   SplitEmptyFunction: false
   SplitEmptyRecord: false
   SplitEmptyNamespace: false
 
 PointerAlignment: Left
-ReferenceAlignment: Pointer
+AlignAfterOpenBracket: AlwaysBreak
 
 BinPackParameters: false
 BinPackArguments: false
-AllowAllParametersOfDeclarationOnNextLine: true
-AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowAllArgumentsOnNextLine: false
 
-AllowShortFunctionsOnASingleLine: InlineOnly
-AllowShortBlocksOnASingleLine: Empty
-AllowShortIfStatementsOnASingleLine: Never
-AllowShortLoopsOnASingleLine: false
-AllowShortCaseLabelsOnASingleLine: false
-AllowShortLambdasOnASingleLine: Inline
-
-SortIncludes: Never
-IncludeBlocks: Preserve
-
-BreakConstructorInitializers: BeforeComma
 PackConstructorInitializers: Never
 
-NamespaceIndentation: None
-FixNamespaceComments: true
-
-AlignAfterOpenBracket: Align
-AlignOperands: Align
-BreakBeforeBinaryOperators: None
-BreakBeforeTernaryOperators: true
-SpaceBeforeParens: ControlStatements
-Cpp11BracedListStyle: true
+AllowShortFunctionsOnASingleLine: InlineOnly

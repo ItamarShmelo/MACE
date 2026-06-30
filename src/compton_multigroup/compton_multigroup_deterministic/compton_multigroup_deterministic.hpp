@@ -51,11 +51,11 @@
  *   polylogarithm-based methods," JCP 70(2):311–329, 1987.
  */
 
-#include "utilities/gauss_legendre.hpp"
-#include "utilities/units.hpp"
-#include "compton_multigroup/weight_function.hpp"
 #include "compton_differential_cross_section/compton_kernel_quadrature/compton_kernel_quadrature.hpp"
 #include "compton_differential_cross_section/compton_kernel_solver/compton_kernel_solver.hpp"
+#include "compton_multigroup/weight_function.hpp"
+#include "utilities/gauss_legendre.hpp"
+#include "utilities/units.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -96,16 +96,26 @@ struct MGIntegrationConfig {
      * @brief Construct with validated defaults.
      *
      * @param cutoff_ratio            Outward-from-peak early-termination ratio.
-     * @param xi_order                GL order for the ξ peak core (defaults to 48).
-     * @param xi_peak_k               Half-width of the ξ peak window in sigma units.
-     * @param xi_tail_order           GL order for ξ tail sub-intervals (defaults to 16).
-     * @param ep_k_cut                E' truncation width in sigma units (must be > 0).
-     * @param ep_k_in                 E' interior-edge separator in sigma units (must be >= 0, < ep_k_cut).
-     * @param ep_edge_order           GL order for E' edge regions (defaults to 24).
-     * @param ep_interior_order       GL order for E' ridge interior (defaults to 24).
-     * @param e_panel_order           GL order for E-axis sub-panels (defaults to 12).
-     * @param log_e_panel_ratio       Panel width ratio threshold for log/rlog mapping (must be > 1).
-     * @param e_boundary_k            E-panel boundary-layer width in sigma units (must be > 0).
+     * @param xi_order                GL order for the ξ peak core (defaults to
+     * 48).
+     * @param xi_peak_k               Half-width of the ξ peak window in sigma
+     * units.
+     * @param xi_tail_order           GL order for ξ tail sub-intervals
+     * (defaults to 16).
+     * @param ep_k_cut                E' truncation width in sigma units (must
+     * be > 0).
+     * @param ep_k_in                 E' interior-edge separator in sigma units
+     * (must be >= 0, < ep_k_cut).
+     * @param ep_edge_order           GL order for E' edge regions (defaults to
+     * 24).
+     * @param ep_interior_order       GL order for E' ridge interior (defaults
+     * to 24).
+     * @param e_panel_order           GL order for E-axis sub-panels (defaults
+     * to 12).
+     * @param log_e_panel_ratio       Panel width ratio threshold for log/rlog
+     * mapping (must be > 1).
+     * @param e_boundary_k            E-panel boundary-layer width in sigma
+     * units (must be > 0).
      * @throws std::invalid_argument on invalid parameters.
      */
     MGIntegrationConfig(
@@ -124,16 +134,23 @@ struct MGIntegrationConfig {
     /** @brief Effective ξ GL order (xi_order if set, otherwise 48). */
     int effective_xi_order() const { return xi_order.value_or(48); }
 
-    /** @brief Effective ξ tail GL order (xi_tail_order if set, otherwise 16). */
+    /** @brief Effective ξ tail GL order (xi_tail_order if set, otherwise 16).
+     */
     int effective_xi_tail_order() const { return xi_tail_order.value_or(16); }
 
-    /** @brief Effective E' edge GL order (ep_edge_order if set, otherwise 24). */
+    /** @brief Effective E' edge GL order (ep_edge_order if set, otherwise 24).
+     */
     int effective_ep_edge_order() const { return ep_edge_order.value_or(24); }
 
-    /** @brief Effective E' interior GL order (ep_interior_order if set, otherwise 24). */
-    int effective_ep_interior_order() const { return ep_interior_order.value_or(24); }
+    /** @brief Effective E' interior GL order (ep_interior_order if set,
+     * otherwise 24). */
+    int effective_ep_interior_order() const
+    {
+        return ep_interior_order.value_or(24);
+    }
 
-    /** @brief Effective E-axis per-panel GL order (e_panel_order if set, otherwise 12). */
+    /** @brief Effective E-axis per-panel GL order (e_panel_order if set,
+     * otherwise 12). */
     int effective_e_panel_order() const { return e_panel_order.value_or(12); }
 };
 
@@ -146,17 +163,19 @@ struct MGIntegrationConfig {
  * like an observable averaged against the scattering distribution.
  */
 class KernelMultiplier {
-public:
+  public:
     virtual ~KernelMultiplier() = default;
-    virtual double operator()(double E, double Ep, double xi, double T, double Ne) const = 0;
+    virtual double
+    operator()(double E, double Ep, double xi, double T, double Ne) const = 0;
 };
 
 /**
  * @brief Identity multiplier: always returns 1.
  */
 class ConstantMultiplier : public KernelMultiplier {
-public:
-    double operator()(double, double, double, double, double) const override {
+  public:
+    double operator()(double, double, double, double, double) const override
+    {
         return 1.0;
     }
 };
@@ -170,13 +189,16 @@ public:
  * compute_dsigma_dT_matrix at any temperature and angular resolution.
  */
 class ComptonMultigroupKernel {
-public:
+  public:
     /**
      * @brief Construct from energy group boundaries and a weight function.
      *
-     * @param energy_group_boundaries  G+1 strictly increasing values [erg], all > 0.
-     * @param weight_function          Shared pointer to a WeightFunction subclass.
-     * @param config                   Integration configuration (tolerance, orders, cutoff).
+     * @param energy_group_boundaries  G+1 strictly increasing values [erg], all
+     * > 0.
+     * @param weight_function          Shared pointer to a WeightFunction
+     * subclass.
+     * @param config                   Integration configuration (tolerance,
+     * orders, cutoff).
      * @throws std::invalid_argument on invalid boundaries.
      */
     ComptonMultigroupKernel(
@@ -185,10 +207,16 @@ public:
         MGIntegrationConfig const& config);
 
     /** @brief Number of energy groups G. */
-    int num_groups() const { return static_cast<int>(group_boundaries_.size()) - 1; }
+    int num_groups() const
+    {
+        return static_cast<int>(group_boundaries_.size()) - 1;
+    }
 
     /** @brief Energy group boundaries [erg], length G+1. */
-    std::vector<double> const& group_boundaries() const { return group_boundaries_; }
+    std::vector<double> const& group_boundaries() const
+    {
+        return group_boundaries_;
+    }
 
     // ── Multigroup-multiangle (3D: G × G × N_angles) ────────────────────
 
@@ -199,13 +227,15 @@ public:
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
      * @param T               Electron temperature [K].
      * @param Ne              Electron density [cm⁻³].
-     * @param multiplier      Pointwise kernel multiplier applied before integration.
+     * @param multiplier      Pointwise kernel multiplier applied before
+     * integration.
      * @return Flat vector of size G×G×N_angles, row-major [g][g'][angle].
      */
     std::vector<double> compute_sigma_matrix(
         ComptonKernelSolver const& kernel,
         int num_angle_bins,
-        double T, double Ne,
+        double T,
+        double Ne,
         KernelMultiplier const& multiplier) const;
 
     /**
@@ -215,18 +245,21 @@ public:
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
      * @param T               Electron temperature [K].
      * @param Ne              Electron density [cm⁻³].
-     * @param multiplier      Pointwise kernel multiplier applied before integration.
+     * @param multiplier      Pointwise kernel multiplier applied before
+     * integration.
      * @return Flat vector of size G×G×N_angles, row-major [g][g'][angle].
      */
     std::vector<double> compute_dsigma_dT_matrix(
         ComptonKernelSolver const& kernel,
         int num_angle_bins,
-        double T, double Ne,
+        double T,
+        double Ne,
         KernelMultiplier const& multiplier) const;
 
-private:
+  private:
     /**
-     * @brief Core driver: assemble the full G×G×num_angle_bins scattering matrix.
+     * @brief Core driver: assemble the full G×G×num_angle_bins scattering
+     * matrix.
      *
      * Orchestrates the multigroup integration for every incoming group g.
      * For each g the method starts at the peak target group (the one
@@ -241,13 +274,17 @@ private:
      * @param num_angle_bins Number of equal-width ξ bins on [−1, 1].
      * @param T              Electron temperature [K].
      * @param Ne             Electron density [cm⁻³].
-     * @param multiplier     Optional pointwise factor applied inside the integrand.
+     * @param multiplier     Optional pointwise factor applied inside the
+     * integrand.
      * @return Flat row-major vector of size G×G×num_angle_bins,
-     *         indexed as result[g * G * num_angle_bins + gp * num_angle_bins + a].
+     *         indexed as result[g * G * num_angle_bins + gp * num_angle_bins +
+     * a].
      */
     std::vector<double> compute_matrix_impl(
         ComptonKernelSolver const& kernel,
-        ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+        ComptonResult (
+            ComptonKernelSolver::*eval)(double, double, double, double, double)
+            const,
         int num_angle_bins,
         double T,
         double Ne,
@@ -263,10 +300,15 @@ private:
      */
     double integrate_xi_bin(
         ComptonKernelSolver const& kernel,
-        ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
-        double E, double Ep,
-        double xi_lo, double xi_hi,
-        double T, double Ne,
+        ComptonResult (
+            ComptonKernelSolver::*eval)(double, double, double, double, double)
+            const,
+        double E,
+        double Ep,
+        double xi_lo,
+        double xi_hi,
+        double T,
+        double Ne,
         KernelMultiplier const& multiplier) const;
 
     /**
@@ -279,11 +321,16 @@ private:
      */
     double integrate_Ep_xi_bin(
         ComptonKernelSolver const& kernel,
-        ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+        ComptonResult (
+            ComptonKernelSolver::*eval)(double, double, double, double, double)
+            const,
         double E,
-        double Ep_lo, double Ep_hi,
-        double xi_lo, double xi_hi,
-        double T, double Ne,
+        double Ep_lo,
+        double Ep_hi,
+        double xi_lo,
+        double xi_hi,
+        double T,
+        double Ne,
         KernelMultiplier const& multiplier) const;
 
     /**
@@ -297,7 +344,9 @@ private:
      */
     double integrate_E_Ep_xi_bin(
         ComptonKernelSolver const& kernel,
-        ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+        ComptonResult (
+            ComptonKernelSolver::*eval)(double, double, double, double, double)
+            const,
         int g,
         int gp,
         double xi_lo,
@@ -306,32 +355,45 @@ private:
         double Ne,
         KernelMultiplier const& multiplier) const;
 
-public:
+  public:
     /** @brief Integrate the kernel over ξ bins for fixed (E, E'). */
     std::vector<double> compute_xi_integral_impl(
         ComptonKernelSolver const& kernel,
-        ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
-        double E, double Ep, int num_xi_bins,
-        double T, double Ne,
+        ComptonResult (
+            ComptonKernelSolver::*eval)(double, double, double, double, double)
+            const,
+        double E,
+        double Ep,
+        int num_xi_bins,
+        double T,
+        double Ne,
         KernelMultiplier const& multiplier) const;
 
     /** @brief Integrate the kernel over E' and ξ bins for fixed E. */
     std::vector<double> compute_Ep_xi_integral_impl(
         ComptonKernelSolver const& kernel,
-        ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
-        double E, double Ep_lo, double Ep_hi, int num_xi_bins,
-        double T, double Ne,
+        ComptonResult (
+            ComptonKernelSolver::*eval)(double, double, double, double, double)
+            const,
+        double E,
+        double Ep_lo,
+        double Ep_hi,
+        int num_xi_bins,
+        double T,
+        double Ne,
         KernelMultiplier const& multiplier) const;
 
-private:
+  private:
     std::vector<double> group_boundaries_;
 
-    /// Shared weight function for the Planck/Wien/Uniform numerator and denominator.
+    /// Shared weight function for the Planck/Wien/Uniform numerator and
+    /// denominator.
     std::shared_ptr<WeightFunction const> weight_func_;
 
     /// GL rule for the ξ (scattering-angle) axis.
     GaussLegendreRule xi_rule_;
-    /// GL rule for ξ tails in peak-focused splitting (low order, tails are exponentially small).
+    /// GL rule for ξ tails in peak-focused splitting (low order, tails are
+    /// exponentially small).
     GaussLegendreRule xi_tail_rule_;
 
     /// GL rule for E' left and right edge regions.
@@ -371,15 +433,17 @@ private:
  * @param T   Electron temperature [K].
  * @return    Thermal width in E' [erg]. Zero when T <= 0 or xi >= 1.
  */
-inline double ridge_thermal_width(double const E, double const xi, double const T)
+inline double
+ridge_thermal_width(double const E, double const xi, double const T)
 {
     double const gamma = E / units::me_c2;
-    double const tau   = T * units::k_boltz / units::me_c2;
-    double const u     = std::max(0.0, 1.0 - xi);
-    if (tau <= 0.0 || u <= 0.0) return 0.0;
-    double const d     = 1.0 + gamma * u;
-    return (E / (d * d))
-         * std::sqrt(tau * u * (2.0 + 2.0 * gamma * u + gamma * gamma * u));
+    double const tau = T * units::k_boltz / units::me_c2;
+    double const u = std::max(0.0, 1.0 - xi);
+    if (tau <= 0.0 || u <= 0.0)
+        return 0.0;
+    double const d = 1.0 + gamma * u;
+    return (E / (d * d)) *
+           std::sqrt(tau * u * (2.0 + 2.0 * gamma * u + gamma * gamma * u));
 }
 
 /**
@@ -388,10 +452,10 @@ inline double ridge_thermal_width(double const E, double const xi, double const 
  * All values are in energy units [erg].
  */
 struct RidgeBounds {
-    double cold_lo;    ///< E'_cold(xi_lo) = E / (1 + gamma*(1-xi_lo)) [erg]
-    double cold_hi;    ///< E'_cold(xi_hi) = E / (1 + gamma*(1-xi_hi)) [erg]
-    double sigma_lo;   ///< ridge_thermal_width(E, xi_lo, T) [erg]
-    double sigma_hi;   ///< ridge_thermal_width(E, xi_hi, T) [erg]
+    double cold_lo;  ///< E'_cold(xi_lo) = E / (1 + gamma*(1-xi_lo)) [erg]
+    double cold_hi;  ///< E'_cold(xi_hi) = E / (1 + gamma*(1-xi_hi)) [erg]
+    double sigma_lo; ///< ridge_thermal_width(E, xi_lo, T) [erg]
+    double sigma_hi; ///< ridge_thermal_width(E, xi_hi, T) [erg]
 };
 
 /**
@@ -406,16 +470,20 @@ struct RidgeBounds {
  * @return      RidgeBounds with cold endpoints and thermal widths.
  */
 inline RidgeBounds compute_ridge_bounds(
-    double const E, double const xi_lo, double const xi_hi, double const T)
+    double const E,
+    double const xi_lo,
+    double const xi_hi,
+    double const T)
 {
     assert(xi_lo <= xi_hi);
     assert(xi_lo >= -1.0);
     assert(xi_hi <= 1.0);
     double const gamma = E / units::me_c2;
-    return { E / (1.0 + gamma * (1.0 - xi_lo)),
-             E / (1.0 + gamma * (1.0 - xi_hi)),
-             ridge_thermal_width(E, xi_lo, T),
-             ridge_thermal_width(E, xi_hi, T) };
+    return {
+        E / (1.0 + gamma * (1.0 - xi_lo)),
+        E / (1.0 + gamma * (1.0 - xi_hi)),
+        ridge_thermal_width(E, xi_lo, T),
+        ridge_thermal_width(E, xi_hi, T)};
 }
 
 } // namespace compton

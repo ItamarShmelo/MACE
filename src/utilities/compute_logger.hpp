@@ -12,27 +12,38 @@
 namespace compton {
 
 class ComputeLogger {
-public:
+  public:
     ComputeLogger(std::string_view tag, std::string_view params)
-        : tag_(tag)
-        , wall_t0_(std::chrono::steady_clock::now())
-        , file_(std::format("compton_multigroup_{}.log", ::getpid()), std::ios::app)
+        : tag_(tag),
+          wall_t0_(std::chrono::steady_clock::now()),
+          file_(
+              std::format("compton_multigroup_{}.log", ::getpid()),
+              std::ios::app)
     {
-        if (!file_) return;
+        if (!file_)
+            return;
         auto const now = std::chrono::system_clock::now();
         std::println(file_, "{:%H:%M:%S} [compton] {}: {}", now, tag_, params);
         file_.flush();
     }
 
-    void done() {
-        if (!file_) return;
+    void done()
+    {
+        if (!file_)
+            return;
         auto const t1 = std::chrono::steady_clock::now();
-        double const elapsed = std::chrono::duration<double>(t1 - wall_t0_).count();
+        double const elapsed =
+            std::chrono::duration<double>(t1 - wall_t0_).count();
         auto const now = std::chrono::system_clock::now();
-        std::println(file_, "{:%H:%M:%S} [compton] {}: done in {:g} s", now, tag_, elapsed);
+        std::println(
+            file_,
+            "{:%H:%M:%S} [compton] {}: done in {:g} s",
+            now,
+            tag_,
+            elapsed);
     }
 
-private:
+  private:
     std::string tag_;
     std::chrono::steady_clock::time_point wall_t0_;
     std::ofstream file_;

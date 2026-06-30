@@ -23,7 +23,7 @@
 namespace compton {
 
 class ComptonPowerSeries {
-public:
+  public:
     /**
      * @param high_precision  When true, use double-double (~31 digits)
      *                        arithmetic; when false, use double (~15 digits).
@@ -49,12 +49,8 @@ public:
      * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
      * @return ComptonResult with value and error estimates
      */
-    ComptonResult sigma_E(
-        double E,
-        double E_prime,
-        double xi,
-        double T,
-        double Ne) const;
+    ComptonResult
+    sigma_E(double E, double E_prime, double xi, double T, double Ne) const;
 
     /**
      * @brief Evaluate ∂Σ_E/∂T at a single phase-space point.
@@ -70,12 +66,8 @@ public:
      * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
      * @return ComptonResult with value and error estimates
      */
-    ComptonResult dsigma_E_dT(
-        double E,
-        double E_prime,
-        double xi,
-        double T,
-        double Ne) const;
+    ComptonResult
+    dsigma_E_dT(double E, double E_prime, double xi, double T, double Ne) const;
 
     /**
      * @brief Run both double and DD power series, return the relative error.
@@ -106,7 +98,7 @@ public:
         double T,
         double Ne) const;
 
-private:
+  private:
     /**
      * @brief Power series evaluation of the normalized kernel.
      *
@@ -122,13 +114,14 @@ private:
      *
      * where:
      *   w_0± = exp(−y±),  w_{n+1}± = w_n± · y± / (n+1)  (Poisson weights)
-     *   c_n± = A± + 2n/a                                  (kinematic coefficients)
-     *   Ê_m(x) = eˣ · E_m(x)                              (scaled exponential integral)
+     *   c_n± = A± + 2n/a                                  (kinematic
+     * coefficients) Ê_m(x) = eˣ · E_m(x)                              (scaled
+     * exponential integral)
      *
      * Template parameter T selects double (~15 digits) or
      * double-double (~31 digits) arithmetic.
      */
-    template<typename T>
+    template <typename T>
     ComptonResult power_series(
         double gamma,
         double gamma_p,
@@ -154,7 +147,7 @@ private:
      *   σ₀ · { 2γγ'/q + (∂P₊/∂τ − ∂P₋/∂τ)
      *        + [(λ₊−κ)/τ² − 3/τ] · (Ψ + P₊ − P₋) }
      */
-    template<typename T>
+    template <typename T>
     ComptonResult power_series_derivative(
         double gamma,
         double gamma_p,

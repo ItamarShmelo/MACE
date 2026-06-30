@@ -5,11 +5,16 @@
 namespace py = pybind11;
 using namespace compton;
 
-PYBIND11_MODULE(_compton_common, m) {
+PYBIND11_MODULE(_compton_common, m)
+{
     m.doc() = "Shared types for Compton scattering kernel modules";
 
     py::class_<ComptonResult>(m, "ComptonResult")
         .def_readonly("value", &ComptonResult::value)
-        .def_readonly("estimated_abs_error", &ComptonResult::estimated_abs_error)
-        .def_readonly("estimated_rel_error", &ComptonResult::estimated_rel_error);
+        .def_readonly(
+            "estimated_abs_error",
+            &ComptonResult::estimated_abs_error)
+        .def_readonly(
+            "estimated_rel_error",
+            &ComptonResult::estimated_rel_error);
 }

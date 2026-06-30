@@ -36,16 +36,16 @@ static constexpr double DOUBLE_PEAK_RATIO_THRESHOLD = 10.0;
 //   Moderate  (tau < 0.2,   T <  ~100 keV): thr = 0.05
 //   Hot       (tau >= 0.2,  T >= ~100 keV): thr = 0.3
 static constexpr double XI_ELASTIC_TAU_VCOLD = 2e-8;
-static constexpr double XI_ELASTIC_TAU_COLD  = 2e-6;
-static constexpr double XI_ELASTIC_TAU_COOL  = 2e-4;
-static constexpr double XI_ELASTIC_TAU_WARM  = 0.02;
-static constexpr double XI_ELASTIC_TAU_HOT   = 0.2;
+static constexpr double XI_ELASTIC_TAU_COLD = 2e-6;
+static constexpr double XI_ELASTIC_TAU_COOL = 2e-4;
+static constexpr double XI_ELASTIC_TAU_WARM = 0.02;
+static constexpr double XI_ELASTIC_TAU_HOT = 0.2;
 static constexpr double XI_ELASTIC_VCOLD_THR = 1e-5;
-static constexpr double XI_ELASTIC_COLD_THR  = 1e-4;
-static constexpr double XI_ELASTIC_COOL_THR  = 1e-3;
-static constexpr double XI_ELASTIC_WARM_THR  = 0.01;
-static constexpr double XI_ELASTIC_MOD_THR   = 0.05;
-static constexpr double XI_ELASTIC_HOT_THR   = 0.3;
+static constexpr double XI_ELASTIC_COLD_THR = 1e-4;
+static constexpr double XI_ELASTIC_COOL_THR = 1e-3;
+static constexpr double XI_ELASTIC_WARM_THR = 0.01;
+static constexpr double XI_ELASTIC_MOD_THR = 0.05;
+static constexpr double XI_ELASTIC_HOT_THR = 0.3;
 } // namespace constants
 
 // ── MGIntegrationConfig ─────────────────────────────────────────────────
@@ -62,17 +62,17 @@ MGIntegrationConfig::MGIntegrationConfig(
     std::optional<int> const e_panel_order,
     double const log_e_panel_ratio,
     double const e_boundary_k)
-    : xi_order(xi_order)
-    , xi_tail_order(xi_tail_order)
-    , cutoff_ratio(cutoff_ratio)
-    , xi_peak_k(xi_peak_k)
-    , ep_k_cut(ep_k_cut)
-    , ep_k_in(ep_k_in)
-    , ep_edge_order(ep_edge_order)
-    , ep_interior_order(ep_interior_order)
-    , e_panel_order(e_panel_order)
-    , log_e_panel_ratio(log_e_panel_ratio)
-    , e_boundary_k(e_boundary_k)
+    : xi_order(xi_order),
+      xi_tail_order(xi_tail_order),
+      cutoff_ratio(cutoff_ratio),
+      xi_peak_k(xi_peak_k),
+      ep_k_cut(ep_k_cut),
+      ep_k_in(ep_k_in),
+      ep_edge_order(ep_edge_order),
+      ep_interior_order(ep_interior_order),
+      e_panel_order(e_panel_order),
+      log_e_panel_ratio(log_e_panel_ratio),
+      e_boundary_k(e_boundary_k)
 {
     if (cutoff_ratio < 0.0)
         throw std::invalid_argument("cutoff_ratio must be >= 0");
@@ -87,7 +87,8 @@ MGIntegrationConfig::MGIntegrationConfig(
     if (!(ep_k_cut > ep_k_in))
         throw std::invalid_argument(
             "ep_k_cut must be > ep_k_in "
-            "(semantic constraint: the edge region must be narrower than the retained interval)");
+            "(semantic constraint: the edge region must be narrower than the "
+            "retained interval)");
     if (ep_edge_order.has_value() && ep_edge_order.value() < 1)
         throw std::invalid_argument("ep_edge_order must be >= 1");
     if (ep_interior_order.has_value() && ep_interior_order.value() < 1)
@@ -104,20 +105,21 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
     std::vector<double> const& energy_group_boundaries,
     std::shared_ptr<WeightFunction const> weight_function,
     MGIntegrationConfig const& config)
-    : group_boundaries_(energy_group_boundaries)
-    , weight_func_(std::move(weight_function))
-    , xi_rule_(compute_gauss_legendre(config.effective_xi_order()))
-    , xi_tail_rule_(compute_gauss_legendre(config.effective_xi_tail_order()))
-    , ep_edge_rule_(compute_gauss_legendre(config.effective_ep_edge_order()))
-    , ep_interior_rule_(compute_gauss_legendre(config.effective_ep_interior_order()))
-    , ep_elastic_core_rule_(compute_gauss_legendre(8))
-    , e_panel_rule_(compute_gauss_legendre(config.effective_e_panel_order()))
-    , xi_peak_k_(config.xi_peak_k)
-    , ep_k_cut_(config.ep_k_cut)
-    , ep_k_in_(config.ep_k_in)
-    , group_cutoff_ratio_(config.cutoff_ratio)
-    , log_e_panel_ratio_(config.log_e_panel_ratio)
-    , e_boundary_k_(config.e_boundary_k)
+    : group_boundaries_(energy_group_boundaries),
+      weight_func_(std::move(weight_function)),
+      xi_rule_(compute_gauss_legendre(config.effective_xi_order())),
+      xi_tail_rule_(compute_gauss_legendre(config.effective_xi_tail_order())),
+      ep_edge_rule_(compute_gauss_legendre(config.effective_ep_edge_order())),
+      ep_interior_rule_(
+          compute_gauss_legendre(config.effective_ep_interior_order())),
+      ep_elastic_core_rule_(compute_gauss_legendre(8)),
+      e_panel_rule_(compute_gauss_legendre(config.effective_e_panel_order())),
+      xi_peak_k_(config.xi_peak_k),
+      ep_k_cut_(config.ep_k_cut),
+      ep_k_in_(config.ep_k_in),
+      group_cutoff_ratio_(config.cutoff_ratio),
+      log_e_panel_ratio_(config.log_e_panel_ratio),
+      e_boundary_k_(config.e_boundary_k)
 {
     if (energy_group_boundaries.size() < 2)
         throw std::invalid_argument("need at least 2 boundaries (1 group)");
@@ -125,32 +127,37 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
     for (std::size_t i = 0; i < energy_group_boundaries.size(); ++i) {
         if (!(energy_group_boundaries[i] > 0.0) ||
             !std::isfinite(energy_group_boundaries[i]))
-            throw std::invalid_argument("all boundaries must be finite and > 0");
+            throw std::invalid_argument(
+                "all boundaries must be finite and > 0");
     }
 
     for (std::size_t i = 0; i + 1 < energy_group_boundaries.size(); ++i) {
         if (energy_group_boundaries[i] >= energy_group_boundaries[i + 1])
-            throw std::invalid_argument("boundaries must be strictly increasing");
+            throw std::invalid_argument(
+                "boundaries must be strictly increasing");
     }
 }
 
-
 namespace {
 
-template<typename F>
+template <typename F>
 double integrate_Ep_ridge(
     F&& f,
-    double Ep_lo, double Ep_hi,
+    double Ep_lo,
+    double Ep_hi,
     RidgeBounds const& rb,
-    double k_cut, double k_in,
+    double k_cut,
+    double k_in,
     GaussLegendreRule const& edge_rule,
     GaussLegendreRule const& interior_rule,
     GaussLegendreRule const& elastic_core_rule)
 {
     double const keep_lo = std::max(Ep_lo, rb.cold_lo - k_cut * rb.sigma_lo);
-    double const keep_hi = std::min(Ep_hi,
-        std::max(rb.cold_lo + k_cut * rb.sigma_lo,
-                 rb.cold_hi + k_cut * rb.sigma_hi));
+    double const keep_hi = std::min(
+        Ep_hi,
+        std::max(
+            rb.cold_lo + k_cut * rb.sigma_lo,
+            rb.cold_hi + k_cut * rb.sigma_hi));
 
     // ── Double-peak path: isolate the narrow elastic endpoint feature ────
     //
@@ -162,15 +169,18 @@ double integrate_Ep_ridge(
     // cannot resolve the meV-scale elastic feature.  Split into 4 regions:
     //   left-tail | broad-left | elastic-core | broad-right | right-tail
     if (rb.sigma_lo / rb.sigma_hi > constants::DOUBLE_PEAK_RATIO_THRESHOLD) {
-        double const ec_lo = std::max(keep_lo, rb.cold_hi - k_cut * rb.sigma_hi);
-        double const ec_hi = std::min(keep_hi, rb.cold_hi + k_cut * rb.sigma_hi);
+        double const ec_lo =
+            std::max(keep_lo, rb.cold_hi - k_cut * rb.sigma_hi);
+        double const ec_hi =
+            std::min(keep_hi, rb.cold_hi + k_cut * rb.sigma_hi);
 
         if (ec_hi > ec_lo && ec_hi > Ep_lo && ec_lo < Ep_hi) {
             double dp_result = 0.0;
 
             if (keep_lo > Ep_lo) {
                 assert(Ep_lo > 0.0);
-                dp_result += rlog_legendre_integrate(f, edge_rule, Ep_lo, keep_lo);
+                dp_result +=
+                    rlog_legendre_integrate(f, edge_rule, Ep_lo, keep_lo);
             }
 
             if (ec_lo > keep_lo)
@@ -179,14 +189,17 @@ double integrate_Ep_ridge(
             dp_result += legendre_integrate(f, elastic_core_rule, ec_lo, ec_hi);
 
             if (keep_hi > ec_hi)
-                dp_result += legendre_integrate(f, interior_rule, ec_hi, keep_hi);
+                dp_result +=
+                    legendre_integrate(f, interior_rule, ec_hi, keep_hi);
 
             if (Ep_hi > keep_hi) {
                 assert(keep_hi > 0.0);
                 if (Ep_hi / keep_hi > 2.0)
-                    dp_result += log_legendre_integrate(f, edge_rule, keep_hi, Ep_hi);
+                    dp_result +=
+                        log_legendre_integrate(f, edge_rule, keep_hi, Ep_hi);
                 else
-                    dp_result += legendre_integrate(f, edge_rule, keep_hi, Ep_hi);
+                    dp_result +=
+                        legendre_integrate(f, edge_rule, keep_hi, Ep_hi);
             }
 
             return dp_result;
@@ -216,9 +229,9 @@ double integrate_Ep_ridge(
     if (edge_lo >= edge_hi) {
         result += legendre_integrate(f, interior_rule, keep_lo, keep_hi);
     } else {
-        double const left_hi  = std::min(keep_hi, edge_lo);
-        double const mid_lo   = std::max(keep_lo, edge_lo);
-        double const mid_hi   = std::min(keep_hi, edge_hi);
+        double const left_hi = std::min(keep_hi, edge_lo);
+        double const mid_lo = std::max(keep_lo, edge_lo);
+        double const mid_hi = std::min(keep_hi, edge_hi);
         double const right_lo = std::max(keep_lo, edge_hi);
 
         if (left_hi > keep_lo)
@@ -244,7 +257,9 @@ double integrate_Ep_ridge(
 
 double ComptonMultigroupKernel::integrate_xi_bin(
     ComptonKernelSolver const& kernel,
-    ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+    ComptonResult (
+        ComptonKernelSolver::*eval)(double, double, double, double, double)
+        const,
     double const E,
     double const Ep,
     double const xi_lo,
@@ -265,12 +280,12 @@ double ComptonMultigroupKernel::integrate_xi_bin(
     double const abs_dg = std::abs(gamma - gamma_p);
 
     double const elastic_thr =
-        tau < constants::XI_ELASTIC_TAU_VCOLD ? constants::XI_ELASTIC_VCOLD_THR :
-        tau < constants::XI_ELASTIC_TAU_COLD  ? constants::XI_ELASTIC_COLD_THR :
-        tau < constants::XI_ELASTIC_TAU_COOL  ? constants::XI_ELASTIC_COOL_THR :
-        tau < constants::XI_ELASTIC_TAU_WARM  ? constants::XI_ELASTIC_WARM_THR :
-        tau < constants::XI_ELASTIC_TAU_HOT   ? constants::XI_ELASTIC_MOD_THR :
-                                                constants::XI_ELASTIC_HOT_THR;
+        tau < constants::XI_ELASTIC_TAU_VCOLD  ? constants::XI_ELASTIC_VCOLD_THR
+        : tau < constants::XI_ELASTIC_TAU_COLD ? constants::XI_ELASTIC_COLD_THR
+        : tau < constants::XI_ELASTIC_TAU_COOL ? constants::XI_ELASTIC_COOL_THR
+        : tau < constants::XI_ELASTIC_TAU_WARM ? constants::XI_ELASTIC_WARM_THR
+        : tau < constants::XI_ELASTIC_TAU_HOT  ? constants::XI_ELASTIC_MOD_THR
+                                               : constants::XI_ELASTIC_HOT_THR;
     bool const elastic_like = abs_dg / gamma < elastic_thr;
 
     if (elastic_like) {
@@ -278,13 +293,14 @@ double ComptonMultigroupKernel::integrate_xi_bin(
         double const eps = span * 1e-14;
         return rlog_legendre_integrate(
             [&](double const s) { return f(xi_lo + s); },
-            xi_rule_, eps, span);
+            xi_rule_,
+            eps,
+            span);
     }
 
     double const xi_pk = 1.0 - abs_dg / (gamma * gamma_p);
     double const sigma_xi =
-        std::sqrt(tau * abs_dg * (2.0 + abs_dg))
-        / (gamma * gamma_p);
+        std::sqrt(tau * abs_dg * (2.0 + abs_dg)) / (gamma * gamma_p);
     double const half_w = xi_peak_k_ * sigma_xi;
     double const bin_span = xi_hi - xi_lo;
 
@@ -312,8 +328,7 @@ double ComptonMultigroupKernel::integrate_xi_bin(
     }
 
     if (core_hi > core_lo) {
-        result += legendre_integrate(
-            f, xi_rule_, core_lo, core_hi);
+        result += legendre_integrate(f, xi_rule_, core_lo, core_hi);
     }
 
     if (core_hi < xi_hi) {
@@ -328,7 +343,9 @@ double ComptonMultigroupKernel::integrate_xi_bin(
 
 double ComptonMultigroupKernel::integrate_Ep_xi_bin(
     ComptonKernelSolver const& kernel,
-    ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+    ComptonResult (
+        ComptonKernelSolver::*eval)(double, double, double, double, double)
+        const,
     double const E,
     double const Ep_lo,
     double const Ep_hi,
@@ -342,20 +359,34 @@ double ComptonMultigroupKernel::integrate_Ep_xi_bin(
 
     auto ep_integrand = [&](double const Ep) {
         return integrate_xi_bin(
-            kernel, eval, E, Ep, xi_lo, xi_hi, T, Ne,
+            kernel,
+            eval,
+            E,
+            Ep,
+            xi_lo,
+            xi_hi,
+            T,
+            Ne,
             multiplier);
     };
 
     return integrate_Ep_ridge(
         ep_integrand,
-        Ep_lo, Ep_hi, rb,
-        ep_k_cut_, ep_k_in_,
-        ep_edge_rule_, ep_interior_rule_, ep_elastic_core_rule_);
+        Ep_lo,
+        Ep_hi,
+        rb,
+        ep_k_cut_,
+        ep_k_in_,
+        ep_edge_rule_,
+        ep_interior_rule_,
+        ep_elastic_core_rule_);
 }
 
 double ComptonMultigroupKernel::integrate_E_Ep_xi_bin(
     ComptonKernelSolver const& kernel,
-    ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+    ComptonResult (
+        ComptonKernelSolver::*eval)(double, double, double, double, double)
+        const,
     int const g,
     int const gp,
     double const xi_lo,
@@ -372,8 +403,16 @@ double ComptonMultigroupKernel::integrate_E_Ep_xi_bin(
     auto E_integrand = [&](double const E) {
         double const w = weight_func_->weight(E, T);
         double const inner = integrate_Ep_xi_bin(
-            kernel, eval, E, Ep_lo, Ep_hi, xi_lo, xi_hi,
-            T, Ne, multiplier);
+            kernel,
+            eval,
+            E,
+            Ep_lo,
+            Ep_hi,
+            xi_lo,
+            xi_hi,
+            T,
+            Ne,
+            multiplier);
         return w * inner;
     };
 
@@ -400,16 +439,17 @@ double ComptonMultigroupKernel::integrate_E_Ep_xi_bin(
     double const bl_hi = E_hi - e_boundary_k_ * sigma_hi;
 
     if (bl_lo < bl_hi) {
-        return integrate_sub(E_lo, bl_lo)
-             + integrate_middle(bl_lo, bl_hi)
-             + integrate_sub(bl_hi, E_hi);
+        return integrate_sub(E_lo, bl_lo) + integrate_middle(bl_lo, bl_hi) +
+               integrate_sub(bl_hi, E_hi);
     }
     return integrate_middle(E_lo, E_hi);
 }
 
 std::vector<double> ComptonMultigroupKernel::compute_xi_integral_impl(
     ComptonKernelSolver const& kernel,
-    ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+    ComptonResult (
+        ComptonKernelSolver::*eval)(double, double, double, double, double)
+        const,
     double const E,
     double const Ep,
     int const num_xi_bins,
@@ -429,10 +469,17 @@ std::vector<double> ComptonMultigroupKernel::compute_xi_integral_impl(
     std::vector<double> result(num_xi_bins);
     for (int a = 0; a < num_xi_bins; ++a) {
         double const xi_lo = -1.0 + a * dxi;
-        double const xi_hi = std::min(-1.0 + (a + 1) * dxi,
-                                      1.0 - constants::XI_UPPER_EPS);
+        double const xi_hi =
+            std::min(-1.0 + (a + 1) * dxi, 1.0 - constants::XI_UPPER_EPS);
         result[a] = integrate_xi_bin(
-            kernel, eval, E, Ep, xi_lo, xi_hi, T, Ne,
+            kernel,
+            eval,
+            E,
+            Ep,
+            xi_lo,
+            xi_hi,
+            T,
+            Ne,
             multiplier);
     }
     return result;
@@ -440,7 +487,9 @@ std::vector<double> ComptonMultigroupKernel::compute_xi_integral_impl(
 
 std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_impl(
     ComptonKernelSolver const& kernel,
-    ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+    ComptonResult (
+        ComptonKernelSolver::*eval)(double, double, double, double, double)
+        const,
     double const E,
     double const Ep_lo,
     double const Ep_hi,
@@ -465,11 +514,19 @@ std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_impl(
     std::vector<double> result(num_xi_bins);
     for (int a = 0; a < num_xi_bins; ++a) {
         double const xi_lo = -1.0 + a * dxi;
-        double const xi_hi = std::min(-1.0 + (a + 1) * dxi,
-                                      1.0 - constants::XI_UPPER_EPS);
+        double const xi_hi =
+            std::min(-1.0 + (a + 1) * dxi, 1.0 - constants::XI_UPPER_EPS);
         result[a] = integrate_Ep_xi_bin(
-            kernel, eval, E, Ep_lo, Ep_hi, xi_lo, xi_hi,
-            T, Ne, multiplier);
+            kernel,
+            eval,
+            E,
+            Ep_lo,
+            Ep_hi,
+            xi_lo,
+            xi_hi,
+            T,
+            Ne,
+            multiplier);
     }
     return result;
 }
@@ -497,14 +554,17 @@ std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_impl(
 //      most of the scattered energy stays near the incoming energy,
 //      so distant target groups contribute negligibly.
 //
-//   3. Each selected (g, gp, angle) bin is evaluated by integrate_E_Ep_xi_bin().
+//   3. Each selected (g, gp, angle) bin is evaluated by
+//   integrate_E_Ep_xi_bin().
 //
 // E' uses fixed-order GL via integrate_Ep_ridge (no adaptive refinement).
 // Convergence is controlled by ep_edge_order and ep_interior_order.
 
 std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     ComptonKernelSolver const& kernel,
-    ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
+    ComptonResult (
+        ComptonKernelSolver::*eval)(double, double, double, double, double)
+        const,
     int const num_angle_bins,
     double const T,
     double const Ne,
@@ -518,20 +578,27 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     // Output buffer: flat row-major [g][gp][angle_bin], initialised to zero.
     // Unevaluated entries (skipped by the cutoff) remain at zero.
     std::vector<double> result(
-        static_cast<std::size_t>(G) * G * num_angle_bins, 0.0);
+        static_cast<std::size_t>(G) * G * num_angle_bins,
+        0.0);
 
     // Uniform angle-bin width: ξ ∈ [-1, 1] split into num_angle_bins slices.
     double const dxi = 2.0 / static_cast<double>(num_angle_bins);
 
-    ComputeLogger logger("deterministic",
-        std::format("G={}, angle_bins={}, T={:.4g} keV",
-            G, num_angle_bins, T / units::kev_kelvin));
+    ComputeLogger logger(
+        "deterministic",
+        std::format(
+            "G={}, angle_bins={}, T={:.4g} keV",
+            G,
+            num_angle_bins,
+            T / units::kev_kelvin));
 
-    // --- Main loop over incoming groups g ---
-    #pragma omp parallel for schedule(dynamic)
+// --- Main loop over incoming groups g ---
+#pragma omp parallel for schedule(dynamic)
     for (int g = 0; g < G; ++g) {
         double const denom = weight_func_->compute_denominator(
-            group_boundaries_[g], group_boundaries_[g + 1], T);
+            group_boundaries_[g],
+            group_boundaries_[g + 1],
+            T);
         double const inv_denom = 1.0 / denom;
 
         auto do_group = [&](int const gp) {
@@ -539,12 +606,20 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
 
             for (int a = 0; a < num_angle_bins; ++a) {
                 double const xi_lo = -1.0 + a * dxi;
-                double const xi_hi = std::min(-1.0 + (a + 1) * dxi,
-                                              1.0 - constants::XI_UPPER_EPS);
+                double const xi_hi = std::min(
+                    -1.0 + (a + 1) * dxi,
+                    1.0 - constants::XI_UPPER_EPS);
 
                 double const numerator = integrate_E_Ep_xi_bin(
-                    kernel, eval, g, gp, xi_lo, xi_hi,
-                    T, Ne, multiplier);
+                    kernel,
+                    eval,
+                    g,
+                    gp,
+                    xi_lo,
+                    xi_hi,
+                    T,
+                    Ne,
+                    multiplier);
 
                 std::size_t const idx =
                     static_cast<std::size_t>(g) * G * num_angle_bins +
@@ -566,15 +641,19 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
 
             // Expand rightward (higher E' groups) until below cutoff.
             for (int gp = gp_peak + 1; gp < G; ++gp) {
-                if (do_group(gp) < cutoff) break;
+                if (do_group(gp) < cutoff)
+                    break;
             }
             // Expand leftward (lower E' groups) until below cutoff.
             for (int gp = gp_peak - 1; gp >= 0; --gp) {
-                if (do_group(gp) < cutoff) break;
+                if (do_group(gp) < cutoff)
+                    break;
             }
         } else {
-            for (int gp = gp_peak + 1; gp < G; ++gp) do_group(gp);
-            for (int gp = gp_peak - 1; gp >= 0; --gp) do_group(gp);
+            for (int gp = gp_peak + 1; gp < G; ++gp)
+                do_group(gp);
+            for (int gp = gp_peak - 1; gp >= 0; --gp)
+                do_group(gp);
         }
     }
 
@@ -586,19 +665,33 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
 std::vector<double> ComptonMultigroupKernel::compute_sigma_matrix(
     ComptonKernelSolver const& kernel,
     int const num_angle_bins,
-    double const T, double const Ne,
+    double const T,
+    double const Ne,
     KernelMultiplier const& multiplier) const
 {
-    return compute_matrix_impl(kernel, &ComptonKernelSolver::sigma_E, num_angle_bins, T, Ne, multiplier);
+    return compute_matrix_impl(
+        kernel,
+        &ComptonKernelSolver::sigma_E,
+        num_angle_bins,
+        T,
+        Ne,
+        multiplier);
 }
 
 std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
     ComptonKernelSolver const& kernel,
     int const num_angle_bins,
-    double const T, double const Ne,
+    double const T,
+    double const Ne,
     KernelMultiplier const& multiplier) const
 {
-    return compute_matrix_impl(kernel, &ComptonKernelSolver::dsigma_E_dT, num_angle_bins, T, Ne, multiplier);
+    return compute_matrix_impl(
+        kernel,
+        &ComptonKernelSolver::dsigma_E_dT,
+        num_angle_bins,
+        T,
+        Ne,
+        multiplier);
 }
 
 } // namespace compton

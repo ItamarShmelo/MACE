@@ -18,33 +18,38 @@
 #include <stdexcept>
 #include <utility>
 
-#include <doubledouble.h>
 #include "utilities/units.hpp"
+#include <doubledouble.h>
 
 namespace compton {
 
 using DD = doubledouble::DoubleDouble;
 
-inline std::ostream& operator<<(std::ostream& os, DD const& x) {
+inline std::ostream& operator<<(std::ostream& os, DD const& x)
+{
     os << "(" << x.upper << ", " << x.lower << ")";
     return os;
 }
 
 namespace details {
 
-inline double dd_to_double(DD const& x) {
+inline double dd_to_double(DD const& x)
+{
     return x.upper + x.lower;
 }
 
-inline double to_double(double const value) {
+inline double to_double(double const value)
+{
     return value;
 }
 
-inline double to_double(DD const& value) {
+inline double to_double(DD const& value)
+{
     return dd_to_double(value);
 }
 
-inline DD dd_abs(DD const& x) {
+inline DD dd_abs(DD const& x)
+{
     if (x.upper < 0.0 || (x.upper == 0.0 && x.lower < 0.0)) {
         return -x;
     }
@@ -56,118 +61,128 @@ inline DD dd_abs(DD const& x) {
  *
  * asinh(x) = log(x + sqrt(x^2 + 1))
  */
-inline DD dd_asinh(DD const& x) {
+inline DD dd_asinh(DD const& x)
+{
     return (x + (x * x + 1.0).sqrt()).log();
 }
 
-inline double param_abs(double const value) {
+inline double param_abs(double const value)
+{
     return std::abs(value);
 }
 
-inline DD param_abs(DD const& value) {
+inline DD param_abs(DD const& value)
+{
     return dd_abs(value);
 }
 
-inline double param_sqrt(double const value) {
+inline double param_sqrt(double const value)
+{
     return std::sqrt(value);
 }
 
-inline DD param_sqrt(DD const& value) {
+inline DD param_sqrt(DD const& value)
+{
     return value.sqrt();
 }
 
-inline double param_exp(double const value) {
+inline double param_exp(double const value)
+{
     return std::exp(value);
 }
 
-inline DD param_exp(DD const& value) {
+inline DD param_exp(DD const& value)
+{
     return value.exp();
 }
 
-inline double param_asinh(double const value) {
+inline double param_asinh(double const value)
+{
     return std::asinh(value);
 }
 
-inline DD param_asinh(DD const& value) {
+inline DD param_asinh(DD const& value)
+{
     return dd_asinh(value);
 }
 
-inline double param_log(double const value) {
+inline double param_log(double const value)
+{
     return std::log(value);
 }
 
-inline DD param_log(DD const& value) {
+inline DD param_log(DD const& value)
+{
     return value.log();
 }
 
-inline double param_clamp(double const value, double const lo, double const hi) {
+inline double param_clamp(double const value, double const lo, double const hi)
+{
     return std::clamp(value, lo, hi);
 }
 
-inline DD param_clamp(DD const& value, DD const& lo, DD const& hi) {
-    if (value < lo) return lo;
-    if (value > hi) return hi;
+inline DD param_clamp(DD const& value, DD const& lo, DD const& hi)
+{
+    if (value < lo)
+        return lo;
+    if (value > hi)
+        return hi;
     return value;
 }
 
-inline bool param_isfinite(double const value) {
+inline bool param_isfinite(double const value)
+{
     return std::isfinite(value);
 }
 
-inline bool param_isfinite(DD const& value) {
+inline bool param_isfinite(DD const& value)
+{
     return std::isfinite(value.upper);
 }
 
-template<typename T> struct MachineEps;
+template <typename T> struct MachineEps;
 
-template<>
-struct MachineEps<double> {
+template <> struct MachineEps<double> {
     static constexpr double value = std::numeric_limits<double>::epsilon();
 };
 
-template<>
-struct MachineEps<DD> {
-    static constexpr double value = std::numeric_limits<double>::epsilon()
-                                  * std::numeric_limits<double>::epsilon();
+template <> struct MachineEps<DD> {
+    static constexpr double value = std::numeric_limits<double>::epsilon() *
+                                    std::numeric_limits<double>::epsilon();
 };
 
-template<typename T>
-struct EhatCfConfig;
+template <typename T> struct EhatCfConfig;
 
-template<>
-struct EhatCfConfig<double> {
+template <> struct EhatCfConfig<double> {
     static constexpr double cf_tol = 1e-14;
     static constexpr int max_iter = 1000;
 };
 
-template<>
-struct EhatCfConfig<DD> {
+template <> struct EhatCfConfig<DD> {
     static constexpr double cf_tol = 1e-20;
     static constexpr int max_iter = 2000;
 };
 
-template<typename T> struct EhatAmpBudget;
+template <typename T> struct EhatAmpBudget;
 
-template<>
-struct EhatAmpBudget<double> {
+template <> struct EhatAmpBudget<double> {
     static constexpr double value = 1e3;
 };
 
-template<>
-struct EhatAmpBudget<DD> {
+template <> struct EhatAmpBudget<DD> {
     static constexpr double value = 1e15;
 };
 
-template<typename T> struct EulerMascheroni;
+template <typename T> struct EulerMascheroni;
 
-template<>
-struct EulerMascheroni<double> {
+template <> struct EulerMascheroni<double> {
     static constexpr double value = 0.57721566490153286;
 };
 
-template<>
-struct EulerMascheroni<DD> {
-    static constexpr DD value{5.772156649015328655e-01, -4.942915152430644834e-18};
+template <> struct EulerMascheroni<DD> {
+    static constexpr DD value{
+        5.772156649015328655e-01,
+        -4.942915152430644834e-18};
 };
 
 /**
@@ -181,8 +196,8 @@ struct EulerMascheroni<DD> {
  * (all terms positive); in [1, 4) mild cancellation is well within double
  * precision (~2 digits lost at x = 4).
  */
-template<typename T>
-inline T ehat_series(T const& x, double const tol) {
+template <typename T> inline T ehat_series(T const& x, double const tol)
+{
     T const gamma_euler = EulerMascheroni<T>::value;
     T const ln_x = param_log(x);
 
@@ -212,12 +227,13 @@ inline T ehat_series(T const& x, double const tol) {
  * Evaluated via the modified Lentz continued fraction (DLMF 8.9.2):
  *   Ehat_m(x) = 1/(x+m - m*1/(x+m+2 - (m+1)*2/(x+m+4 - ...)))
  */
-template<typename T>
+template <typename T>
 inline T ehat(
     int const m,
     T const& x,
     double const cf_tol = details::EhatCfConfig<T>::cf_tol,
-    int const max_iter = details::EhatCfConfig<T>::max_iter) {
+    int const max_iter = details::EhatCfConfig<T>::max_iter)
+{
     using namespace details;
 
     if (!(x > 0.0)) {
@@ -245,7 +261,8 @@ inline T ehat(
     bool converged = false;
 
     for (int j = 1; j <= max_iter; ++j) {
-        double const aj = -static_cast<double>(m + j - 1) * static_cast<double>(j);
+        double const aj =
+            -static_cast<double>(m + j - 1) * static_cast<double>(j);
         T const aj_t = aj;
         T const bj = x + (m + 2 * j);
 
@@ -273,8 +290,7 @@ inline T ehat(
         std::ostringstream message;
         message << "ehat failed to converge: m=" << m;
         message << ", x=" << x;
-        message << ", max_iter=" << max_iter
-                << ", tol=" << cf_tol;
+        message << ", max_iter=" << max_iter << ", tol=" << cf_tol;
         throw std::runtime_error(message.str());
     }
 
@@ -288,7 +304,8 @@ inline T ehat(
  * by exp(x)), and a 5-term Hankel asymptotic expansion for x ≥ 50 where
  * the direct computation would overflow/underflow.
  */
-inline double scaled_K2(double x) {
+inline double scaled_K2(double x)
+{
     if (!(x > 0.0) || !std::isfinite(x))
         throw std::invalid_argument("scaled_K2 requires finite x > 0");
 
@@ -296,7 +313,7 @@ inline double scaled_K2(double x) {
         return std::exp(x) * boost::math::cyl_bessel_k(2, x);
     }
 
-    const double inv8x = 1.0 / (8.0 * x);
+    double const inv8x = 1.0 / (8.0 * x);
     constexpr double mu = 16.0;
 
     double term = 1.0;
@@ -323,7 +340,8 @@ inline double scaled_K2(double x) {
  * Same strategy as scaled_K2: Boost cyl_bessel_k for x < 50, Hankel
  * asymptotic for x >= 50.  Hankel parameter mu = 4·1² = 4 (vs 16 for K₂).
  */
-inline double scaled_K1(double const x) {
+inline double scaled_K1(double const x)
+{
     if (!(x > 0.0) || !std::isfinite(x))
         throw std::invalid_argument("scaled_K1 requires finite x > 0");
 
@@ -358,7 +376,8 @@ inline double scaled_K1(double const x) {
  * Computed via scaled Bessel functions to avoid overflow for small τ.
  * Asymptotics: κ → 1 as τ → 0, κ → 1/(2τ) as τ → ∞.
  */
-inline double kappa_ratio(double const tau) {
+inline double kappa_ratio(double const tau)
+{
     double const x = 1.0 / tau;
     return scaled_K1(x) / scaled_K2(x);
 }
@@ -383,8 +402,7 @@ constexpr double REL_ERROR_TINY_SCALE = 1e-300;
  *   α± = 1/√(ρ±² + ω²)                 (appear in boundary terms)
  *   G, A±, Ψ                            (combined constants for the integrand)
  */
-template<typename T>
-struct KershawParams {
+template <typename T> struct KershawParams {
     T a, s, q, omega2;
     T Delta, lambda_plus, rho_plus, rho_minus;
     T alpha_plus, alpha_minus;
@@ -397,13 +415,14 @@ struct KershawParams {
  * This is a pure function (no state); it derives (a, s, q, Δ, λ₊, ρ±, α±,
  * G, A±, Ψ) from the inputs.  Used by both quadrature and series modules.
  */
-template<typename T>
+template <typename T>
 inline KershawParams<T> compute_params(
-    double const gamma, 
-    double const gamma_p, 
-    double const xi, 
-    double const tau) {
-    
+    double const gamma,
+    double const gamma_p,
+    double const xi,
+    double const tau)
+{
+
     KershawParams<T> p{};
 
     T const gamma_t = static_cast<T>(gamma);
@@ -449,9 +468,9 @@ inline KershawParams<T> compute_params(
     p.A_plus = p.G - s_over_tau_a2;
     p.A_minus = p.G + s_over_tau_a2;
 
-    p.Psi = two * tau_t * gamma_t * gamma_p_t / p.q
-          + p.s / a2 * (p.alpha_plus + p.alpha_minus)
-          + (p.rho_plus * p.alpha_plus - p.rho_minus * p.alpha_minus) / p.a;
+    p.Psi = two * tau_t * gamma_t * gamma_p_t / p.q +
+            p.s / a2 * (p.alpha_plus + p.alpha_minus) +
+            (p.rho_plus * p.alpha_plus - p.rho_minus * p.alpha_minus) / p.a;
 
     return p;
 }
@@ -465,14 +484,13 @@ inline KershawParams<T> compute_params(
  * energy transfers (λ₊≫1) are exponentially suppressed.
  */
 inline double sigma0_E(
-    double const E, 
-    double const tau, 
-    double const lambda_plus, 
-    double const Ne) {
-    return Ne * units::r_e2 * units::me_c2
-           / (4.0 * E * E * tau)
-           * std::exp(-(lambda_plus - 1.0) / tau)
-           / scaled_K2(1.0 / tau);
+    double const E,
+    double const tau,
+    double const lambda_plus,
+    double const Ne)
+{
+    return Ne * units::r_e2 * units::me_c2 / (4.0 * E * E * tau) *
+           std::exp(-(lambda_plus - 1.0) / tau) / scaled_K2(1.0 / tau);
 }
 
 /// Result of a kernel evaluation: value plus heuristic error estimates.
@@ -507,7 +525,8 @@ inline void assert_parameters(
     if (!(T > 0.0) || !std::isfinite(T))
         throw std::invalid_argument("T must be finite and > 0");
     if (!(xi > -1.0 && xi < 1.0) || !std::isfinite(xi))
-        throw std::invalid_argument("xi must be finite and strictly inside (-1, 1)");
+        throw std::invalid_argument(
+            "xi must be finite and strictly inside (-1, 1)");
     if (!std::isfinite(Ne))
         throw std::invalid_argument("Ne must be finite");
     if (1.0 - xi < 1e-14)

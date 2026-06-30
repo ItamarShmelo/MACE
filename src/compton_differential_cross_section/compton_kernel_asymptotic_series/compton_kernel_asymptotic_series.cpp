@@ -13,13 +13,13 @@ ComptonKernelAsymptoticSeries::ComptonKernelAsymptoticSeries(
     double const eps_rel,
     int const n_min,
     int const n_max)
-    : high_precision_(high_precision)
-    , eps_rel_(eps_rel)
-    , n_min_(n_min)
-    , n_max_(n_max)
+    : high_precision_(high_precision),
+      eps_rel_(eps_rel),
+      n_min_(n_min),
+      n_max_(n_max)
 {}
 
-template<typename T>
+template <typename T>
 ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
     double const gamma,
     double const gamma_p,
@@ -39,19 +39,19 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
     T const one = static_cast<T>(1.0);
     T const neg_one = static_cast<T>(-1.0);
 
-    T const zeta_plus  = param_clamp(p.rho_plus * p.alpha_plus, neg_one, one);
+    T const zeta_plus = param_clamp(p.rho_plus * p.alpha_plus, neg_one, one);
     T const zeta_minus = param_clamp(p.rho_minus * p.alpha_minus, neg_one, one);
 
-    T const eta_plus  = p.alpha_plus * (p.s / a2 + p.rho_plus / a);
+    T const eta_plus = p.alpha_plus * (p.s / a2 + p.rho_plus / a);
     T const eta_minus = p.alpha_minus * (-p.s / a2 + p.rho_minus / a);
 
-    T const gamma_t   = static_cast<T>(gamma);
+    T const gamma_t = static_cast<T>(gamma);
     T const gamma_p_t = static_cast<T>(gamma_p);
-    T const tau_t     = static_cast<T>(tau);
+    T const tau_t = static_cast<T>(tau);
 
     T const base_term = static_cast<T>(2.0) * tau_t * gamma_t * gamma_p_t / p.q;
 
-    T const neg_tau_alpha_plus  = -tau_t * p.alpha_plus;
+    T const neg_tau_alpha_plus = -tau_t * p.alpha_plus;
     T const neg_tau_alpha_minus = -tau_t * p.alpha_minus;
 
     T S_combined = static_cast<T>(0.0);
@@ -65,9 +65,9 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
     int increase_count = 0;
     double prev_combined_mag = std::numeric_limits<double>::infinity();
 
-    T factorial_n    = one;
-    T power_plus     = neg_tau_alpha_plus;
-    T power_minus    = neg_tau_alpha_minus;
+    T factorial_n = one;
+    T power_plus = neg_tau_alpha_plus;
+    T power_minus = neg_tau_alpha_minus;
 
     T Pp_prev = one;
     T Pp_curr = zeta_plus;
@@ -77,39 +77,42 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
     for (int n = 0; n <= n_max_; ++n) {
         if (n > 0) {
             factorial_n *= static_cast<T>(n);
-            power_plus  *= neg_tau_alpha_plus;
+            power_plus *= neg_tau_alpha_plus;
             power_minus *= neg_tau_alpha_minus;
         }
 
         T const factorial_n1 = factorial_n * static_cast<T>(n + 1);
 
-        T const Pp_n  = Pp_prev;
+        T const Pp_n = Pp_prev;
         T const Pp_n1 = Pp_curr;
-        T const Pm_n  = Pm_prev;
+        T const Pm_n = Pm_prev;
         T const Pm_n1 = Pm_curr;
 
         // Rearranged accumulation: groups the G contribution so that
         // the massive G*n! terms cancel analytically rather than
         // numerically.  See docs/asymptotic_rearrangement_derivation.md.
-        double const d_plus_mag  = std::abs(to_double(power_plus * Pp_n));
+        double const d_plus_mag = std::abs(to_double(power_plus * Pp_n));
         double const d_minus_mag = std::abs(to_double(power_minus * Pm_n));
 
-        double const f_plus_mag  = std::abs(to_double(eta_plus * power_plus * Pp_n1));
-        double const f_minus_mag = std::abs(to_double(eta_minus * power_minus * Pm_n1));
+        double const f_plus_mag =
+            std::abs(to_double(eta_plus * power_plus * Pp_n1));
+        double const f_minus_mag =
+            std::abs(to_double(eta_minus * power_minus * Pm_n1));
 
         T const D_n = power_minus * Pm_n - power_plus * Pp_n;
-        T const F_n1 = eta_minus * power_minus * Pm_n1
-                     - eta_plus * power_plus * Pp_n1;
+        T const F_n1 =
+            eta_minus * power_minus * Pm_n1 - eta_plus * power_plus * Pp_n1;
         T const combined =
-            (p.G - static_cast<T>(n + 1) / a) * factorial_n * D_n
-            + factorial_n1 * F_n1;
+            (p.G - static_cast<T>(n + 1) / a) * factorial_n * D_n +
+            factorial_n1 * F_n1;
 
-        double const coeff_D_mag = std::abs(to_double(
-            (p.G - static_cast<T>(n + 1) / a) * factorial_n));
+        double const coeff_D_mag = std::abs(
+            to_double((p.G - static_cast<T>(n + 1) / a) * factorial_n));
         double const D_roundoff = EPS_T * (d_plus_mag + d_minus_mag);
         double const F_roundoff = EPS_T * (f_plus_mag + f_minus_mag);
-        double const term_roundoff = coeff_D_mag * D_roundoff
-                                   + std::abs(to_double(factorial_n1)) * F_roundoff;
+        double const term_roundoff =
+            coeff_D_mag * D_roundoff +
+            std::abs(to_double(factorial_n1)) * F_roundoff;
         roundoff_sum += term_roundoff;
 
         S_combined += combined;
@@ -123,12 +126,15 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
 
         double const norm_so_far = to_double(param_abs(base_term + S_combined));
 
-        if (n >= n_min_ && combined_mag / (norm_so_far + constants::REL_ERROR_TINY_SCALE) < eps_rel_) {
+        if (n >= n_min_ &&
+            combined_mag / (norm_so_far + constants::REL_ERROR_TINY_SCALE) <
+                eps_rel_) {
             double const normalized = to_double(base_term + S_combined);
             double const norm_abs_error = std::max(combined_mag, roundoff_sum);
             double const value = sigma0 * normalized;
             double const abs_error = std::abs(sigma0) * norm_abs_error;
-            double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
+            double const rel_error =
+                abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
             return ComptonResult{value, abs_error, rel_error};
         }
 
@@ -136,10 +142,13 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
             ++increase_count;
             if (increase_count >= 2) {
                 double const normalized = to_double(base_term + best_S);
-                double const norm_abs_error = std::max(smallest_term_mag, best_roundoff_sum);
+                double const norm_abs_error =
+                    std::max(smallest_term_mag, best_roundoff_sum);
                 double const value = sigma0 * normalized;
                 double const abs_error = std::abs(sigma0) * norm_abs_error;
-                double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
+                double const rel_error =
+                    abs_error /
+                    (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
                 return ComptonResult{value, abs_error, rel_error};
             }
         } else {
@@ -152,13 +161,17 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
             break;
 
         T const n_dbl = static_cast<T>(n);
-        T const Pp_next = ((static_cast<T>(2.0) * n_dbl + static_cast<T>(3.0)) * zeta_plus * Pp_curr
-                         - (n_dbl + one) * Pp_prev) / (n_dbl + static_cast<T>(2.0));
+        T const Pp_next = ((static_cast<T>(2.0) * n_dbl + static_cast<T>(3.0)) *
+                               zeta_plus * Pp_curr -
+                           (n_dbl + one) * Pp_prev) /
+                          (n_dbl + static_cast<T>(2.0));
         Pp_prev = Pp_curr;
         Pp_curr = Pp_next;
 
-        T const Pm_next = ((static_cast<T>(2.0) * n_dbl + static_cast<T>(3.0)) * zeta_minus * Pm_curr
-                         - (n_dbl + one) * Pm_prev) / (n_dbl + static_cast<T>(2.0));
+        T const Pm_next = ((static_cast<T>(2.0) * n_dbl + static_cast<T>(3.0)) *
+                               zeta_minus * Pm_curr -
+                           (n_dbl + one) * Pm_prev) /
+                          (n_dbl + static_cast<T>(2.0));
         Pm_prev = Pm_curr;
         Pm_curr = Pm_next;
     }
@@ -167,11 +180,21 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
 }
 
 template ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series<double>(
-    double, double, double, double, double, double) const;
+    double,
+    double,
+    double,
+    double,
+    double,
+    double) const;
 template ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series<DD>(
-    double, double, double, double, double, double) const;
+    double,
+    double,
+    double,
+    double,
+    double,
+    double) const;
 
-template<typename T>
+template <typename T>
 ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
     double const gamma,
     double const gamma_p,
@@ -192,21 +215,21 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
     T const one = static_cast<T>(1.0);
     T const neg_one = static_cast<T>(-1.0);
 
-    T const zeta_plus  = param_clamp(p.rho_plus * p.alpha_plus, neg_one, one);
+    T const zeta_plus = param_clamp(p.rho_plus * p.alpha_plus, neg_one, one);
     T const zeta_minus = param_clamp(p.rho_minus * p.alpha_minus, neg_one, one);
 
-    T const eta_plus  = p.alpha_plus * (p.s / a2 + p.rho_plus / a);
+    T const eta_plus = p.alpha_plus * (p.s / a2 + p.rho_plus / a);
     T const eta_minus = p.alpha_minus * (-p.s / a2 + p.rho_minus / a);
 
-    T const gamma_t   = static_cast<T>(gamma);
+    T const gamma_t = static_cast<T>(gamma);
     T const gamma_p_t = static_cast<T>(gamma_p);
-    T const tau_t     = static_cast<T>(tau);
+    T const tau_t = static_cast<T>(tau);
 
     T const lk = p.lambda_plus - static_cast<T>(kappa_val);
-    T const base_deriv = static_cast<T>(2.0) * gamma_t * gamma_p_t / p.q
-                       * (lk / tau_t - static_cast<T>(2.0));
+    T const base_deriv = static_cast<T>(2.0) * gamma_t * gamma_p_t / p.q *
+                         (lk / tau_t - static_cast<T>(2.0));
 
-    T const neg_tau_alpha_plus  = -tau_t * p.alpha_plus;
+    T const neg_tau_alpha_plus = -tau_t * p.alpha_plus;
     T const neg_tau_alpha_minus = -tau_t * p.alpha_minus;
 
     T dS_combined = static_cast<T>(0.0);
@@ -220,9 +243,9 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
     int increase_count = 0;
     double prev_dcombined_mag = std::numeric_limits<double>::infinity();
 
-    T factorial_n    = one;
-    T power_plus     = neg_tau_alpha_plus;
-    T power_minus    = neg_tau_alpha_minus;
+    T factorial_n = one;
+    T power_plus = neg_tau_alpha_plus;
+    T power_minus = neg_tau_alpha_minus;
 
     T Pp_prev = one;
     T Pp_curr = zeta_plus;
@@ -232,40 +255,43 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
     for (int n = 0; n <= n_max_; ++n) {
         if (n > 0) {
             factorial_n *= static_cast<T>(n);
-            power_plus  *= neg_tau_alpha_plus;
+            power_plus *= neg_tau_alpha_plus;
             power_minus *= neg_tau_alpha_minus;
         }
 
         T const factorial_n1 = factorial_n * static_cast<T>(n + 1);
 
-        T const Pp_n  = Pp_prev;
+        T const Pp_n = Pp_prev;
         T const Pp_n1 = Pp_curr;
-        T const Pm_n  = Pm_prev;
+        T const Pm_n = Pm_prev;
         T const Pm_n1 = Pm_curr;
 
-        T const weight = lk / (tau_t * tau_t) + (static_cast<T>(n) - static_cast<T>(2.0)) / tau_t;
+        T const weight = lk / (tau_t * tau_t) +
+                         (static_cast<T>(n) - static_cast<T>(2.0)) / tau_t;
 
-        double const d_plus_mag  = std::abs(to_double(power_plus * Pp_n));
+        double const d_plus_mag = std::abs(to_double(power_plus * Pp_n));
         double const d_minus_mag = std::abs(to_double(power_minus * Pm_n));
 
-        double const f_plus_mag  = std::abs(to_double(eta_plus * power_plus * Pp_n1));
-        double const f_minus_mag = std::abs(to_double(eta_minus * power_minus * Pm_n1));
+        double const f_plus_mag =
+            std::abs(to_double(eta_plus * power_plus * Pp_n1));
+        double const f_minus_mag =
+            std::abs(to_double(eta_minus * power_minus * Pm_n1));
 
         T const D_n = power_minus * Pm_n - power_plus * Pp_n;
-        T const F_n1 = eta_minus * power_minus * Pm_n1
-                     - eta_plus * power_plus * Pp_n1;
+        T const F_n1 =
+            eta_minus * power_minus * Pm_n1 - eta_plus * power_plus * Pp_n1;
         T const combined =
-            weight * ((p.G - static_cast<T>(n + 1) / a) * factorial_n * D_n
-                      + factorial_n1 * F_n1);
+            weight * ((p.G - static_cast<T>(n + 1) / a) * factorial_n * D_n +
+                      factorial_n1 * F_n1);
 
-        double const coeff_D_mag = std::abs(to_double(
-            (p.G - static_cast<T>(n + 1) / a) * factorial_n));
+        double const coeff_D_mag = std::abs(
+            to_double((p.G - static_cast<T>(n + 1) / a) * factorial_n));
         double const D_roundoff = EPS_T * (d_plus_mag + d_minus_mag);
         double const F_roundoff = EPS_T * (f_plus_mag + f_minus_mag);
         double const weight_mag = std::abs(to_double(weight));
-        double const term_roundoff = weight_mag
-            * (coeff_D_mag * D_roundoff
-               + std::abs(to_double(factorial_n1)) * F_roundoff);
+        double const term_roundoff =
+            weight_mag * (coeff_D_mag * D_roundoff +
+                          std::abs(to_double(factorial_n1)) * F_roundoff);
         roundoff_sum += term_roundoff;
 
         dS_combined += combined;
@@ -277,14 +303,18 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
             best_roundoff_sum = roundoff_sum;
         }
 
-        double const norm_so_far = to_double(param_abs(base_deriv + dS_combined));
+        double const norm_so_far =
+            to_double(param_abs(base_deriv + dS_combined));
 
-        if (n >= n_min_ && dcombined_mag / (norm_so_far + constants::REL_ERROR_TINY_SCALE) < eps_rel_) {
+        if (n >= n_min_ &&
+            dcombined_mag / (norm_so_far + constants::REL_ERROR_TINY_SCALE) <
+                eps_rel_) {
             double const normalized = to_double(base_deriv + dS_combined);
             double const norm_abs_error = std::max(dcombined_mag, roundoff_sum);
             double const value = sigma0 * normalized;
             double const abs_error = std::abs(sigma0) * norm_abs_error;
-            double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
+            double const rel_error =
+                abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
             return ComptonResult{value, abs_error, rel_error};
         }
 
@@ -292,10 +322,13 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
             ++increase_count;
             if (increase_count >= 2) {
                 double const normalized = to_double(base_deriv + best_dS);
-                double const norm_abs_error = std::max(smallest_dterm_mag, best_roundoff_sum);
+                double const norm_abs_error =
+                    std::max(smallest_dterm_mag, best_roundoff_sum);
                 double const value = sigma0 * normalized;
                 double const abs_error = std::abs(sigma0) * norm_abs_error;
-                double const rel_error = abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
+                double const rel_error =
+                    abs_error /
+                    (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
                 return ComptonResult{value, abs_error, rel_error};
             }
         } else {
@@ -308,13 +341,17 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
             break;
 
         T const n_dbl = static_cast<T>(n);
-        T const Pp_next = ((static_cast<T>(2.0) * n_dbl + static_cast<T>(3.0)) * zeta_plus * Pp_curr
-                         - (n_dbl + one) * Pp_prev) / (n_dbl + static_cast<T>(2.0));
+        T const Pp_next = ((static_cast<T>(2.0) * n_dbl + static_cast<T>(3.0)) *
+                               zeta_plus * Pp_curr -
+                           (n_dbl + one) * Pp_prev) /
+                          (n_dbl + static_cast<T>(2.0));
         Pp_prev = Pp_curr;
         Pp_curr = Pp_next;
 
-        T const Pm_next = ((static_cast<T>(2.0) * n_dbl + static_cast<T>(3.0)) * zeta_minus * Pm_curr
-                         - (n_dbl + one) * Pm_prev) / (n_dbl + static_cast<T>(2.0));
+        T const Pm_next = ((static_cast<T>(2.0) * n_dbl + static_cast<T>(3.0)) *
+                               zeta_minus * Pm_curr -
+                           (n_dbl + one) * Pm_prev) /
+                          (n_dbl + static_cast<T>(2.0));
         Pm_prev = Pm_curr;
         Pm_curr = Pm_next;
     }
@@ -322,10 +359,22 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
     throw std::runtime_error("asymptotic series derivative failed to converge");
 }
 
-template ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative<double>(
-    double, double, double, double, double, double) const;
-template ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative<DD>(
-    double, double, double, double, double, double) const;
+template ComptonResult
+ComptonKernelAsymptoticSeries::asymptotic_series_derivative<double>(
+    double,
+    double,
+    double,
+    double,
+    double,
+    double) const;
+template ComptonResult
+ComptonKernelAsymptoticSeries::asymptotic_series_derivative<DD>(
+    double,
+    double,
+    double,
+    double,
+    double,
+    double) const;
 
 ComptonResult ComptonKernelAsymptoticSeries::sigma_E(
     double const E,
@@ -335,8 +384,8 @@ ComptonResult ComptonKernelAsymptoticSeries::sigma_E(
     double const Ne) const
 {
     assert_parameters(E, E_prime, xi, T, Ne);
-    double const tau     = T * units::k_boltz / units::me_c2;
-    double const gamma   = E / units::me_c2;
+    double const tau = T * units::k_boltz / units::me_c2;
+    double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
     if (high_precision_)
@@ -353,15 +402,17 @@ double ComptonKernelAsymptoticSeries::sigma_E_precision_check(
     double const Ne) const
 {
     assert_parameters(E, E_prime, xi, T, Ne);
-    double const tau     = T * units::k_boltz / units::me_c2;
-    double const gamma   = E / units::me_c2;
+    double const tau = T * units::k_boltz / units::me_c2;
+    double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
-    ComptonResult const dd_res  = asymptotic_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
-    ComptonResult const dbl_res = asymptotic_series<double>(gamma, gamma_p, xi, tau, E, Ne);
+    ComptonResult const dd_res =
+        asymptotic_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
+    ComptonResult const dbl_res =
+        asymptotic_series<double>(gamma, gamma_p, xi, tau, E, Ne);
 
-    return std::abs(dd_res.value - dbl_res.value)
-         / (std::abs(dd_res.value) + constants::REL_ERROR_TINY_SCALE);
+    return std::abs(dd_res.value - dbl_res.value) /
+           (std::abs(dd_res.value) + constants::REL_ERROR_TINY_SCALE);
 }
 
 ComptonResult ComptonKernelAsymptoticSeries::dsigma_E_dT(
@@ -372,16 +423,23 @@ ComptonResult ComptonKernelAsymptoticSeries::dsigma_E_dT(
     double const Ne) const
 {
     assert_parameters(E, E_prime, xi, T, Ne);
-    double const tau     = T * units::k_boltz / units::me_c2;
+    double const tau = T * units::k_boltz / units::me_c2;
     double const dtau_dT = units::k_boltz / units::me_c2;
-    double const gamma   = E / units::me_c2;
+    double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
     ComptonResult dtau_result;
     if (high_precision_)
-        dtau_result = asymptotic_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);
+        dtau_result =
+            asymptotic_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);
     else
-        dtau_result = asymptotic_series_derivative<double>(gamma, gamma_p, xi, tau, E, Ne);
+        dtau_result = asymptotic_series_derivative<double>(
+            gamma,
+            gamma_p,
+            xi,
+            tau,
+            E,
+            Ne);
 
     return ComptonResult{
         dtau_result.value * dtau_dT,
@@ -397,15 +455,17 @@ double ComptonKernelAsymptoticSeries::dsigma_E_dT_precision_check(
     double const Ne) const
 {
     assert_parameters(E, E_prime, xi, T, Ne);
-    double const tau     = T * units::k_boltz / units::me_c2;
-    double const gamma   = E / units::me_c2;
+    double const tau = T * units::k_boltz / units::me_c2;
+    double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
-    ComptonResult const dd_res  = asymptotic_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);
-    ComptonResult const dbl_res = asymptotic_series_derivative<double>(gamma, gamma_p, xi, tau, E, Ne);
+    ComptonResult const dd_res =
+        asymptotic_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);
+    ComptonResult const dbl_res =
+        asymptotic_series_derivative<double>(gamma, gamma_p, xi, tau, E, Ne);
 
-    return std::abs(dd_res.value - dbl_res.value)
-         / (std::abs(dd_res.value) + constants::REL_ERROR_TINY_SCALE);
+    return std::abs(dd_res.value - dbl_res.value) /
+           (std::abs(dd_res.value) + constants::REL_ERROR_TINY_SCALE);
 }
 
 } // namespace compton
