@@ -240,3 +240,37 @@ class TestWienDenominator:
         expected = kT * ref
 
         assert computed == pytest.approx(expected, rel=1e-9, abs=0)
+
+
+# ---------------------------------------------------------------------------
+# 5. peak_energy()
+# ---------------------------------------------------------------------------
+
+class TestPeakEnergy:
+    """Verify peak_energy(T) for all weight functions."""
+
+    def test_planck_peak_energy(self):
+        wf = cm.PlanckWeightFunction(cap_x=25.0)
+        T = 10.0 * kev_kelvin
+        E_peak = wf.peak_energy(T)
+        assert E_peak == pytest.approx(2.821439 * k_boltz * T, rel=1e-6)
+
+    def test_uniform_peak_energy(self):
+        wf = cm.UniformWeightFunction()
+        assert wf.peak_energy(10.0 * kev_kelvin) is None
+
+    def test_wien_peak_energy(self):
+        wf = cm.WienWeightFunction(cap_x=25.0)
+        T = 10.0 * kev_kelvin
+        E_peak = wf.peak_energy(T)
+        assert E_peak == pytest.approx(3.0 * k_boltz * T, rel=1e-6)
+
+    @pytest.mark.parametrize("T_kev", [0.1, 1.0, 10.0, 100.0])
+    def test_planck_peak_scales_linearly(self, T_kev):
+        """Peak energy should scale linearly with T."""
+        wf = cm.PlanckWeightFunction(cap_x=25.0)
+        T = T_kev * kev_kelvin
+        E_peak = wf.peak_energy(T)
+        T2 = 2.0 * T
+        E_peak2 = wf.peak_energy(T2)
+        assert E_peak2 == pytest.approx(2.0 * E_peak, rel=1e-14)

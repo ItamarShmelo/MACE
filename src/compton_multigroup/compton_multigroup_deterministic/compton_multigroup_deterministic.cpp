@@ -240,29 +240,6 @@ double integrate_Ep_ridge(
     return result;
 }
 
-template<typename F>
-double integrate_E_panels(
-    F&& integrand,
-    std::vector<EPanel> const& panels,
-    GaussLegendreRule const& rule)
-{
-    double sum = 0.0;
-    for (auto const& panel : panels) {
-        switch (panel.map) {
-        case EPanelMap::Linear:
-            sum += legendre_integrate(integrand, rule, panel.lo, panel.hi);
-            break;
-        case EPanelMap::LogLower:
-            sum += log_legendre_integrate(integrand, rule, panel.lo, panel.hi);
-            break;
-        case EPanelMap::LogUpper:
-            sum += rlog_legendre_integrate(integrand, rule, panel.lo, panel.hi);
-            break;
-        }
-    }
-    return sum;
-}
-
 } // anonymous namespace
 
 double ComptonMultigroupKernel::integrate_xi_bin(
@@ -376,42 +353,45 @@ double ComptonMultigroupKernel::integrate_Ep_xi_bin(
         ep_edge_rule_, ep_interior_rule_, ep_elastic_core_rule_);
 }
 
-// ── E-axis panel construction ───────────────────────────────────────────
-
-std::vector<EPanel> ComptonMultigroupKernel::compute_E_panels(
+double ComptonMultigroupKernel::integrate_E_Ep_xi_bin(
+    ComptonKernelSolver const& kernel,
+    ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
     int const g,
-    double const T) const
+    int const gp,
+    double const xi_lo,
+    double const xi_hi,
+    double const T,
+    double const Ne,
+    KernelMultiplier const& multiplier) const
 {
     double const E_lo = group_boundaries_[g];
     double const E_hi = group_boundaries_[g + 1];
+    double const Ep_lo = group_boundaries_[gp];
+    double const Ep_hi = group_boundaries_[gp + 1];
 
-    auto make_panel = [&](double const a, double const b) -> EPanel {
-        EPanelMap map;
-        if (b / a <= log_e_panel_ratio_) {
-            map = EPanelMap::Linear;
-        } else if (weight_func_->weight(a, T) >= weight_func_->weight(b, T)) {
-            map = EPanelMap::LogLower;
-        } else {
-            map = EPanelMap::LogUpper;
-        }
-        return {a, b, map};
+    auto E_integrand = [&](double const E) {
+        double const w = weight_func_->weight(E, T);
+        double const inner = integrate_Ep_xi_bin(
+            kernel, eval, E, Ep_lo, Ep_hi, xi_lo, xi_hi,
+            T, Ne, multiplier);
+        return w * inner;
     };
 
-    std::vector<EPanel> panels;
-
-    auto add_panel = [&](double const a, double const b) {
-        if (b > a)
-            panels.push_back(make_panel(a, b));
+    auto integrate_sub = [&](double const a, double const b) -> double {
+        if (!(b > a))
+            return 0.0;
+        if (b / a <= log_e_panel_ratio_)
+            return legendre_integrate(E_integrand, e_panel_rule_, a, b);
+        if (weight_func_->weight(a, T) >= weight_func_->weight(b, T))
+            return log_legendre_integrate(E_integrand, e_panel_rule_, a, b);
+        return rlog_legendre_integrate(E_integrand, e_panel_rule_, a, b);
     };
 
-    auto add_middle_panels = [&](double const a, double const b) {
+    auto integrate_middle = [&](double const a, double const b) -> double {
         auto const Epk = weight_func_->peak_energy(T);
-        if (Epk && *Epk > a && *Epk < b) {
-            add_panel(a, *Epk);
-            add_panel(*Epk, b);
-            return;
-        }
-        add_panel(a, b);
+        if (Epk && *Epk > a && *Epk < b)
+            return integrate_sub(a, *Epk) + integrate_sub(*Epk, b);
+        return integrate_sub(a, b);
     };
 
     double const sigma_lo = ridge_thermal_width(E_lo, -1.0, T);
@@ -420,61 +400,11 @@ std::vector<EPanel> ComptonMultigroupKernel::compute_E_panels(
     double const bl_hi = E_hi - e_boundary_k_ * sigma_hi;
 
     if (bl_lo < bl_hi) {
-        add_panel(E_lo, bl_lo);
-        add_middle_panels(bl_lo, bl_hi);
-        add_panel(bl_hi, E_hi);
-    } else {
-        add_middle_panels(E_lo, E_hi);
+        return integrate_sub(E_lo, bl_lo)
+             + integrate_middle(bl_lo, bl_hi)
+             + integrate_sub(bl_hi, E_hi);
     }
-
-    return panels;
-}
-
-double ComptonMultigroupKernel::compute_group_entry(
-    ComptonKernelSolver const& kernel,
-    ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
-    int const g,
-    int const gp,
-    int const num_angle_bins,
-    double const dxi,
-    double const T,
-    double const Ne,
-    double const inv_denom,
-    KernelMultiplier const& multiplier,
-    std::vector<EPanel> const& panels,
-    std::vector<double>& result) const
-{
-    int const G = num_groups();
-
-    double const Ep_lo = group_boundaries_[gp];
-    double const Ep_hi = group_boundaries_[gp + 1];
-
-    double group_sum = 0.0;
-
-    for (int a = 0; a < num_angle_bins; ++a) {
-        double const xi_lo = -1.0 + a * dxi;
-        double const xi_hi = std::min(-1.0 + (a + 1) * dxi,
-                                      1.0 - constants::XI_UPPER_EPS);
-
-        auto E_integrand = [&](double const E) {
-            double const w = weight_func_->weight(E, T);
-            double const inner = integrate_Ep_xi_bin(
-                kernel, eval, E, Ep_lo, Ep_hi, xi_lo, xi_hi,
-                T, Ne, multiplier);
-            return w * inner;
-        };
-
-        double const numerator = integrate_E_panels(
-            E_integrand, panels, e_panel_rule_);
-
-        std::size_t const idx =
-            static_cast<std::size_t>(g) * G * num_angle_bins +
-            static_cast<std::size_t>(gp) * num_angle_bins +
-            static_cast<std::size_t>(a);
-        result[idx] = 2.0 * std::numbers::pi * numerator * inv_denom;
-        group_sum += std::abs(result[idx]);
-    }
-    return group_sum;
+    return integrate_middle(E_lo, E_hi);
 }
 
 std::vector<double> ComptonMultigroupKernel::compute_xi_integral_impl(
@@ -567,7 +497,7 @@ std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_impl(
 //      most of the scattered energy stays near the incoming energy,
 //      so distant target groups contribute negligibly.
 //
-//   3. Each (g, gp) pair is delegated to compute_group_entry().
+//   3. Each selected (g, gp, angle) bin is evaluated by integrate_E_Ep_xi_bin().
 //
 // E' uses fixed-order GL via integrate_Ep_ridge (no adaptive refinement).
 // Convergence is controlled by ep_edge_order and ep_interior_order.
@@ -600,17 +530,30 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     // --- Main loop over incoming groups g ---
     #pragma omp parallel for schedule(dynamic)
     for (int g = 0; g < G; ++g) {
-        auto const panels = compute_E_panels(g, T);
-
         double const denom = weight_func_->compute_denominator(
             group_boundaries_[g], group_boundaries_[g + 1], T);
         double const inv_denom = 1.0 / denom;
 
         auto do_group = [&](int const gp) {
-            return compute_group_entry(
-                kernel, eval, g, gp, num_angle_bins, dxi,
-                T, Ne,
-                inv_denom, multiplier, panels, result);
+            double group_sum = 0.0;
+
+            for (int a = 0; a < num_angle_bins; ++a) {
+                double const xi_lo = -1.0 + a * dxi;
+                double const xi_hi = std::min(-1.0 + (a + 1) * dxi,
+                                              1.0 - constants::XI_UPPER_EPS);
+
+                double const numerator = integrate_E_Ep_xi_bin(
+                    kernel, eval, g, gp, xi_lo, xi_hi,
+                    T, Ne, multiplier);
+
+                std::size_t const idx =
+                    static_cast<std::size_t>(g) * G * num_angle_bins +
+                    static_cast<std::size_t>(gp) * num_angle_bins +
+                    static_cast<std::size_t>(a);
+                result[idx] = 2.0 * std::numbers::pi * numerator * inv_denom;
+                group_sum += std::abs(result[idx]);
+            }
+            return group_sum;
         };
 
         // --- Outward-from-peak target-group traversal ---

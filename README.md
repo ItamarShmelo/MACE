@@ -111,7 +111,12 @@ kernel = cds.ComptonKernelSolver()
 mg = cm.ComptonMultigroupKernel(
     energy_group_boundaries=[0.1*kev, 0.5*kev, 1*kev, 5*kev, 10*kev],
     weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-    config=cm.MGIntegrationConfig(base_order=8))
+    config=cm.MGIntegrationConfig(
+        xi_order=8,
+        xi_tail_order=8,
+        ep_edge_order=8,
+        ep_interior_order=8,
+        e_panel_order=8))
 
 # Angle-integrated G x G matrix
 S = mg.compute_sigma_matrix(kernel, T=10*kev_kelvin, Ne=1.0)

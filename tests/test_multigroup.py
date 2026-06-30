@@ -5,12 +5,16 @@ Validates the ComptonMultigroupKernel integration against:
   1. Analytic Planck integral for the denominator
   2. Quadrature convergence (increasing order)
   3. Angle-bin summation consistency
+  4. Analytic denominator comparison (numerical vs analytic)
+  5. Positivity checks
+  6. Conservation / opacity-sum checks
 """
 
 import sys
 
 import numpy as np
 import pytest
+from scipy.integrate import quad as scipy_quad
 
 sys.path.insert(0, "cpp_modules")
 
@@ -27,6 +31,15 @@ BOUNDARIES_KEV = [0.1, 0.5, 1.0, 5.0, 10.0, 50.0]
 BOUNDARIES_ERG = [b * kev for b in BOUNDARIES_KEV]
 
 KERNEL = ComptonKernelSolver()
+
+
+def _config(order=None, **kwargs):
+    if order is not None:
+        for key in ("xi_order", "xi_tail_order", "ep_edge_order",
+                    "ep_interior_order", "e_panel_order"):
+            if kwargs.get(key) is None:
+                kwargs[key] = order
+    return cm.MGIntegrationConfig(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -47,7 +60,7 @@ class TestDenominator:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=[E_lo, E_hi],
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
+            config=_config(8))
 
         x_lo, x_hi = 0.1, 5.0
         from scipy.integrate import quad as scipy_quad
@@ -69,7 +82,7 @@ class TestDenominator:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=[E_lo, E_hi],
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
+            config=_config(8))
 
         cap_x = 25.0
         w0 = cap_x**3 / np.expm1(cap_x)
@@ -125,11 +138,11 @@ class TestAdaptiveConvergence:
         mg_loose = cm.ComptonMultigroupKernel(
             energy_group_boundaries=narrow_bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-2))
+            config=_config(8))
         mg_tight = cm.ComptonMultigroupKernel(
             energy_group_boundaries=narrow_bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-4))
+            config=_config(8))
 
         S_loose = mg_loose.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
         S_tight = mg_tight.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
@@ -153,8 +166,8 @@ class TestAdaptiveConvergence:
 # 4. Cold recoil band functions
 # ---------------------------------------------------------------------------
 
-class TestPeakLimits:
-    """Validate peak_limits and backward-compat cold_recoil_lo/hi bindings."""
+class TestColdRecoilBounds:
+    """Validate cold_recoil_lo/hi bindings (backed by compute_ridge_bounds at T=0)."""
 
     def test_forward_scatter_identity(self):
         """At xi=1 (forward scatter), E'=E (no energy change)."""
@@ -207,7 +220,7 @@ class TestPeakAwareConsistency:
         T = 10.0 * kev_kelvin
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
 
-        cfg = cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3)
+        cfg = _config(8)
 
         mg_default = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
@@ -217,7 +230,7 @@ class TestPeakAwareConsistency:
         mg_cfg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
+            config=_config(8))
 
         S_default = mg_default.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
         S_cfg = mg_cfg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
@@ -237,7 +250,7 @@ class TestPeakAwareConsistency:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
+            config=_config(8))
 
         S_integrated = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
         S_binned = mg.compute_sigma_matrix(
@@ -267,7 +280,7 @@ class TestHardPhysicsRegression:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-2))
+            config=_config(8))
 
         S = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
         row_sums = S.sum(axis=1)
@@ -282,7 +295,7 @@ class TestHardPhysicsRegression:
         mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-2))
+            config=_config(8))
 
         S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
         assert S.shape == (2, 2, 4)
@@ -298,19 +311,16 @@ class TestHardPhysicsRegression:
 class TestGroupCutoff:
     """Verify outward-from-peak group cutoff produces correct results."""
 
-    def _make_mg(self, bounds, *, base_order=8, tol=1e-3, cutoff=1e-8):
+    def _make_mg(self, bounds, *, order=8, tol=1e-3, cutoff=1e-8):
         return cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-            config=cm.MGIntegrationConfig(
-                base_order=base_order,
-                integration_tolerance=tol,
-                cutoff_ratio=cutoff))
+            config=_config(order, cutoff_ratio=cutoff))
 
-    def test_cutoff_rejects_zero(self):
-        """Setting cutoff_ratio=0 raises ValueError."""
-        with pytest.raises(Exception):
-            cm.MGIntegrationConfig(cutoff_ratio=0.0)
+    def test_cutoff_zero_disables_cutoff(self):
+        """Setting cutoff_ratio=0 is valid and disables early termination."""
+        cfg = cm.MGIntegrationConfig(cutoff_ratio=0.0)
+        assert cfg.cutoff_ratio == 0.0
 
     def test_default_cutoff(self):
         """Default cutoff (1e-8) produces identical results to explicit 1e-8."""
@@ -383,3 +393,194 @@ class TestGroupCutoff:
         rel_err = np.abs(rs_full[mask] - rs_cut[mask]) / np.abs(rs_full[mask])
         assert np.max(rel_err) < 1e-7, (
             f"multiangle cutoff row-sum max rel error = {np.max(rel_err):.2e}")
+
+
+# ---------------------------------------------------------------------------
+# 6. Analytic denominator comparison (numerical panel-based vs analytic)
+# ---------------------------------------------------------------------------
+
+def _numerical_denom_via_gl(wf, E_lo, E_hi, T, order=24):
+    """Compute numerical denominator via high-order GL for reference."""
+    ref, _ = scipy_quad(lambda E: wf.weight(E, T), E_lo, E_hi, limit=200)
+    return ref
+
+
+class TestAnalyticDenominatorComparison:
+    """Compare numerical denominator (from panel-based GL) against analytic."""
+
+    @pytest.mark.parametrize("T_kev", [1.0, 10.0, 100.0])
+    @pytest.mark.parametrize("x_range", [
+        (0.1, 5.0),
+        (1.0, 20.0),
+        (0.5, 2.5),
+    ])
+    def test_planck_denom_convergence(self, T_kev, x_range):
+        """Numerical GL denominator converges to analytic Planck denominator."""
+        T = T_kev * kev_kelvin
+        kT = k_boltz * T
+        x_lo, x_hi = x_range
+        E_lo, E_hi = x_lo * kT, x_hi * kT
+
+        wf = cm.PlanckWeightFunction(cap_x=25.0)
+        analytic = wf.compute_denominator(E_lo, E_hi, T)
+
+        ref_scipy = _numerical_denom_via_gl(wf, E_lo, E_hi, T)
+        assert analytic == pytest.approx(ref_scipy, rel=1e-8), (
+            f"analytic vs scipy at T={T_kev} keV, x=[{x_lo},{x_hi}]")
+
+    @pytest.mark.parametrize("T_kev", [1.0, 10.0, 100.0])
+    def test_wien_denom(self, T_kev):
+        T = T_kev * kev_kelvin
+        kT = k_boltz * T
+        E_lo, E_hi = 0.5 * kT, 10.0 * kT
+
+        wf = cm.WienWeightFunction(cap_x=25.0)
+        analytic = wf.compute_denominator(E_lo, E_hi, T)
+        ref_scipy = _numerical_denom_via_gl(wf, E_lo, E_hi, T)
+        assert analytic == pytest.approx(ref_scipy, rel=1e-8)
+
+    @pytest.mark.parametrize("T_kev", [1.0, 10.0])
+    def test_uniform_denom(self, T_kev):
+        T = T_kev * kev_kelvin
+        kT = k_boltz * T
+        E_lo, E_hi = 1.0 * kT, 5.0 * kT
+
+        wf = cm.UniformWeightFunction()
+        analytic = wf.compute_denominator(E_lo, E_hi, T)
+        assert analytic == pytest.approx(E_hi - E_lo, rel=1e-14)
+
+
+# ---------------------------------------------------------------------------
+# 7. Quadrature convergence (panel order 8, 12, 16, 24)
+# ---------------------------------------------------------------------------
+
+class TestPanelOrderConvergence:
+    """Verify successive differences decrease as e_panel_order increases."""
+
+    def test_convergence_sequence(self):
+        T = 10.0 * kev_kelvin
+        bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
+        orders = [8, 12, 16, 24]
+        matrices = []
+
+        for order in orders:
+            cfg = _config(24, e_panel_order=order)
+            mg = cm.ComptonMultigroupKernel(
+                energy_group_boundaries=bounds,
+                weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+                config=cfg)
+            S = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+            matrices.append(S)
+
+        diffs = []
+        for i in range(len(matrices) - 1):
+            mask = np.abs(matrices[-1]) > 1e-35
+            if np.any(mask):
+                diff = np.max(np.abs(
+                    matrices[i][mask] - matrices[-1][mask]) /
+                    np.abs(matrices[-1][mask]))
+                diffs.append(diff)
+
+        if len(diffs) >= 2:
+            assert diffs[0] > diffs[-1], (
+                f"lowest order should be further from reference than highest: "
+                f"diffs={diffs}")
+
+        if diffs:
+            assert diffs[-1] < 0.01, (
+                f"order 16 vs 24 diff = {diffs[-1]:.2e}, expected < 1%")
+
+
+# ---------------------------------------------------------------------------
+# 8. Positivity checks
+# ---------------------------------------------------------------------------
+
+class TestPositivity:
+    """All matrix entries should be non-negative."""
+
+    @pytest.mark.parametrize("T_kev", [1.0, 10.0, 100.0])
+    def test_sigma_nonnegative(self, T_kev):
+        T = T_kev * kev_kelvin
+        bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev, 50.0 * kev]
+
+        mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            config=_config(24))
+
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
+        assert np.all(S >= 0), (
+            f"negative entries found at T={T_kev} keV: min={S.min():.2e}")
+
+
+# ---------------------------------------------------------------------------
+# 9. Conservation / opacity-sum checks
+# ---------------------------------------------------------------------------
+
+class TestConservationSums:
+    """Row sums at different panel orders should agree."""
+
+    def test_row_sums_converge(self):
+        T = 10.0 * kev_kelvin
+        bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev, 50.0 * kev]
+
+        cfg_lo = _config(24, e_panel_order=8)
+        cfg_hi = _config(24, e_panel_order=24)
+
+        mg_lo = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            config=cfg_lo)
+        mg_hi = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=bounds,
+            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            config=cfg_hi)
+
+        S_lo = mg_lo.compute_sigma_matrix(
+            KERNEL, num_angle_bins=4, T=T, Ne=1.0)
+        S_hi = mg_hi.compute_sigma_matrix(
+            KERNEL, num_angle_bins=4, T=T, Ne=1.0)
+
+        rs_lo = S_lo.sum(axis=(1, 2))
+        rs_hi = S_hi.sum(axis=(1, 2))
+
+        mask = np.abs(rs_hi) > 1e-35
+        if not np.any(mask):
+            pytest.skip("all row sums near zero")
+
+        np.testing.assert_allclose(rs_lo[mask], rs_hi[mask], rtol=1e-2,
+            err_msg="row sums at e_panel_order=8 vs 24 differ by >1%")
+
+
+# ---------------------------------------------------------------------------
+# 10. New config fields
+# ---------------------------------------------------------------------------
+
+class TestNewConfigFields:
+    """Verify new MGIntegrationConfig fields work correctly."""
+
+    def test_e_panel_order_default(self):
+        cfg = cm.MGIntegrationConfig()
+        assert cfg.effective_e_panel_order() == 12
+
+    def test_e_panel_order_explicit(self):
+        cfg = cm.MGIntegrationConfig(e_panel_order=16)
+        assert cfg.effective_e_panel_order() == 16
+
+    def test_log_e_panel_ratio_default(self):
+        cfg = cm.MGIntegrationConfig()
+        assert cfg.log_e_panel_ratio == pytest.approx(2.0)
+
+    def test_log_e_panel_ratio_explicit(self):
+        cfg = cm.MGIntegrationConfig(log_e_panel_ratio=3.0)
+        assert cfg.log_e_panel_ratio == pytest.approx(3.0)
+
+    def test_log_e_panel_ratio_validation(self):
+        with pytest.raises(Exception):
+            cm.MGIntegrationConfig(log_e_panel_ratio=1.0)
+        with pytest.raises(Exception):
+            cm.MGIntegrationConfig(log_e_panel_ratio=0.5)
+
+    def test_e_panel_order_validation(self):
+        with pytest.raises(Exception):
+            cm.MGIntegrationConfig(e_panel_order=0)

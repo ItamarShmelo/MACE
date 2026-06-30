@@ -32,7 +32,12 @@ WORKER_DETERMINISTIC = textwrap.dedent("""\
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=boundaries,
         weight_function=wf,
-        config=cm.MGIntegrationConfig(base_order=8, peak_max_depth=2))
+        config=cm.MGIntegrationConfig(
+            xi_order=8,
+            xi_tail_order=8,
+            ep_edge_order=8,
+            ep_interior_order=8,
+            e_panel_order=8))
 
     T = 10.0 * kev_kelvin
     S = mg.compute_sigma_matrix(kernel=kernel, num_angle_bins=2, T=T, Ne=1.0)

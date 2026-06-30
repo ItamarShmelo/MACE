@@ -26,30 +26,29 @@ from _units import kev, kev_kelvin
 KERNEL = ComptonKernelSolver()
 
 
-def _make_mg(bounds_erg, *, base_order=24, xi_order=None, tol=1e-4,
+def _config(order, **kwargs):
+    for key in ("xi_order", "xi_tail_order", "ep_edge_order",
+                "ep_interior_order", "e_panel_order"):
+        if kwargs.get(key) is None:
+            kwargs[key] = order
+    return cm.MGIntegrationConfig(**kwargs)
+
+
+def _make_mg(bounds_erg, *, order=24, xi_order=None, tol=1e-4,
              xi_peak_k=10.0):
     """Helper to build a ComptonMultigroupKernel with given config."""
     return cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds_erg,
         weight_function=cm.UniformWeightFunction(),
-        config=cm.MGIntegrationConfig(
-            base_order=base_order,
-            integration_tolerance=tol,
-            xi_order=xi_order,
-            xi_peak_k=xi_peak_k))
+        config=_config(order, xi_order=xi_order, xi_peak_k=xi_peak_k))
 
 
-def _reference_mg(bounds_erg, *, base_order=128):
+def _reference_mg(bounds_erg, *, order=128):
     """Build a high-order reference ComptonMultigroupKernel."""
     return cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds_erg,
         weight_function=cm.UniformWeightFunction(),
-        config=cm.MGIntegrationConfig(
-            base_order=base_order,
-            integration_tolerance=1e-10,
-            cold_temperature_order=base_order,
-            xi_order=base_order,
-            xi_peak_k=10.0))
+        config=_config(order, xi_peak_k=10.0))
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +64,7 @@ class TestElasticLike:
         bounds = [0.95 * E, 1.05 * E]
         T = 0.1 * kev_kelvin
 
-        mg = _make_mg(bounds, base_order=48, xi_order=48)
+        mg = _make_mg(bounds, order=48, xi_order=48)
         S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=8,
                                     T=T, Ne=1.0)
 
@@ -80,7 +79,7 @@ class TestElasticLike:
         T = 0.1 * kev_kelvin
         n_bins = 8
 
-        mg = _make_mg(bounds, base_order=48, xi_order=48)
+        mg = _make_mg(bounds, order=48, xi_order=48)
         S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins,
                                     T=T, Ne=1.0)
 
@@ -117,7 +116,7 @@ class TestInteriorPeak:
         T = 0.1 * kev_kelvin
         n_bins = 8
 
-        mg = _make_mg(bounds, base_order=48, xi_order=48)
+        mg = _make_mg(bounds, order=48, xi_order=48)
         S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins,
                                     T=T, Ne=1.0)
 
@@ -142,7 +141,7 @@ class TestInteriorPeak:
                          0.95 * E_out, 1.05 * E_out})
         T = 0.1 * kev_kelvin
 
-        mg = _make_mg(bounds, base_order=24)
+        mg = _make_mg(bounds, order=24)
         S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=8,
                                     T=T, Ne=1.0)
         assert np.all(np.isfinite(S)), "non-finite entries in interior-peak"
@@ -166,7 +165,7 @@ class TestPeakLeft:
         T = 0.1 * kev_kelvin
         n_bins = 8
 
-        mg = _make_mg(bounds, base_order=48, xi_order=48)
+        mg = _make_mg(bounds, order=48, xi_order=48)
         S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins,
                                     T=T, Ne=1.0)
 
@@ -201,7 +200,7 @@ class TestPeakRight:
         T = 0.1 * kev_kelvin
         n_bins = 8
 
-        mg = _make_mg(bounds, base_order=48, xi_order=48)
+        mg = _make_mg(bounds, order=48, xi_order=48)
         S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins,
                                     T=T, Ne=1.0)
 
@@ -247,7 +246,7 @@ class TestExtremeEnergyRatios:
         bounds = sorted({lo, mid, hi})
         T = 1.0 * kev_kelvin
 
-        mg = _make_mg(bounds, base_order=24)
+        mg = _make_mg(bounds, order=24)
         S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=4,
                                     T=T, Ne=1.0)
 

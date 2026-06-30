@@ -1,5 +1,5 @@
 """
-Bit-exactness verification for the compute_group_entry refactoring.
+Bit-exactness verification for the deterministic triple-integral refactoring.
 
 Compares post-refactor matrix output against pre-refactor snapshots using
 bitwise equality (np.testing.assert_array_equal).  The snapshots are
@@ -25,6 +25,15 @@ KERNEL = ComptonKernelSolver()
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "refactor_snapshots")
 
 
+def _low_order_config():
+    return cm.MGIntegrationConfig(
+        xi_order=8,
+        xi_tail_order=8,
+        ep_edge_order=8,
+        ep_interior_order=8,
+        e_panel_order=8)
+
+
 def _snapshot_path(name: str) -> str:
     return os.path.join(SNAPSHOT_DIR, f"{name}.npy")
 
@@ -48,7 +57,7 @@ def _hot_sigma():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds,
         weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-        config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
+        config=_low_order_config())
     return mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
 
 
@@ -58,7 +67,7 @@ def _hot_dsigma():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds,
         weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-        config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
+        config=_low_order_config())
     return mg.compute_dsigma_dT_matrix(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
 
 
@@ -68,21 +77,7 @@ def _cold_sigma():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds,
         weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-        config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
-    return mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T, Ne=1.0)
-
-
-def _flat_ep_sigma():
-    bounds = [0.5 * kev, 1.0 * kev, 5.0 * kev, 10.0 * kev, 50.0 * kev]
-    T = 10.0 * kev_kelvin
-    flat = cm.FlatEpConfig(density=64.0, min_points=8, max_points=256,
-                           mode=cm.FlatEpDensityMode.points_per_decade,
-                           flat_E=False)
-    mg = cm.ComptonMultigroupKernel(
-        energy_group_boundaries=bounds,
-        weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-        config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3,
-                                      flat_ep=flat))
+        config=_low_order_config())
     return mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T, Ne=1.0)
 
 
@@ -92,7 +87,7 @@ def _single_bin_sigma():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds,
         weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-        config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
+        config=_low_order_config())
     return mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
 
 
@@ -102,7 +97,7 @@ def _wien_sigma():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds,
         weight_function=cm.WienWeightFunction(cap_x=25.0),
-        config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
+        config=_low_order_config())
     return mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T, Ne=1.0)
 
 
@@ -110,7 +105,6 @@ SCENARIOS = {
     "hot_sigma":       _hot_sigma,
     "hot_dsigma":      _hot_dsigma,
     "cold_sigma":      _cold_sigma,
-    "flat_ep_sigma":   _flat_ep_sigma,
     "single_bin_sigma": _single_bin_sigma,
     "wien_sigma":      _wien_sigma,
 }
@@ -161,7 +155,7 @@ class TestNewPublicAPI:
         return cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
             weight_function=cm.UniformWeightFunction(),
-            config=cm.MGIntegrationConfig(base_order=8, integration_tolerance=1e-3))
+            config=_low_order_config())
 
     def test_xi_integral_sigma_shape(self, mg):
         E = 5.0 * kev

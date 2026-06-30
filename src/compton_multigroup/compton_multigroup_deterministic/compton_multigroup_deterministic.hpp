@@ -68,20 +68,6 @@
 
 namespace compton {
 
-/// Coordinate mapping for an E-axis integration panel.
-enum class EPanelMap {
-    Linear,     ///< legendre_integrate (uniform node spacing)
-    LogLower,   ///< log_legendre_integrate (nodes clustered near lower end)
-    LogUpper    ///< rlog_legendre_integrate (nodes clustered near upper end)
-};
-
-/// Descriptor for one E-axis integration sub-panel.
-struct EPanel {
-    double lo;       ///< Lower panel boundary [erg].
-    double hi;       ///< Upper panel boundary [erg].
-    EPanelMap map;   ///< Coordinate mapping for this panel.
-};
-
 /**
  * @brief Consolidated configuration for multigroup integration.
  *
@@ -248,7 +234,7 @@ private:
      * stopping in each direction once the angle-summed magnitude drops
      * below group_cutoff_ratio_ × peak_value.
      *
-     * Each (g, gp) pair is evaluated by compute_group_entry().
+     * Each selected (g, gp, angle) bin is evaluated by integrate_E_Ep_xi_bin().
      *
      * @param kernel         Point-wise kernel evaluator.
      * @param eval           Pointer-to-member: sigma_E or dsigma_E_dT.
@@ -301,32 +287,24 @@ private:
         KernelMultiplier const& multiplier) const;
 
     /**
-     * @brief Evaluate one (g -> gp) block of the scattering matrix.
+     * @brief Integrate over E, E', and a single ξ bin for one group pair.
      *
-     * Loops over angle bins, integrating w(E,T) * integrate_Ep_xi_bin
-     * over the incoming E group using feature-aware E-axis panels.
+     * Integrates w(E,T) * integrate_Ep_xi_bin over the incoming E group
+     * using feature-aware E-axis panels computed on demand for g.
      *
-     * @return Sum of |S(g, gp, a)| over angle bins (for cutoff).
+     * @return ∫_{E_lo}^{E_hi} w(E,T) ∫_{Ep_lo}^{Ep_hi} ∫_{xi_lo}^{xi_hi}
+     *         multiplier · kernel dξ dE' dE
      */
-    double compute_group_entry(
+    double integrate_E_Ep_xi_bin(
         ComptonKernelSolver const& kernel,
         ComptonResult (ComptonKernelSolver::*eval)(double, double, double, double, double) const,
         int g,
         int gp,
-        int num_angle_bins,
-        double dxi,
+        double xi_lo,
+        double xi_hi,
         double T,
         double Ne,
-        double inv_denom,
-        KernelMultiplier const& multiplier,
-        std::vector<EPanel> const& panels,
-        std::vector<double>& result) const;
-
-    /// Build E-axis panel descriptors for incoming group g.
-    /// Splits at the weight-function peak (if inside the group),
-    /// then assigns per-panel coordinate mappings
-    /// (Linear, LogLower, or LogUpper).
-    std::vector<EPanel> compute_E_panels(int g, double T) const;
+        KernelMultiplier const& multiplier) const;
 
 public:
     /** @brief Integrate the kernel over ξ bins for fixed (E, E'). */

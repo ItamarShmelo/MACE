@@ -296,40 +296,50 @@ The multigroup cross section
 $$\sigma(g \to g') = \frac{2\pi \int_{\Delta E_g} \int_{\Delta E_{g'}} \int_{\xi_i}^{\xi_{i+1}} w(E,T)\,\Sigma_E\, d\xi\, dE'\, dE}{\int_{\Delta E_g} w(E,T)\, dE}$$
 
 is evaluated by Gauss–Legendre quadrature on three finite intervals $(E, E', \xi)$.
-The E axis uses **feature-aware multi-panel GL** with per-panel coordinate
+The E axis uses **feature-aware sub-interval GL** with per-sub-interval coordinate
 mapping selection (linear, log, or rlog).  The E' axis uses a ridge-based
 three-region split (see [Ridge-Based E' Integration](#ridge-based-e-integration)
 below).  The $\xi$ axis uses peak-focused splitting.
 
-**E-axis panel splitting.**  For each incoming energy group $g$, the integration
-domain $[E_\text{lo}, E_\text{hi}]$ is subdivided at feature points from three
-sources:
+The deterministic implementation is organized as three nested integration
+helpers:
 
-1. **Group edges** (always present).
-2. **Weight function peak**: the energy at which $w(E,T)$ attains its maximum
-   (e.g. $E = 2.821 k_B T$ for Planck, $3 k_B T$ for Wien, none for Uniform),
-   obtained via `WeightFunction::peak_energy(T)`.
-3. **Cold Compton edge crossings**: incoming energies $E$ at which the
-   cold-Compton scattered energy $E'_\text{cold}(E, \mu)$ crosses an outgoing
-   group boundary, creating a sharp transition (kink) in the integrand.
-   The scattering-angle candidates $\mu$ include angle-bin edges and the
-   `xi_tail_rule_` GL nodes mapped into each bin.
+- `integrate_xi_bin` integrates over one $\xi$ bin for fixed $(E, E')$.
+- `integrate_Ep_xi_bin` integrates over an outgoing-energy interval and one
+  $\xi$ bin for fixed $E$, reusing the ridge-based $E'$ split.
+- `integrate_E_Ep_xi_bin` integrates the weighted numerator over the incoming
+  energy group for one selected $(g, g', \xi_i)$ bin, subdividing the E-axis
+  at boundary layers and the weight-function peak, and selecting the
+  appropriate coordinate mapping for each sub-interval.
 
-Split points are sorted, deduplicated (merging points closer than
-$10^{-10} \cdot \text{span}$), and each resulting panel $[a, b]$ is assigned a
-coordinate mapping:
+**E-axis sub-interval splitting.**  For each incoming energy group $g$,
+`integrate_E_Ep_xi_bin` subdivides the integration domain
+$[E_\text{lo}, E_\text{hi}]$ into up to four sub-intervals using two
+feature sources:
+
+1. **Boundary layers.**  The Compton ridge has significant thermal width
+   near the group edges.  Boundary-layer points
+   $\text{bl\_lo} = E_\text{lo} + k_b \cdot \sigma(E_\text{lo})$ and
+   $\text{bl\_hi} = E_\text{hi} - k_b \cdot \sigma(E_\text{hi})$
+   (where $\sigma$ is `ridge_thermal_width` at $\xi = -1$ and $k_b$ is
+   `e_boundary_k`) isolate thin edge regions from the interior.
+   When the boundary layers overlap ($\text{bl\_lo} \ge \text{bl\_hi}$),
+   no edge split is applied.
+2. **Weight function peak.**  If the weight-function peak energy (e.g.
+   $2.821\,k_B T$ for Planck) falls strictly inside the middle region,
+   that region is split at the peak so each piece has a monotone weight.
+
+Each sub-interval $[a, b]$ is integrated with `e_panel_order` GL points
+(default 12) using a coordinate mapping chosen by the weight profile:
 
 | Condition | Mapping | Rationale |
 |-----------|---------|-----------|
-| $b/a \le$ `log_e_panel_ratio` | **Linear** | Narrow panel; uniform nodes adequate |
+| $b/a \le$ `log_e_panel_ratio` | **Linear** | Narrow sub-interval; uniform nodes adequate |
 | $w(a,T) \ge w(b,T)$ | **LogLower** | Weight falls toward $b$; cluster nodes near $a$ |
 | $w(a,T) < w(b,T)$ | **LogUpper** | Weight rises toward $b$; cluster nodes near $b$ |
 
-Each panel is integrated with `e_panel_order` GL points (default 12).  Splitting
-at the weight peak creates monotone panels where log/rlog quadrature is most
-effective.  At cold temperatures, the number of Compton edge crossings inside
-the group increases, automatically adding resolution where the integrand has
-sharp transitions — no special cold E-axis rule is needed.
+Zero-width sub-intervals (where $b \le a$) are skipped, which naturally
+handles cases where boundary-layer points coincide with group edges.
 
 **Cold-temperature ξ regime:** Below 0.005 keV the Compton kernel narrows to
 near-Thomson scattering, requiring more quadrature nodes for the ξ axis.
@@ -356,8 +366,8 @@ it underflows; above `cap_x` the weight is held constant at its value at the cap
 
 Each weight function provides a `peak_energy(T)` method that returns the energy
 at which $w(E,T)$ attains its maximum (or `std::nullopt` for the uniform weight).
-This is used by the E-axis panel splitting to place a panel boundary at the
-weight peak, ensuring each panel has a monotone weight function.
+This is used by the E-axis sub-interval splitting to place a split point at the
+weight peak, ensuring each sub-interval has a monotone weight function.
 
 **Analytic denominator.**  The denominator $D(g) = \int_{\Delta E_g} w(E,T)\,dE$
 is computed analytically via `WeightFunction::compute_denominator()`, which uses
@@ -439,17 +449,14 @@ Groups entirely outside the retained interval return exactly zero in default mod
 The outward-from-peak group cutoff (`cutoff_ratio`) breaks immediately on these
 zeros, providing an automatic performance benefit.
 
-#### Right-Tail Cap
+#### Right Tail
 
-Beyond the retained interval, a right tail is always integrated from
-$\text{keep\_hi}$ up to $\min(E'_\text{hi},\; \max(\gamma'_C(\xi_\text{lo}) + k_\text{tail}\,\sigma_\text{lo},\; \gamma'_C(\xi_\text{hi}) + k_\text{tail}\,\sigma_\text{hi}))$
-using log Gauss-Legendre quadrature with `ep_edge_order` nodes.  The cap
-prevents the log-GL from spreading nodes over a huge dead zone where the
-integrand is zero, which caused poor convergence when the upper limit was
-the full group boundary $E'_\text{hi}$.
-
-The default `ep_k_tail = 10` (i.e. $2 \times k_\text{cut}$) suffices for
-T ≤ 10 keV; higher values (e.g. 15) provide reliable accuracy up to ~100 keV.
+Beyond the retained interval, the remaining target-group tail
+$[\text{keep\_hi}, E'_\text{hi}]$ is still integrated when non-empty.  It uses
+log Gauss-Legendre quadrature with `ep_edge_order` nodes when
+$E'_\text{hi}/\text{keep\_hi} > 2$, and ordinary linear GL otherwise.  There is
+no separate tail-width configuration; the retained interval is controlled by
+`ep_k_cut`.
 
 #### Three-Region Split
 
@@ -518,19 +525,17 @@ boundaries are defensively clipped, and empty intervals are skipped.
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `base_order` | 24 | GL panel order for E axes |
-| `cold_temperature_order` | 48 | GL order for E/ξ axes when T < 0.005 keV |
-| `xi_order` | `nullopt` → `base_order` | GL order for the ξ peak panel |
+| `xi_order` | `nullopt` → 48 | GL order for the ξ peak panel |
 | `xi_peak_k` | 5.0 | Half-width of the ξ peak window in sigma units |
 | `xi_tail_order` | `nullopt` → 16 | GL order for ξ tail sub-intervals |
 | `cutoff_ratio` | 1e-8 | Outward-from-peak early-termination ratio |
 | `ep_k_cut` | 5.0 | E' truncation width in sigma units (must be > 0) |
 | `ep_k_in` | 2.0 | E' interior-edge separator in sigma units (must be >= 0, < `ep_k_cut`) |
-| `ep_k_tail` | 10.0 | Right-tail extent in sigma units (must be >= `ep_k_cut`) |
-| `ep_edge_order` | `nullopt` → `base_order` | GL order for E' edge regions |
-| `ep_interior_order` | `nullopt` → `base_order` | GL order for E' ridge interior |
-| `e_panel_order` | `nullopt` → 12 | GL order for E-axis sub-panels (per panel) |
-| `log_e_panel_ratio` | 2.0 | Panel width ratio threshold for log/rlog-E mapping (must be > 1) |
+| `ep_edge_order` | `nullopt` → 24 | GL order for E' edge regions |
+| `ep_interior_order` | `nullopt` → 24 | GL order for E' ridge interior |
+| `e_panel_order` | `nullopt` → 12 | GL order for E-axis sub-intervals |
+| `log_e_panel_ratio` | 2.0 | Sub-interval width ratio threshold for log/rlog-E mapping (must be > 1) |
+| `e_boundary_k` | 5.0 | Incoming-E boundary-layer width in sigma units |
 
 All E' sub-regions use fixed-order GL (no adaptive refinement):
 
