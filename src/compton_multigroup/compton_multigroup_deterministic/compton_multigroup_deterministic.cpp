@@ -1,12 +1,11 @@
 #include "compton_multigroup/compton_multigroup_deterministic/compton_multigroup_deterministic.hpp"
 #include "compton_common/compton_common.hpp"
+#include "utilities/compute_logger.hpp"
 
 #include <algorithm>
 #include <cassert>
-#include <chrono>
 #include <cmath>
-#include <cstdio>
-#include <ctime>
+#include <format>
 #include <numbers>
 #include <stdexcept>
 
@@ -137,15 +136,6 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
 
 
 namespace {
-
-void log_ts(std::FILE* f) {
-    auto const now = std::chrono::system_clock::now();
-    auto const t = std::chrono::system_clock::to_time_t(now);
-    std::tm tm_buf{};
-    localtime_r(&t, &tm_buf);
-    std::fprintf(f, "%02d:%02d:%02d",
-        tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec);
-}
 
 template<typename F>
 double integrate_Ep_ridge(
@@ -603,15 +593,9 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     // Uniform angle-bin width: ξ ∈ [-1, 1] split into num_angle_bins slices.
     double const dxi = 2.0 / static_cast<double>(num_angle_bins);
 
-    auto const wall_t0 = std::chrono::steady_clock::now();
-    std::FILE* log_file = std::fopen("compton_multigroup.log", "a");
-    if (log_file) {
-        log_ts(log_file);
-        std::fprintf(log_file,
-            " [compton] deterministic: G=%d, angle_bins=%d, T=%.4g keV\n",
-            G, num_angle_bins, T / units::kev_kelvin);
-        std::fflush(log_file);
-    }
+    ComputeLogger logger("deterministic",
+        std::format("G={}, angle_bins={}, T={:.4g} keV",
+            G, num_angle_bins, T / units::kev_kelvin));
 
     // --- Main loop over incoming groups g ---
     #pragma omp parallel for schedule(dynamic)
@@ -651,15 +635,7 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
         }
     }
 
-    if (log_file) {
-        auto const wall_t1 = std::chrono::steady_clock::now();
-        double const elapsed =
-            std::chrono::duration<double>(wall_t1 - wall_t0).count();
-        log_ts(log_file);
-        std::fprintf(log_file,
-            " [compton] deterministic: done in %.1f s\n", elapsed);
-        std::fclose(log_file);
-    }
+    logger.done();
 
     return result;
 }
