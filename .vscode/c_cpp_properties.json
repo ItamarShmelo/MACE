@@ -12,9 +12,9 @@
                 "/usr/include"
             ],
             "defines": [],
-            "compilerPath": "/usr/bin/g++",
+            "compilerPath": "/software/x86_64/5.14.0/gcc/15.1.0/bin/c++",
             "cStandard": "c17",
-            "cppStandard": "c++20",
+            "cppStandard": "c++23",
             "intelliSenseMode": "linux-gcc-x64",
             "compileCommands": "${workspaceFolder}/build/compile_commands.json"
         }

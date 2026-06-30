@@ -1,0 +1,28 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+
+IndentWidth: 4
+ColumnLimit: 80
+
+QualifierAlignment: Custom
+QualifierOrder: ['inline', 'static', 'constexpr', 'type', 'const', 'volatile', 'restrict']
+
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+
+PointerAlignment: Left
+AlignAfterOpenBracket: AlwaysBreak
+
+BinPackParameters: false
+BinPackArguments: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowAllArgumentsOnNextLine: false
+
+PackConstructorInitializers: Never
+
+AllowShortFunctionsOnASingleLine: InlineOnly

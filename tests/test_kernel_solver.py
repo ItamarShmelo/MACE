@@ -6,18 +6,15 @@ regimes (asymptotic double/DD, power series double/DD) for both sigma_E
 and dsigma_E_dT, and that custom threshold parameters work.
 """
 
-import sys
-
+import compton_matrix._compton_differential_cross_section as cq
 import numpy as np
 import pytest
-
-sys.path.insert(0, "cpp_modules")
-
-import _compton_differential_cross_section as cq
-from _compton_differential_cross_section import ComptonPowerSeries
-from _compton_differential_cross_section import ComptonKernelAsymptoticSeries
-from _compton_differential_cross_section import ComptonKernelSolver
-from _units import kev, kev_kelvin, me_c2
+from compton_matrix._compton_differential_cross_section import (
+    ComptonKernelAsymptoticSeries,
+    ComptonKernelSolver,
+    ComptonPowerSeries,
+)
+from compton_matrix._units import kev, kev_kelvin
 
 QUAD_REF = cq.ComptonKernelQuadrature(256, cq.QuadratureForm.PostIBP)
 DD_SERIES = ComptonPowerSeries(high_precision=True)
@@ -259,16 +256,14 @@ BOUNDARY_POINTS = [
     (10.0, 10.5, 0.5, 110.0, 0.0347),  # just below threshold -> asymptotic
     (10.0, 10.5, 0.5, 112.0, 0.0354),  # just above threshold -> power series
     (10.0, 10.5, 0.5, 120.0, 0.0379),  # comfortably above -> power series
-    (10.0, 10.5, 0.0, 80.0, 0.0308),   # well below threshold -> asymptotic
+    (10.0, 10.5, 0.0, 80.0, 0.0308),  # well below threshold -> asymptotic
 ]
 
 
 class TestDispatchBoundary:
     """Points straddling tau_alpha_max = 0.035 must all match Q256."""
 
-    @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev,_ta",
-                             BOUNDARY_POINTS,
-                             ids=[f"ta~{p[4]}" for p in BOUNDARY_POINTS])
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev,_ta", BOUNDARY_POINTS, ids=[f"ta~{p[4]}" for p in BOUNDARY_POINTS])
     def test_sigma_E(self, E_kev, Ep_kev, xi, T_kev, _ta):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
         qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
@@ -278,9 +273,7 @@ class TestDispatchBoundary:
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"
 
-    @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev,_ta",
-                             BOUNDARY_POINTS,
-                             ids=[f"ta~{p[4]}" for p in BOUNDARY_POINTS])
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev,_ta", BOUNDARY_POINTS, ids=[f"ta~{p[4]}" for p in BOUNDARY_POINTS])
     def test_dsigma_E_dT(self, E_kev, Ep_kev, xi, T_kev, _ta):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
         qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
@@ -295,7 +288,7 @@ class TestDispatchBoundary:
 
 ULTRA_LOW_GAMMA_POINTS = [
     # gamma_min < 1e-4, cold plasma -- the roundoff estimator drives DD escalation
-    (0.04, 0.042, 0.0, 0.5),   # gamma~7.8e-5
+    (0.04, 0.042, 0.0, 0.5),  # gamma~7.8e-5
     (0.05, 0.0525, 0.0, 0.5),  # gamma~9.8e-5
 ]
 
@@ -340,10 +333,8 @@ class TestVecMethods:
 
         for i, Ep in enumerate(Ep_arr):
             scalar = kernel.sigma_E(E, float(Ep), xi, T, Ne)
-            assert values[i] == pytest.approx(scalar.value, rel=0, abs=0), \
-                f"value mismatch at i={i}"
-            assert errors[i] == pytest.approx(scalar.estimated_abs_error, rel=0, abs=0), \
-                f"error mismatch at i={i}"
+            assert values[i] == pytest.approx(scalar.value, rel=0, abs=0), f"value mismatch at i={i}"
+            assert errors[i] == pytest.approx(scalar.estimated_abs_error, rel=0, abs=0), f"error mismatch at i={i}"
 
     @pytest.mark.parametrize("name,make_kernel", VEC_KERNELS, ids=[k[0] for k in VEC_KERNELS])
     def test_dsigma_E_dT_vec(self, name, make_kernel):
@@ -356,7 +347,5 @@ class TestVecMethods:
 
         for i, Ep in enumerate(Ep_arr):
             scalar = kernel.dsigma_E_dT(E, float(Ep), xi, T, Ne)
-            assert values[i] == pytest.approx(scalar.value, rel=0, abs=0), \
-                f"value mismatch at i={i}"
-            assert errors[i] == pytest.approx(scalar.estimated_abs_error, rel=0, abs=0), \
-                f"error mismatch at i={i}"
+            assert values[i] == pytest.approx(scalar.value, rel=0, abs=0), f"value mismatch at i={i}"
+            assert errors[i] == pytest.approx(scalar.estimated_abs_error, rel=0, abs=0), f"error mismatch at i={i}"

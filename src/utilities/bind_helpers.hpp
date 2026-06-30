@@ -30,11 +30,9 @@ namespace compton::bind {
  * @param num_angle_bins  Number of angle bins (A).
  * @param fn              Callable that produces the flat data.
  */
-template<typename Fn>
-py::array_t<double> flat_to_numpy_3d(
-    int const G,
-    int const num_angle_bins,
-    Fn&& fn)
+template <typename Fn>
+py::array_t<double>
+flat_to_numpy_3d(int const G, int const num_angle_bins, Fn&& fn)
 {
     std::vector<double> flat = std::forward<Fn>(fn)();
     py::array_t<double> arr({G, G, num_angle_bins});
@@ -54,10 +52,8 @@ py::array_t<double> flat_to_numpy_3d(
  * @param G   Number of energy groups.
  * @param fn  Callable that produces the flat data.
  */
-template<typename Fn>
-py::array_t<double> flat_to_numpy_2d(
-    int const G,
-    Fn&& fn)
+template <typename Fn>
+py::array_t<double> flat_to_numpy_2d(int const G, Fn&& fn)
 {
     std::vector<double> flat = std::forward<Fn>(fn)();
     py::array_t<double> arr({G, G});
@@ -79,7 +75,7 @@ py::array_t<double> flat_to_numpy_2d(
  * @tparam Class           Kernel class (e.g. ComptonKernelQuadrature).
  * @tparam MemberFunction  Pointer-to-member returning ComptonResult.
  */
-template<typename Class, typename MemberFunction>
+template <typename Class, typename MemberFunction>
 py::tuple vectorize_sigma(
     Class const& self,
     double E,

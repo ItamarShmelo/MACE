@@ -6,16 +6,11 @@ Validates:
   2. compute_denominator(E_left, E_right, T) against scipy adaptive quadrature.
 """
 
-import sys
-
+import compton_matrix._compton_multigroup as cm
 import numpy as np
 import pytest
+from compton_matrix._units import k_boltz, kev_kelvin
 from scipy.integrate import quad as scipy_quad
-
-sys.path.insert(0, "cpp_modules")
-
-import _compton_multigroup as cm
-from _units import k_boltz, kev_kelvin
 
 CAP_X = 25.0
 W0 = CAP_X**3 / np.expm1(CAP_X)
@@ -24,6 +19,7 @@ W0 = CAP_X**3 / np.expm1(CAP_X)
 # ---------------------------------------------------------------------------
 # 1. weight(E, T)
 # ---------------------------------------------------------------------------
+
 
 class TestWeight:
     """Verify the capped Planck weight function."""
@@ -53,6 +49,7 @@ class TestWeight:
 # ---------------------------------------------------------------------------
 # 2. compute_denominator(E_left, E_right, T)
 # ---------------------------------------------------------------------------
+
 
 class TestComputeDenominator:
     """Verify the denominator integral against scipy adaptive quadrature."""
@@ -108,6 +105,7 @@ class TestComputeDenominator:
 # ---------------------------------------------------------------------------
 # 3. UniformWeightFunction
 # ---------------------------------------------------------------------------
+
 
 class TestUniformWeight:
     """Verify the uniform (flat) weight function."""
@@ -223,9 +221,7 @@ class TestWienDenominator:
         assert computed == pytest.approx(expected, rel=1e-10)
 
     @pytest.mark.parametrize("T_kev", [1.0, 10.0, 100.0])
-    @pytest.mark.parametrize(
-        "x_range", [(1e-6, 1e-5), (0.001, 0.01), (0.01, 0.1)]
-    )
+    @pytest.mark.parametrize("x_range", [(1e-6, 1e-5), (0.001, 0.01), (0.01, 0.1)])
     def test_small_x(self, T_kev, x_range):
         """Small-x regime where the closed-form antiderivative loses digits."""
         T = T_kev * kev_kelvin
@@ -240,3 +236,38 @@ class TestWienDenominator:
         expected = kT * ref
 
         assert computed == pytest.approx(expected, rel=1e-9, abs=0)
+
+
+# ---------------------------------------------------------------------------
+# 5. peak_energy()
+# ---------------------------------------------------------------------------
+
+
+class TestPeakEnergy:
+    """Verify peak_energy(T) for all weight functions."""
+
+    def test_planck_peak_energy(self):
+        wf = cm.PlanckWeightFunction(cap_x=25.0)
+        T = 10.0 * kev_kelvin
+        E_peak = wf.peak_energy(T)
+        assert E_peak == pytest.approx(2.821439 * k_boltz * T, rel=1e-6)
+
+    def test_uniform_peak_energy(self):
+        wf = cm.UniformWeightFunction()
+        assert wf.peak_energy(10.0 * kev_kelvin) is None
+
+    def test_wien_peak_energy(self):
+        wf = cm.WienWeightFunction(cap_x=25.0)
+        T = 10.0 * kev_kelvin
+        E_peak = wf.peak_energy(T)
+        assert E_peak == pytest.approx(3.0 * k_boltz * T, rel=1e-6)
+
+    @pytest.mark.parametrize("T_kev", [0.1, 1.0, 10.0, 100.0])
+    def test_planck_peak_scales_linearly(self, T_kev):
+        """Peak energy should scale linearly with T."""
+        wf = cm.PlanckWeightFunction(cap_x=25.0)
+        T = T_kev * kev_kelvin
+        E_peak = wf.peak_energy(T)
+        T2 = 2.0 * T
+        E_peak2 = wf.peak_energy(T2)
+        assert E_peak2 == pytest.approx(2.0 * E_peak, rel=1e-14)

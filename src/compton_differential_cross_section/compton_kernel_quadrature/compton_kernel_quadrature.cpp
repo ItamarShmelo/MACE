@@ -4,7 +4,8 @@
 namespace compton {
 
 ComptonKernelQuadrature::ComptonKernelQuadrature(int NL, QuadratureForm form)
-    : NL_(NL), form_(form)
+    : NL_(NL),
+      form_(form)
 {
     if (NL != 32 && NL != 64 && NL != 128 && NL != 256)
         throw std::invalid_argument("NL must be one of: 32, 64, 128, 256");
@@ -28,8 +29,8 @@ double ComptonKernelQuadrature::compute_IQ_post_ibp(
         double const inv_sqrt_Rm = 1.0 / std::sqrt(Rm);
 
         double const tau_a = tau * p.a;
-        double const H = (p.A_plus - rp / tau_a) * inv_sqrt_Rp
-                       + (-p.A_minus + rm / tau_a) * inv_sqrt_Rm;
+        double const H = (p.A_plus - rp / tau_a) * inv_sqrt_Rp +
+                         (-p.A_minus + rm / tau_a) * inv_sqrt_Rm;
 
         return tau * H;
     };
@@ -63,7 +64,8 @@ double ComptonKernelQuadrature::compute_IQ_pre_ibp(
         double const num_plus = t_minus * p.s + one_plus_xi;
         double const num_minus = t_plus * p.s - one_plus_xi;
 
-        double const bracket_32 = (num_plus * inv_Rm_32 + num_minus * inv_Rp_32) / a2;
+        double const bracket_32 =
+            (num_plus * inv_Rm_32 + num_minus * inv_Rp_32) / a2;
         double const bracket_12 = p.G * (inv_sqrt_Rp - inv_sqrt_Rm);
 
         double const F = const_term + bracket_32 + bracket_12;
@@ -86,7 +88,8 @@ ComptonResult ComptonKernelQuadrature::sigma_E(
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
-    KershawParams<double> const p = compute_params<double>(gamma, gamma_p, xi, tau);
+    KershawParams<double> const p =
+        compute_params<double>(gamma, gamma_p, xi, tau);
     double const sigma0 = sigma0_E(E, tau, p.lambda_plus, Ne);
 
     if (form_ == QuadratureForm::PostIntegrationByParts) {
@@ -95,7 +98,8 @@ ComptonResult ComptonKernelQuadrature::sigma_E(
         double const value = sigma0 * (p.Psi + IQ_hi);
 
         double const abs_err = std::abs(sigma0) * std::abs(IQ_hi - IQ_lo);
-        double const rel_err = abs_err / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
+        double const rel_err =
+            abs_err / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
 
         return ComptonResult{value, abs_err, rel_err};
     } else {
@@ -104,7 +108,8 @@ ComptonResult ComptonKernelQuadrature::sigma_E(
         double const value = sigma0 * IQ_hi;
 
         double const abs_err = std::abs(sigma0) * std::abs(IQ_hi - IQ_lo);
-        double const rel_err = abs_err / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
+        double const rel_err =
+            abs_err / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
 
         return ComptonResult{value, abs_err, rel_err};
     }
@@ -140,8 +145,10 @@ double ComptonKernelQuadrature::compute_dIQ_post_ibp(
         double const lam = p.lambda_plus + rho;
         double const dlnSig0 = (lam - kappa_val) / tau2 - 3.0 / tau;
 
-        double const plus_term = (dlnSig0 * A_plus_rho + B_plus / tau2) * inv_sqrt_Rp;
-        double const minus_term = (dlnSig0 * A_minus_rho - B_minus / tau2) * inv_sqrt_Rm;
+        double const plus_term =
+            (dlnSig0 * A_plus_rho + B_plus / tau2) * inv_sqrt_Rp;
+        double const minus_term =
+            (dlnSig0 * A_minus_rho - B_minus / tau2) * inv_sqrt_Rm;
 
         return tau * (plus_term + minus_term);
     };
@@ -177,7 +184,8 @@ double ComptonKernelQuadrature::compute_dIQ_pre_ibp(
         double const num_plus = t_minus * p.s + one_plus_xi;
         double const num_minus = t_plus * p.s - one_plus_xi;
 
-        double const bracket_32 = (num_plus * inv_Rm_32 + num_minus * inv_Rp_32) / a2;
+        double const bracket_32 =
+            (num_plus * inv_Rm_32 + num_minus * inv_Rp_32) / a2;
         double const bracket_12 = p.G * (inv_sqrt_Rp - inv_sqrt_Rm);
 
         double const F = const_term + bracket_32 + bracket_12;
@@ -205,12 +213,14 @@ ComptonResult ComptonKernelQuadrature::dsigma_E_dT(
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
-    KershawParams<double> const p = compute_params<double>(gamma, gamma_p, xi, tau);
+    KershawParams<double> const p =
+        compute_params<double>(gamma, gamma_p, xi, tau);
     double const sigma0 = sigma0_E(E, tau, p.lambda_plus, Ne);
     double const kappa_val = kappa_ratio(tau);
 
     if (form_ == QuadratureForm::PostIntegrationByParts) {
-        double const dlnSig0 = (p.lambda_plus - kappa_val) / (tau * tau) - 3.0 / tau;
+        double const dlnSig0 =
+            (p.lambda_plus - kappa_val) / (tau * tau) - 3.0 / tau;
         double const dPsi_dtau = 2.0 * gamma * gamma_p / p.q;
         double const non_integral = dlnSig0 * p.Psi + dPsi_dtau;
 
@@ -218,8 +228,10 @@ ComptonResult ComptonKernelQuadrature::dsigma_E_dT(
         double const dIQ_lo = compute_dIQ_post_ibp(p, tau, NL_ / 2, kappa_val);
         double const value = sigma0 * (non_integral + dIQ_hi) * dtau_dT;
 
-        double const abs_err = std::abs(sigma0) * std::abs(dIQ_hi - dIQ_lo) * dtau_dT;
-        double const rel_err = abs_err / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
+        double const abs_err =
+            std::abs(sigma0) * std::abs(dIQ_hi - dIQ_lo) * dtau_dT;
+        double const rel_err =
+            abs_err / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
         return ComptonResult{value, abs_err, rel_err};
 
     } else {
@@ -227,8 +239,10 @@ ComptonResult ComptonKernelQuadrature::dsigma_E_dT(
         double const dIQ_lo = compute_dIQ_pre_ibp(p, tau, NL_ / 2, kappa_val);
         double const value = sigma0 * dIQ_hi * dtau_dT;
 
-        double const abs_err = std::abs(sigma0) * std::abs(dIQ_hi - dIQ_lo) * dtau_dT;
-        double const rel_err = abs_err / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
+        double const abs_err =
+            std::abs(sigma0) * std::abs(dIQ_hi - dIQ_lo) * dtau_dT;
+        double const rel_err =
+            abs_err / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
         return ComptonResult{value, abs_err, rel_err};
     }
 }

@@ -50,8 +50,8 @@ namespace compton {
 
 /// Selects which integral form to use for I_Q.
 enum class QuadratureForm {
-    PostIntegrationByParts,  ///< Default: IBP-transformed, O(1/√R) integrand
-    PreIntegrationByParts    ///< Original O(1/R^{3/2}) integrand
+    PostIntegrationByParts, ///< Default: IBP-transformed, O(1/√R) integrand
+    PreIntegrationByParts   ///< Original O(1/R^{3/2}) integrand
 };
 
 /**
@@ -63,13 +63,14 @@ enum class QuadratureForm {
  * quadratures (order NL and NL/2) for the Richardson-style error estimate.
  */
 class ComptonKernelQuadrature {
-public:
+  public:
     /**
      * @param NL    Number of Gauss-Laguerre nodes (32, 64, 128, or 256).
      * @param form  Which integral representation to evaluate.
      */
-    ComptonKernelQuadrature(int NL,
-                            QuadratureForm form = QuadratureForm::PostIntegrationByParts);
+    ComptonKernelQuadrature(
+        int NL,
+        QuadratureForm form = QuadratureForm::PostIntegrationByParts);
 
     /**
      * @brief Evaluate Σ_E(E → E', ξ; T, Nₑ).
@@ -81,11 +82,12 @@ public:
      * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
      * @return ComptonResult with value and error estimates
      */
-    ComptonResult sigma_E(double const E,
-                        double const E_prime,
-                        double const xi,
-                        double const T,
-                        double const Ne) const;
+    ComptonResult sigma_E(
+        double const E,
+        double const E_prime,
+        double const xi,
+        double const T,
+        double const Ne) const;
 
     /**
      * @brief Evaluate ∂Σ_E/∂T at a single phase-space point.
@@ -102,13 +104,14 @@ public:
      * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
      * @return ComptonResult with value and error estimates
      */
-    ComptonResult dsigma_E_dT(double const E,
-                             double const E_prime,
-                             double const xi,
-                             double const T,
-                             double const Ne) const;
+    ComptonResult dsigma_E_dT(
+        double const E,
+        double const E_prime,
+        double const xi,
+        double const T,
+        double const Ne) const;
 
-private:
+  private:
     /**
      * @brief Post-IBP Gauss-Laguerre quadrature for I_Q.
      *
@@ -121,7 +124,10 @@ private:
      * The full kernel value is then:
      *   Σ_E = Σ₀ · (Ψ + I_Q^{post})
      */
-    double compute_IQ_post_ibp(KershawParams<double> const& p, double const tau, int const NL) const;
+    double compute_IQ_post_ibp(
+        KershawParams<double> const& p,
+        double const tau,
+        int const NL) const;
 
     /**
      * @brief Pre-IBP Gauss-Laguerre quadrature for I_Q.
@@ -138,7 +144,10 @@ private:
      * The full kernel value is then:
      *   Σ_E = Σ₀ · I_Q^{pre}
      */
-    double compute_IQ_pre_ibp(KershawParams<double> const& p, double const tau, int const NL) const;
+    double compute_IQ_pre_ibp(
+        KershawParams<double> const& p,
+        double const tau,
+        int const NL) const;
 
     /**
      * @brief Post-IBP derivative quadrature for ∂I_Q/∂τ.
@@ -154,8 +163,11 @@ private:
      *   dlnΣ₀(ρ) = (λ₊ + ρ − κ)/τ² − 3/τ
      *   B₊(ρ) = s/a² + r₊/a,   B₋(ρ) = r₋/a − s/a²
      */
-    double compute_dIQ_post_ibp(KershawParams<double> const& p, double const tau,
-                                 int const NL, double const kappa_val) const;
+    double compute_dIQ_post_ibp(
+        KershawParams<double> const& p,
+        double const tau,
+        int const NL,
+        double const kappa_val) const;
 
     /**
      * @brief Pre-IBP derivative quadrature for ∂I_Q/∂τ.
@@ -166,8 +178,11 @@ private:
      * so the derivative integral is:
      *   τ · Σᵢ wᵢ · weight(xᵢ) · F(xᵢ)
      */
-    double compute_dIQ_pre_ibp(KershawParams<double> const& p, double const tau,
-                                int const NL, double const kappa_val) const;
+    double compute_dIQ_pre_ibp(
+        KershawParams<double> const& p,
+        double const tau,
+        int const NL,
+        double const kappa_val) const;
 
     int NL_;
     QuadratureForm form_;

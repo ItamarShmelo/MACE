@@ -85,12 +85,14 @@ struct MCIntegrationConfig {
  * merge order.
  */
 class ComptonMonteCarloKernel {
-public:
+  public:
     /**
      * @brief Construct from energy group boundaries and a weight function.
      *
-     * @param energy_group_boundaries  G+1 strictly increasing values [erg], all > 0.
-     * @param weight_function          Shared pointer to a WeightFunction subclass.
+     * @param energy_group_boundaries  G+1 strictly increasing values [erg], all
+     * > 0.
+     * @param weight_function          Shared pointer to a WeightFunction
+     * subclass.
      * @param config                   MC integration configuration.
      * @throws std::invalid_argument on invalid boundaries or config.
      */
@@ -106,20 +108,26 @@ public:
     std::vector<double> const& group_centers() const { return group_centers_; }
 
     /** @brief Energy group boundaries [erg], length G+1. */
-    std::vector<double> const& group_boundaries() const { return group_boundaries_; }
+    std::vector<double> const& group_boundaries() const
+    {
+        return group_boundaries_;
+    }
 
     /**
      * @brief Compute the multigroup-multiangle σ matrix via MC.
      *
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
      * @param T               Electron temperature [K].
-     * @param Ne              Electron density [cm⁻³] (forwarded to multiplier only).
-     * @param multiplier      Pointwise kernel multiplier applied before accumulation.
+     * @param Ne              Electron density [cm⁻³] (forwarded to multiplier
+     * only).
+     * @param multiplier      Pointwise kernel multiplier applied before
+     * accumulation.
      * @return Flat vector of size G×G×N_angles, row-major [g][g'][angle].
      */
     std::vector<double> compute_sigma_matrix(
         int num_angle_bins,
-        double T, double Ne,
+        double T,
+        double Ne,
         KernelMultiplier const& multiplier) const;
 
     /**
@@ -128,7 +136,8 @@ public:
      * Equivalent to compute_sigma_matrix(1, T, Ne, multiplier) reshaped to G×G.
      */
     std::vector<double> compute_sigma_matrix(
-        double T, double Ne,
+        double T,
+        double Ne,
         KernelMultiplier const& multiplier) const;
 
     /**
@@ -142,25 +151,30 @@ public:
      *
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
      * @param T               Electron temperature [K].
-     * @param Ne              Electron density [cm⁻³] (forwarded to multiplier only).
-     * @param multiplier      Pointwise kernel multiplier applied before accumulation.
+     * @param Ne              Electron density [cm⁻³] (forwarded to multiplier
+     * only).
+     * @param multiplier      Pointwise kernel multiplier applied before
+     * accumulation.
      * @return Flat vector of size G×G×N_angles, row-major [g][g'][angle].
      */
     std::vector<double> compute_dsigma_dT_matrix(
         int num_angle_bins,
-        double T, double Ne,
+        double T,
+        double Ne,
         KernelMultiplier const& multiplier) const;
 
     /**
      * @brief Compute the angle-integrated ∂σ/∂T matrix via MC.
      *
-     * Equivalent to compute_dsigma_dT_matrix(1, T, Ne, multiplier) reshaped to G×G.
+     * Equivalent to compute_dsigma_dT_matrix(1, T, Ne, multiplier) reshaped to
+     * G×G.
      */
     std::vector<double> compute_dsigma_dT_matrix(
-        double T, double Ne,
+        double T,
+        double Ne,
         KernelMultiplier const& multiplier) const;
 
-private:
+  private:
     /**
      * @brief Core MC integration loop parameterized by a multiplier callable.
      *
@@ -169,7 +183,7 @@ private:
      *         For dsigma/dT it wraps KernelMultiplier times the derivative
      *         weight ((λ − κ)/τ² − 3/τ) · dτ/dT.
      */
-    template<typename MultiplierFn>
+    template <typename MultiplierFn>
     std::vector<double> mc_integrate(
         int num_angle_bins,
         double T,

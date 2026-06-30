@@ -1,7 +1,8 @@
-#include <pybind11/pybind11.h>
 #include "utilities/units.hpp"
+#include <pybind11/pybind11.h>
 
-PYBIND11_MODULE(_units, m) {
+PYBIND11_MODULE(_units, m)
+{
     m.doc() = "Physical constants in CGS units";
 
     m.attr("me") = units::me;

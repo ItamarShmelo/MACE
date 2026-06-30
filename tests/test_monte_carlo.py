@@ -8,17 +8,12 @@ Validates ComptonMonteCarloKernel against:
 """
 
 import math
-import sys
 
+import compton_matrix._compton_multigroup as cm
+import compton_matrix._compton_multigroup as mc
 import numpy as np
 import pytest
-
-sys.path.insert(0, "cpp_modules")
-
-import _compton_multigroup as mc
-import _compton_multigroup as cm
-from _units import kev, kev_kelvin
-
+from compton_matrix._units import kev, kev_kelvin
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -38,15 +33,14 @@ def _make_mc(bounds, *, weight_function=None, num_samples=NUM_SAMPLES, seed=SEED
     return mc.ComptonMonteCarloKernel(
         energy_group_boundaries=bounds,
         weight_function=weight_function,
-        config=mc.MCIntegrationConfig(
-            num_samples=num_samples,
-            seed=seed,
-            discard_out_of_grid=True))
+        config=mc.MCIntegrationConfig(num_samples=num_samples, seed=seed, discard_out_of_grid=True),
+    )
 
 
 # ---------------------------------------------------------------------------
 # 1. Weight function invariance
 # ---------------------------------------------------------------------------
+
 
 class TestWeightFunctionInvariance:
     """Wien vs Planck produce different but valid matrices."""
@@ -55,26 +49,23 @@ class TestWeightFunctionInvariance:
         T = 10.0 * kev_kelvin
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
 
-        mc_wien = _make_mc(
-            bounds, weight_function=cm.WienWeightFunction(cap_x=25.0))
-        mc_planck = _make_mc(
-            bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0))
+        mc_wien = _make_mc(bounds, weight_function=cm.WienWeightFunction(cap_x=25.0))
+        mc_planck = _make_mc(bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0))
 
         S_wien = mc_wien.compute_sigma_matrix(T=T, Ne=1.0)
         S_planck = mc_planck.compute_sigma_matrix(T=T, Ne=1.0)
 
         assert S_wien.shape == S_planck.shape
-        assert not np.allclose(S_wien, S_planck, rtol=0.01, atol=0), \
+        assert not np.allclose(S_wien, S_planck, rtol=0.01, atol=0), (
             "Wien and Planck should produce meaningfully different matrices"
+        )
 
     def test_all_weights_positive(self):
         """All weight functions produce non-negative matrices."""
         T = 10.0 * kev_kelvin
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
 
-        for wf in [cm.WienWeightFunction(cap_x=25.0),
-                    cm.PlanckWeightFunction(cap_x=25.0),
-                    cm.UniformWeightFunction()]:
+        for wf in [cm.WienWeightFunction(cap_x=25.0), cm.PlanckWeightFunction(cap_x=25.0), cm.UniformWeightFunction()]:
             mc_obj = _make_mc(bounds, weight_function=wf)
             S = mc_obj.compute_sigma_matrix(T=T, Ne=1.0)
             assert np.all(S >= 0), f"negative entries with {type(wf).__name__}"
@@ -84,19 +75,17 @@ class TestWeightFunctionInvariance:
         T = 10.0 * kev_kelvin
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
 
-        for wf in [cm.WienWeightFunction(cap_x=25.0),
-                    cm.PlanckWeightFunction(cap_x=25.0),
-                    cm.UniformWeightFunction()]:
+        for wf in [cm.WienWeightFunction(cap_x=25.0), cm.PlanckWeightFunction(cap_x=25.0), cm.UniformWeightFunction()]:
             mc_obj = _make_mc(bounds, weight_function=wf)
             S = mc_obj.compute_sigma_matrix(T=T, Ne=1.0)
             rs = S.sum(axis=1)
-            assert np.all(rs > 0), \
-                f"non-positive row sums with {type(wf).__name__}"
+            assert np.all(rs > 0), f"non-positive row sums with {type(wf).__name__}"
 
 
 # ---------------------------------------------------------------------------
 # 2. Kernel multiplier correctness
 # ---------------------------------------------------------------------------
+
 
 class TestKernelMultiplier:
     """Explicit ConstantMultiplier matches default-argument call."""
@@ -108,8 +97,7 @@ class TestKernelMultiplier:
         mc_explicit = _make_mc(BOUNDARIES_ERG, seed=99)
 
         S_default = mc_default.compute_sigma_matrix(T=T, Ne=1.0)
-        S_explicit = mc_explicit.compute_sigma_matrix(
-            T=T, Ne=1.0, multiplier=cm.ConstantMultiplier())
+        S_explicit = mc_explicit.compute_sigma_matrix(T=T, Ne=1.0, multiplier=cm.ConstantMultiplier())
 
         np.testing.assert_allclose(S_default, S_explicit, rtol=1e-14, atol=0)
 
@@ -119,11 +107,8 @@ class TestKernelMultiplier:
         mc_default = _make_mc(BOUNDARIES_ERG, seed=99)
         mc_explicit = _make_mc(BOUNDARIES_ERG, seed=99)
 
-        S_default = mc_default.compute_sigma_matrix(
-            num_angle_bins=4, T=T, Ne=1.0)
-        S_explicit = mc_explicit.compute_sigma_matrix(
-            num_angle_bins=4, T=T, Ne=1.0,
-            multiplier=cm.ConstantMultiplier())
+        S_default = mc_default.compute_sigma_matrix(num_angle_bins=4, T=T, Ne=1.0)
+        S_explicit = mc_explicit.compute_sigma_matrix(num_angle_bins=4, T=T, Ne=1.0, multiplier=cm.ConstantMultiplier())
 
         np.testing.assert_allclose(S_default, S_explicit, rtol=1e-14, atol=0)
 
@@ -131,6 +116,7 @@ class TestKernelMultiplier:
 # ---------------------------------------------------------------------------
 # 3. Seed reproducibility
 # ---------------------------------------------------------------------------
+
 
 class TestSeedReproducibility:
     """Same seed produces reproducible results (within FP reduction noise)."""
@@ -157,13 +143,13 @@ class TestSeedReproducibility:
         S1 = mc1.compute_sigma_matrix(T=T, Ne=1.0)
         S2 = mc2.compute_sigma_matrix(T=T, Ne=1.0)
 
-        assert not np.array_equal(S1, S2), \
-            "different seeds should produce different results"
+        assert not np.array_equal(S1, S2), "different seeds should produce different results"
 
 
 # ---------------------------------------------------------------------------
 # 4. Basic sanity checks
 # ---------------------------------------------------------------------------
+
 
 class TestBasicSanity:
     """Smoke tests for API and output shape."""
@@ -185,8 +171,7 @@ class TestBasicSanity:
 
     def test_output_shape_3d(self):
         mc_obj = _make_mc(BOUNDARIES_ERG, num_samples=1000)
-        S = mc_obj.compute_sigma_matrix(
-            num_angle_bins=4, T=10.0 * kev_kelvin, Ne=1.0)
+        S = mc_obj.compute_sigma_matrix(num_angle_bins=4, T=10.0 * kev_kelvin, Ne=1.0)
         assert S.shape == (G, G, 4)
 
     def test_angle_sum_matches_integrated(self):
@@ -197,27 +182,27 @@ class TestBasicSanity:
         S_int = mc_obj.compute_sigma_matrix(T=T, Ne=1.0)
 
         mc_obj2 = _make_mc(BOUNDARIES_ERG, seed=SEED)
-        S_ang = mc_obj2.compute_sigma_matrix(
-            num_angle_bins=1, T=T, Ne=1.0)
+        S_ang = mc_obj2.compute_sigma_matrix(num_angle_bins=1, T=T, Ne=1.0)
         S_summed = S_ang.sum(axis=2)
 
         np.testing.assert_allclose(S_int, S_summed, rtol=1e-14, atol=0)
 
     def test_invalid_boundaries(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError, match="boundaries"):
             mc.ComptonMonteCarloKernel(
-                energy_group_boundaries=[5.0 * kev, 1.0 * kev],
-                weight_function=cm.WienWeightFunction(cap_x=25.0))
+                energy_group_boundaries=[5.0 * kev, 1.0 * kev], weight_function=cm.WienWeightFunction(cap_x=25.0)
+            )
 
     def test_invalid_temperature(self):
         mc_obj = _make_mc(BOUNDARIES_ERG, num_samples=100)
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError, match="[Tt]emperature"):
             mc_obj.compute_sigma_matrix(T=-1.0, Ne=1.0)
 
 
 # ---------------------------------------------------------------------------
 # 5. Derivative golden-value regression
 # ---------------------------------------------------------------------------
+
 
 class TestDerivativeGolden:
     """Seed-locked golden values for compute_dsigma_dT_matrix."""
@@ -247,15 +232,20 @@ class TestDerivativeGolden:
         mc_obj = _make_mc(bounds, seed=42, num_samples=100_000)
         dS = mc_obj.compute_dsigma_dT_matrix(T=T, Ne=1.0)
 
-        expected = np.array([
-            [-5.90748425e-34,  6.19672716e-34],
-            [ 8.59482191e-35, -7.29746021e-34],
-        ])
+        expected = np.array(
+            [
+                [-5.90748425e-34, 6.19672716e-34],
+                [8.59482191e-35, -7.29746021e-34],
+            ]
+        )
 
         np.testing.assert_allclose(
-            dS, expected, rtol=0.2, atol=0,
-            err_msg="derivative golden values changed beyond MC noise -- "
-                    "update if intentional")
+            dS,
+            expected,
+            rtol=0.2,
+            atol=0,
+            err_msg="derivative golden values changed beyond MC noise -- update if intentional",
+        )
 
     def test_derivative_output_shape_2d(self):
         mc_obj = _make_mc(BOUNDARIES_ERG, num_samples=1000)
@@ -264,6 +254,5 @@ class TestDerivativeGolden:
 
     def test_derivative_output_shape_3d(self):
         mc_obj = _make_mc(BOUNDARIES_ERG, num_samples=1000)
-        dS = mc_obj.compute_dsigma_dT_matrix(
-            num_angle_bins=4, T=10.0 * kev_kelvin, Ne=1.0)
+        dS = mc_obj.compute_dsigma_dT_matrix(num_angle_bins=4, T=10.0 * kev_kelvin, Ne=1.0)
         assert dS.shape == (G, G, 4)

@@ -19,23 +19,43 @@ at each phase-space point based on the scattering kinematics.
 | Dependency | Role |
 |------------|------|
 | CMake >= 3.22 | Build system |
-| C++20 compiler | Language standard |
+| C++23 compiler | Language standard |
 | [pybind11](https://pybind11.readthedocs.io/) | Python bindings |
 | [Boost](https://www.boost.org/) | Modified Bessel functions ($K_1$, $K_2$) |
 | [doubledouble](https://github.com/WarrenWeckesser/doubledouble) | ~31-digit arithmetic for HP power series (fetched automatically by CMake) |
 | [planck_integral](https://github.com/menahemkrief/planck_integral) | Planck integral for weight-function denominators (fetched automatically by CMake) |
 | OpenMP (optional) | Parallel multigroup integration (enabled by default via `COMPTON_ENABLE_OMP`) |
 
+**System prerequisites:** Boost development headers and (optionally) OpenMP must be
+installed system-wide. On RHEL/CentOS: `dnf install boost-devel`. The
+`planck_integral` dependency is fetched via SSH (`git@github.com:...`), so an
+SSH key with access to that repository is required at build time.
+
 **Python** (for tests and usage): `numpy`, `scipy`, `pytest`.
 
-## Compilation
+## Installation
+
+The recommended workflow uses [uv](https://docs.astral.sh/uv/):
 
 ```bash
-cmake -S . -B build
+uv sync                  # create venv and install dependencies
+uv pip install -e .      # editable install (triggers CMake build)
+```
+
+This builds all pybind11 extension modules and installs them inside the
+`compton_matrix` Python package.
+
+### Manual CMake build (for C++ development / IDE support)
+
+```bash
+cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 cmake --build build -j
 ```
 
-This produces pybind11 extension modules in `cpp_modules/`:
+### Extension modules
+
+The package contains the following extension modules (accessible as
+`compton_matrix._module_name`):
 
 | Module | Contents |
 |--------|----------|
@@ -49,11 +69,8 @@ This produces pybind11 extension modules in `cpp_modules/`:
 ## Example usage
 
 ```python
-import sys
-sys.path.insert(0, "cpp_modules")
-
-import _compton_differential_cross_section as cds
-from _units import kev, kev_kelvin
+import compton_matrix._compton_differential_cross_section as cds
+from compton_matrix._units import kev, kev_kelvin
 
 # Quadrature (256-point Gauss-Laguerre, post-IBP form)
 quad = cds.ComptonKernelQuadrature(256, cds.QuadratureForm.PostIBP)
@@ -100,18 +117,20 @@ The `kernel` argument is a `ComptonKernelSolver` instance.
 **Example:**
 
 ```python
-import sys
-sys.path.insert(0, "cpp_modules")
-
-import _compton_multigroup as cm
-import _compton_differential_cross_section as cds
-from _units import kev, kev_kelvin
+import compton_matrix._compton_multigroup as cm
+import compton_matrix._compton_differential_cross_section as cds
+from compton_matrix._units import kev, kev_kelvin
 
 kernel = cds.ComptonKernelSolver()
 mg = cm.ComptonMultigroupKernel(
     energy_group_boundaries=[0.1*kev, 0.5*kev, 1*kev, 5*kev, 10*kev],
     weight_function=cm.PlanckWeightFunction(cap_x=25.0),
-    config=cm.MGIntegrationConfig(base_order=8))
+    config=cm.MGIntegrationConfig(
+        xi_order=8,
+        xi_tail_order=8,
+        ep_edge_order=8,
+        ep_interior_order=8,
+        e_panel_order=8))
 
 # Angle-integrated G x G matrix
 S = mg.compute_sigma_matrix(kernel, T=10*kev_kelvin, Ne=1.0)
@@ -478,7 +497,7 @@ The thresholds are configurable at construction time (defaults from `compton_ker
 ## Tests
 
 ```bash
-pytest tests/
+uv run pytest
 ```
 
 The suite covers point-wise kernels, multigroup integration, and utilities:

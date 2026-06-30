@@ -65,12 +65,12 @@
  *   Mathematics of Computation 23 (106): 221–230, 1969.
  */
 
-#include <vector>
+#include <algorithm>
 #include <cmath>
 #include <numeric>
 #include <stdexcept>
-#include <algorithm>
 #include <utility>
+#include <vector>
 
 namespace compton {
 
@@ -79,7 +79,10 @@ struct GaussLaguerreRule {
     std::vector<double> weights; ///< Corresponding quadrature weights
 
     GaussLaguerreRule() = default;
-    explicit GaussLaguerreRule(int const N) : nodes(N), weights(N) {}
+    explicit GaussLaguerreRule(int const N)
+        : nodes(N),
+          weights(N)
+    {}
 };
 
 namespace detail {
@@ -108,12 +111,15 @@ struct Tql2Result {
  * eigenvalue.  A hard limit of 300 iterations per eigenvalue guards against
  * pathological cases.
  */
-inline Tql2Result tql2(int const n, std::vector<double> diag,
-                       std::vector<double> offdiag) {
+inline Tql2Result
+tql2(int const n, std::vector<double> diag, std::vector<double> offdiag)
+{
     std::vector<double> Z(n * n, 0.0);
-    for (int i = 0; i < n; ++i) Z[i * n + i] = 1.0;
+    for (int i = 0; i < n; ++i)
+        Z[i * n + i] = 1.0;
 
-    if (n == 1) return Tql2Result{std::move(diag), std::move(Z)};
+    if (n == 1)
+        return Tql2Result{std::move(diag), std::move(Z)};
 
     // Shift offdiag so that subdiagonal is in offdiag[0..n-2]
     // (offdiag passed in has subdiag in [1..n-1])
@@ -129,9 +135,11 @@ inline Tql2Result tql2(int const n, std::vector<double> diag,
             int m = l;
             for (; m < n - 1; ++m) {
                 double const dd = std::abs(diag[m]) + std::abs(diag[m + 1]);
-                if (std::abs(offdiag[m]) <= 1e-15 * dd) break;
+                if (std::abs(offdiag[m]) <= 1e-15 * dd)
+                    break;
             }
-            if (m == l) break;
+            if (m == l)
+                break;
 
             if (iter++ >= max_iter)
                 throw std::runtime_error("tql2: too many iterations");
@@ -170,7 +178,8 @@ inline Tql2Result tql2(int const n, std::vector<double> diag,
                 }
             }
 
-            if (r == 0.0 && iter > 0) continue;
+            if (r == 0.0 && iter > 0)
+                continue;
 
             diag[l] -= p;
             offdiag[l] = g;
@@ -211,8 +220,10 @@ inline Tql2Result tql2(int const n, std::vector<double> diag,
  * @return   GaussLaguerreRule with nodes and weights vectors of length N.
  * @throws   std::invalid_argument if N < 1.
  */
-inline GaussLaguerreRule compute_gauss_laguerre(int N) {
-    if (N < 1) throw std::invalid_argument("N must be >= 1");
+inline GaussLaguerreRule compute_gauss_laguerre(int N)
+{
+    if (N < 1)
+        throw std::invalid_argument("N must be >= 1");
 
     // For Laguerre polynomials L_n(x) with alpha=0:
     // Three-term recurrence: (n+1) L_{n+1}(x) = (2n+1-x) L_n(x) - n L_{n-1}(x)
@@ -229,7 +240,8 @@ inline GaussLaguerreRule compute_gauss_laguerre(int N) {
         offdiag[i] = (i == 0) ? 0.0 : static_cast<double>(i);
     }
 
-    detail::Tql2Result const eig = detail::tql2(N, std::move(diag), std::move(offdiag));
+    detail::Tql2Result const eig =
+        detail::tql2(N, std::move(diag), std::move(offdiag));
 
     GaussLaguerreRule rule(N);
 
@@ -246,8 +258,9 @@ inline GaussLaguerreRule compute_gauss_laguerre(int N) {
 /**
  * @brief Integrate a function using a precomputed Gauss-Laguerre rule.
  */
-template<typename F>
-inline double laguerre_integrate(F&& integrand, GaussLaguerreRule const& rule) {
+template <typename F>
+inline double laguerre_integrate(F&& integrand, GaussLaguerreRule const& rule)
+{
     double sum = 0.0;
     int const n = static_cast<int>(rule.nodes.size());
     for (int i = 0; i < n; ++i) {
@@ -259,7 +272,8 @@ inline double laguerre_integrate(F&& integrand, GaussLaguerreRule const& rule) {
 /**
  * @brief Return cached Gauss-Laguerre rules for supported orders.
  */
-inline GaussLaguerreRule const& get_rule(int const N) {
+inline GaussLaguerreRule const& get_rule(int const N)
+{
     static GaussLaguerreRule const rule_16 = compute_gauss_laguerre(16);
     static GaussLaguerreRule const rule_32 = compute_gauss_laguerre(32);
     static GaussLaguerreRule const rule_64 = compute_gauss_laguerre(64);
@@ -267,12 +281,18 @@ inline GaussLaguerreRule const& get_rule(int const N) {
     static GaussLaguerreRule const rule_256 = compute_gauss_laguerre(256);
 
     switch (N) {
-        case 16:  return rule_16;
-        case 32:  return rule_32;
-        case 64:  return rule_64;
-        case 128: return rule_128;
-        case 256: return rule_256;
-        default:  throw std::invalid_argument("N must be one of: 16, 32, 64, 128, 256");
+    case 16:
+        return rule_16;
+    case 32:
+        return rule_32;
+    case 64:
+        return rule_64;
+    case 128:
+        return rule_128;
+    case 256:
+        return rule_256;
+    default:
+        throw std::invalid_argument("N must be one of: 16, 32, 64, 128, 256");
     }
 }
 

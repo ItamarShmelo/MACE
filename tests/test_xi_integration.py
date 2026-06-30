@@ -11,50 +11,45 @@ Validates the five integration branches:
 """
 
 import math
-import sys
 
+import compton_matrix._compton_multigroup as cm
 import numpy as np
 import pytest
-
-sys.path.insert(0, "cpp_modules")
-
-import _compton_multigroup as cm
-from _compton_differential_cross_section import ComptonKernelSolver
-from _units import kev, kev_kelvin
-
+from compton_matrix._compton_differential_cross_section import ComptonKernelSolver
+from compton_matrix._units import kev, kev_kelvin
 
 KERNEL = ComptonKernelSolver()
 
 
-def _make_mg(bounds_erg, *, base_order=24, xi_order=None, tol=1e-4,
-             xi_peak_k=10.0):
+def _config(order, **kwargs):
+    for key in ("xi_order", "xi_tail_order", "ep_edge_order", "ep_interior_order", "e_panel_order"):
+        if kwargs.get(key) is None:
+            kwargs[key] = order
+    return cm.MGIntegrationConfig(**kwargs)
+
+
+def _make_mg(bounds_erg, *, order=24, xi_order=None, tol=1e-4, xi_peak_k=10.0):
     """Helper to build a ComptonMultigroupKernel with given config."""
     return cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds_erg,
         weight_function=cm.UniformWeightFunction(),
-        config=cm.MGIntegrationConfig(
-            base_order=base_order,
-            integration_tolerance=tol,
-            xi_order=xi_order,
-            xi_peak_k=xi_peak_k))
+        config=_config(order, xi_order=xi_order, xi_peak_k=xi_peak_k),
+    )
 
 
-def _reference_mg(bounds_erg, *, base_order=128):
+def _reference_mg(bounds_erg, *, order=128):
     """Build a high-order reference ComptonMultigroupKernel."""
     return cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds_erg,
         weight_function=cm.UniformWeightFunction(),
-        config=cm.MGIntegrationConfig(
-            base_order=base_order,
-            integration_tolerance=1e-10,
-            cold_temperature_order=base_order,
-            xi_order=base_order,
-            xi_peak_k=10.0))
+        config=_config(order, xi_peak_k=10.0),
+    )
 
 
 # ---------------------------------------------------------------------------
 # 1. Elastic-like branch
 # ---------------------------------------------------------------------------
+
 
 class TestElasticLike:
     """gamma = gamma_p = 0.1 (d = 0): elastic-like rlog integration."""
@@ -65,9 +60,8 @@ class TestElasticLike:
         bounds = [0.95 * E, 1.05 * E]
         T = 0.1 * kev_kelvin
 
-        mg = _make_mg(bounds, base_order=48, xi_order=48)
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=8,
-                                    T=T, Ne=1.0)
+        mg = _make_mg(bounds, order=48, xi_order=48)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=8, T=T, Ne=1.0)
 
         last_bin = S[0, 0, -1]
         assert np.isfinite(last_bin), "elastic-like result is not finite"
@@ -80,13 +74,11 @@ class TestElasticLike:
         T = 0.1 * kev_kelvin
         n_bins = 8
 
-        mg = _make_mg(bounds, base_order=48, xi_order=48)
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins,
-                                    T=T, Ne=1.0)
+        mg = _make_mg(bounds, order=48, xi_order=48)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
 
         mg_ref = _reference_mg(bounds)
-        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins,
-                                            T=T, Ne=1.0)
+        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
 
         peak = np.max(np.abs(S_ref))
         mask = np.abs(S_ref) > 1e-4 * peak
@@ -101,6 +93,7 @@ class TestElasticLike:
 # 2. Interior peak (three-region split)
 # ---------------------------------------------------------------------------
 
+
 class TestInteriorPeak:
     """gamma = 10, gamma_p = 15, T = 0.1 keV: narrow peak inside last bin.
 
@@ -112,18 +105,15 @@ class TestInteriorPeak:
     def test_vs_reference(self):
         E_in = 10.0 * 511.0 * kev
         E_out = 15.0 * 511.0 * kev
-        bounds = sorted({0.95 * E_in, 1.05 * E_in,
-                         0.95 * E_out, 1.05 * E_out})
+        bounds = sorted({0.95 * E_in, 1.05 * E_in, 0.95 * E_out, 1.05 * E_out})
         T = 0.1 * kev_kelvin
         n_bins = 8
 
-        mg = _make_mg(bounds, base_order=48, xi_order=48)
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins,
-                                    T=T, Ne=1.0)
+        mg = _make_mg(bounds, order=48, xi_order=48)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
 
         mg_ref = _reference_mg(bounds)
-        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins,
-                                            T=T, Ne=1.0)
+        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
 
         peak = np.max(np.abs(S_ref))
         mask = np.abs(S_ref) > 1e-4 * peak
@@ -131,26 +121,24 @@ class TestInteriorPeak:
             pytest.skip("no significant entries in reference")
 
         rel = np.max(np.abs(S[mask] - S_ref[mask]) / np.abs(S_ref[mask]))
-        assert rel < 0.05, (
-            f"interior-peak vs ref: max rel diff = {rel:.2e}")
+        assert rel < 0.05, f"interior-peak vs ref: max rel diff = {rel:.2e}"
 
     def test_all_bins_finite(self):
         """All angle bins produce finite results."""
         E_in = 10.0 * 511.0 * kev
         E_out = 15.0 * 511.0 * kev
-        bounds = sorted({0.95 * E_in, 1.05 * E_in,
-                         0.95 * E_out, 1.05 * E_out})
+        bounds = sorted({0.95 * E_in, 1.05 * E_in, 0.95 * E_out, 1.05 * E_out})
         T = 0.1 * kev_kelvin
 
-        mg = _make_mg(bounds, base_order=24)
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=8,
-                                    T=T, Ne=1.0)
+        mg = _make_mg(bounds, order=24)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=8, T=T, Ne=1.0)
         assert np.all(np.isfinite(S)), "non-finite entries in interior-peak"
 
 
 # ---------------------------------------------------------------------------
 # 3. Peak entirely left
 # ---------------------------------------------------------------------------
+
 
 class TestPeakLeft:
     """gamma = 0.1, gamma_p = 0.5, T = 0.1 keV: xi_pk = -7.
@@ -161,18 +149,15 @@ class TestPeakLeft:
     def test_vs_reference(self):
         E_in = 0.1 * 511.0 * kev
         E_out = 0.5 * 511.0 * kev
-        bounds = sorted({0.9 * E_in, 1.1 * E_in,
-                         0.9 * E_out, 1.1 * E_out})
+        bounds = sorted({0.9 * E_in, 1.1 * E_in, 0.9 * E_out, 1.1 * E_out})
         T = 0.1 * kev_kelvin
         n_bins = 8
 
-        mg = _make_mg(bounds, base_order=48, xi_order=48)
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins,
-                                    T=T, Ne=1.0)
+        mg = _make_mg(bounds, order=48, xi_order=48)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
 
         mg_ref = _reference_mg(bounds)
-        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins,
-                                            T=T, Ne=1.0)
+        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
 
         peak = np.max(np.abs(S_ref))
         mask = np.abs(S_ref) > 1e-4 * peak
@@ -187,6 +172,7 @@ class TestPeakLeft:
 # 4. Peak entirely right
 # ---------------------------------------------------------------------------
 
+
 class TestPeakRight:
     """gamma = 10, gamma_p = 15, T = 0.1 keV, first bin [-1, -0.75].
 
@@ -196,26 +182,23 @@ class TestPeakRight:
     def test_vs_reference(self):
         E_in = 10.0 * 511.0 * kev
         E_out = 15.0 * 511.0 * kev
-        bounds = sorted({0.95 * E_in, 1.05 * E_in,
-                         0.95 * E_out, 1.05 * E_out})
+        bounds = sorted({0.95 * E_in, 1.05 * E_in, 0.95 * E_out, 1.05 * E_out})
         T = 0.1 * kev_kelvin
         n_bins = 8
 
-        mg = _make_mg(bounds, base_order=48, xi_order=48)
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins,
-                                    T=T, Ne=1.0)
+        mg = _make_mg(bounds, order=48, xi_order=48)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
 
         mg_ref = _reference_mg(bounds)
-        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins,
-                                            T=T, Ne=1.0)
+        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
 
         g_in = 0
-        for i, (lo, hi) in enumerate(zip(bounds[:-1], bounds[1:])):
+        for i, (lo, hi) in enumerate(zip(bounds[:-1], bounds[1:], strict=True)):
             if lo <= E_in <= hi:
                 g_in = i
                 break
         g_out = 0
-        for i, (lo, hi) in enumerate(zip(bounds[:-1], bounds[1:])):
+        for i, (lo, hi) in enumerate(zip(bounds[:-1], bounds[1:], strict=True)):
             if lo <= E_out <= hi:
                 g_out = i
                 break
@@ -226,13 +209,13 @@ class TestPeakRight:
         assert np.isfinite(first_bin_val), "peak-right result not finite"
         if abs(first_bin_ref) > 1e-35:
             rel = abs(first_bin_val - first_bin_ref) / abs(first_bin_ref)
-            assert rel < 0.05, (
-                f"peak-right first bin vs ref: rel diff = {rel:.2e}")
+            assert rel < 0.05, f"peak-right first bin vs ref: rel diff = {rel:.2e}"
 
 
 # ---------------------------------------------------------------------------
 # 5. Extreme energy ratios
 # ---------------------------------------------------------------------------
+
 
 class TestExtremeEnergyRatios:
     """gamma_p/gamma in {0.01, 100}: xi_pk far left, results positive/finite."""
@@ -247,9 +230,8 @@ class TestExtremeEnergyRatios:
         bounds = sorted({lo, mid, hi})
         T = 1.0 * kev_kelvin
 
-        mg = _make_mg(bounds, base_order=24)
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=4,
-                                    T=T, Ne=1.0)
+        mg = _make_mg(bounds, order=24)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
 
         assert np.all(np.isfinite(S)), "non-finite entries at extreme ratio"
         row_sums = S.sum(axis=(1, 2))
@@ -259,6 +241,7 @@ class TestExtremeEnergyRatios:
 # ---------------------------------------------------------------------------
 # 6. Log/rlog clustering sanity check
 # ---------------------------------------------------------------------------
+
 
 class TestLogRlogClustering:
     """Verify log clusters near lower end and rlog near upper end."""
@@ -272,19 +255,18 @@ class TestLogRlogClustering:
             return math.exp(-1000.0 * x)
 
         from scipy.integrate import quad
+
         ref, _ = quad(f, eps, span)
 
-        log_val = cm.adaptive_log_legendre_integrate(
-            f, 8, eps, span, tol=1e-15, max_depth=0)
-        rlog_val = cm.adaptive_rlog_legendre_integrate(
-            f, 8, eps, span, tol=1e-15, max_depth=0)
+        log_val = cm.adaptive_log_legendre_integrate(f, 8, eps, span, tol=1e-15, max_depth=0)
+        rlog_val = cm.adaptive_rlog_legendre_integrate(f, 8, eps, span, tol=1e-15, max_depth=0)
 
         log_err = abs(log_val - ref) / abs(ref)
         rlog_err = abs(rlog_val - ref) / abs(ref)
 
         assert log_err < rlog_err, (
-            f"log should be more accurate for left-peaked: "
-            f"log_err={log_err:.2e}, rlog_err={rlog_err:.2e}")
+            f"log should be more accurate for left-peaked: log_err={log_err:.2e}, rlog_err={rlog_err:.2e}"
+        )
 
     def test_right_peaked_function(self):
         """rlog should outperform log for g(x) = exp(-1000*(span-x))."""
@@ -295,16 +277,15 @@ class TestLogRlogClustering:
             return math.exp(-1000.0 * (span - x))
 
         from scipy.integrate import quad
+
         ref, _ = quad(g, eps, span)
 
-        log_val = cm.adaptive_log_legendre_integrate(
-            g, 8, eps, span, tol=1e-15, max_depth=0)
-        rlog_val = cm.adaptive_rlog_legendre_integrate(
-            g, 8, eps, span, tol=1e-15, max_depth=0)
+        log_val = cm.adaptive_log_legendre_integrate(g, 8, eps, span, tol=1e-15, max_depth=0)
+        rlog_val = cm.adaptive_rlog_legendre_integrate(g, 8, eps, span, tol=1e-15, max_depth=0)
 
         log_err = abs(log_val - ref) / abs(ref)
         rlog_err = abs(rlog_val - ref) / abs(ref)
 
         assert rlog_err < log_err, (
-            f"rlog should be more accurate for right-peaked: "
-            f"log_err={log_err:.2e}, rlog_err={rlog_err:.2e}")
+            f"rlog should be more accurate for right-peaked: log_err={log_err:.2e}, rlog_err={rlog_err:.2e}"
+        )

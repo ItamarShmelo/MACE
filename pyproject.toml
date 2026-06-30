@@ -1,0 +1,34 @@
+[build-system]
+requires = [
+    "scikit-build-core>=0.11",
+    "pybind11>=2.11",
+]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "compton-matrix"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["numpy"]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "scipy",
+    "ruff",
+    "matplotlib",
+]
+
+[tool.scikit-build]
+minimum-version = "0.11"
+build.verbose = true
+wheel.packages = ["python/compton_matrix"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+extraPaths = ["python"]
+reportMissingModuleSource = false

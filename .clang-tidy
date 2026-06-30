@@ -1,0 +1,24 @@
+---
+# Phase 1: high-value checks (bugs, performance, miscellaneous).
+# Phase 2 checks (readability-*, modernize-*) are commented out below;
+# enable them selectively once phase 1 is clean.
+
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  performance-*,
+  misc-*,
+
+# Phase 2 -- uncomment individually when ready:
+#  readability-*,
+#  -readability-magic-numbers,
+#  -readability-identifier-length,
+#  -readability-function-cognitive-complexity,
+#  modernize-*,
+#  -modernize-use-trailing-return-type,
+#  cppcoreguidelines-*,
+#  -cppcoreguidelines-avoid-magic-numbers,
+
+HeaderFilterRegex: 'src/.*'
+WarningsAsErrors: ''

@@ -52,9 +52,9 @@
 
 #include "utilities/gauss_laguerre.hpp"
 
-#include <vector>
 #include <cmath>
 #include <stdexcept>
+#include <vector>
 
 namespace compton {
 
@@ -63,7 +63,10 @@ struct GaussLegendreRule {
     std::vector<double> weights; ///< Corresponding quadrature weights
 
     GaussLegendreRule() = default;
-    explicit GaussLegendreRule(int const N) : nodes(N), weights(N) {}
+    explicit GaussLegendreRule(int const N)
+        : nodes(N),
+          weights(N)
+    {}
 };
 
 /**
@@ -77,8 +80,10 @@ struct GaussLegendreRule {
  * @return   GaussLegendreRule with nodes and weights vectors of length N.
  * @throws   std::invalid_argument if N < 1.
  */
-inline GaussLegendreRule compute_gauss_legendre(int const N) {
-    if (N < 1) throw std::invalid_argument("N must be >= 1");
+inline GaussLegendreRule compute_gauss_legendre(int const N)
+{
+    if (N < 1)
+        throw std::invalid_argument("N must be >= 1");
 
     std::vector<double> diag(N, 0.0);
     std::vector<double> offdiag(N, 0.0);
@@ -88,7 +93,8 @@ inline GaussLegendreRule compute_gauss_legendre(int const N) {
         offdiag[i] = n / std::sqrt(4.0 * n * n - 1.0);
     }
 
-    detail::Tql2Result const eig = detail::tql2(N, std::move(diag), std::move(offdiag));
+    detail::Tql2Result const eig =
+        detail::tql2(N, std::move(diag), std::move(offdiag));
 
     GaussLegendreRule rule(N);
 
@@ -114,13 +120,15 @@ inline GaussLegendreRule compute_gauss_legendre(int const N) {
  * @param b          Upper integration limit.
  * @return           Approximate value of ∫_a^b f(x) dx.
  */
-template<typename F>
-inline double legendre_integrate(F&& integrand,
-                                 GaussLegendreRule const& rule,
-                                 double const a,
-                                 double const b) {
+template <typename F>
+inline double legendre_integrate(
+    F&& integrand,
+    GaussLegendreRule const& rule,
+    double const a,
+    double const b)
+{
     double const half_width = 0.5 * (b - a);
-    double const midpoint   = 0.5 * (a + b);
+    double const midpoint = 0.5 * (a + b);
 
     double sum = 0.0;
     int const n = static_cast<int>(rule.nodes.size());
@@ -147,18 +155,23 @@ inline double legendre_integrate(F&& integrand,
  * @param b           Upper integration limit (must be > a).
  * @return            Approximate value of integral_a^b f(x) dx.
  */
-template<typename F>
-inline double log_legendre_integrate(F&& integrand,
-                                     GaussLegendreRule const& rule,
-                                     double const a,
-                                     double const b) {
+template <typename F>
+inline double log_legendre_integrate(
+    F&& integrand,
+    GaussLegendreRule const& rule,
+    double const a,
+    double const b)
+{
     double const log_a = std::log(a);
     double const log_b = std::log(b);
     return legendre_integrate(
         [&](double const u) {
             double const x = std::exp(u);
             return integrand(x) * x;
-        }, rule, log_a, log_b);
+        },
+        rule,
+        log_a,
+        log_b);
 }
 
 /**
@@ -176,11 +189,13 @@ inline double log_legendre_integrate(F&& integrand,
  * @param b           Upper integration limit (must be > a).
  * @return            Approximate value of integral_a^b f(x) dx.
  */
-template<typename F>
-inline double rlog_legendre_integrate(F&& integrand,
-                                      GaussLegendreRule const& rule,
-                                      double const a,
-                                      double const b) {
+template <typename F>
+inline double rlog_legendre_integrate(
+    F&& integrand,
+    GaussLegendreRule const& rule,
+    double const a,
+    double const b)
+{
     double const sum_ab = a + b;
     double const log_a = std::log(a);
     double const log_b = std::log(b);
@@ -188,7 +203,10 @@ inline double rlog_legendre_integrate(F&& integrand,
         [&](double const u) {
             double const y = std::exp(u);
             return integrand(sum_ab - y) * y;
-        }, rule, log_a, log_b);
+        },
+        rule,
+        log_a,
+        log_b);
 }
 
 /**
@@ -206,20 +224,21 @@ inline double rlog_legendre_integrate(F&& integrand,
  * @param max_depth   Maximum recursion depth (prevents runaway subdivision).
  * @return            Approximate value of integral_a^b f(x) dx.
  */
-template<typename F>
-double adaptive_legendre_integrate(F&& integrand,
-                                   GaussLegendreRule const& rule,
-                                   double const a,
-                                   double const b,
-                                   double const tol,
-                                   int const max_depth)
+template <typename F>
+double adaptive_legendre_integrate(
+    F&& integrand,
+    GaussLegendreRule const& rule,
+    double const a,
+    double const b,
+    double const tol,
+    int const max_depth)
 {
     constexpr double abs_floor = 1e-300;
 
     double const I_whole = legendre_integrate(integrand, rule, a, b);
 
     double const mid = 0.5 * (a + b);
-    double const I_left  = legendre_integrate(integrand, rule, a, mid);
+    double const I_left = legendre_integrate(integrand, rule, a, mid);
     double const I_right = legendre_integrate(integrand, rule, mid, b);
     double const I_halves = I_left + I_right;
 
@@ -231,9 +250,19 @@ double adaptive_legendre_integrate(F&& integrand,
     }
 
     double const refined_left = adaptive_legendre_integrate(
-        integrand, rule, a, mid, tol, max_depth - 1);
+        integrand,
+        rule,
+        a,
+        mid,
+        tol,
+        max_depth - 1);
     double const refined_right = adaptive_legendre_integrate(
-        integrand, rule, mid, b, tol, max_depth - 1);
+        integrand,
+        rule,
+        mid,
+        b,
+        tol,
+        max_depth - 1);
     return refined_left + refined_right;
 }
 
@@ -255,13 +284,14 @@ double adaptive_legendre_integrate(F&& integrand,
  * @param max_depth   Maximum recursion depth.
  * @return            Approximate value of ∫_a^b f(x) dx.
  */
-template<typename F>
-double adaptive_log_legendre_integrate(F&& integrand,
-                                       GaussLegendreRule const& rule,
-                                       double const a,
-                                       double const b,
-                                       double const tol,
-                                       int const max_depth)
+template <typename F>
+double adaptive_log_legendre_integrate(
+    F&& integrand,
+    GaussLegendreRule const& rule,
+    double const a,
+    double const b,
+    double const tol,
+    int const max_depth)
 {
     double const log_a = std::log(a);
     double const log_b = std::log(b);
@@ -271,7 +301,11 @@ double adaptive_log_legendre_integrate(F&& integrand,
             double const x = std::exp(u);
             return integrand(x) * x;
         },
-        rule, log_a, log_b, tol, max_depth);
+        rule,
+        log_a,
+        log_b,
+        tol,
+        max_depth);
 }
 
 /**
@@ -296,13 +330,14 @@ double adaptive_log_legendre_integrate(F&& integrand,
  * @param max_depth   Maximum recursion depth.
  * @return            Approximate value of ∫_a^b f(x) dx.
  */
-template<typename F>
-double adaptive_rlog_legendre_integrate(F&& integrand,
-                                        GaussLegendreRule const& rule,
-                                        double const a,
-                                        double const b,
-                                        double const tol,
-                                        int const max_depth)
+template <typename F>
+double adaptive_rlog_legendre_integrate(
+    F&& integrand,
+    GaussLegendreRule const& rule,
+    double const a,
+    double const b,
+    double const tol,
+    int const max_depth)
 {
     double const sum_ab = a + b;
     double const log_a = std::log(a);
@@ -313,7 +348,11 @@ double adaptive_rlog_legendre_integrate(F&& integrand,
             double const y = std::exp(u);
             return integrand(sum_ab - y) * y;
         },
-        rule, log_a, log_b, tol, max_depth);
+        rule,
+        log_a,
+        log_b,
+        tol,
+        max_depth);
 }
 
 } // namespace compton

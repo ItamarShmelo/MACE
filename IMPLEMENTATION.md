@@ -296,26 +296,55 @@ The multigroup cross section
 $$\sigma(g \to g') = \frac{2\pi \int_{\Delta E_g} \int_{\Delta E_{g'}} \int_{\xi_i}^{\xi_{i+1}} w(E,T)\,\Sigma_E\, d\xi\, dE'\, dE}{\int_{\Delta E_g} w(E,T)\, dE}$$
 
 is evaluated by Gauss–Legendre quadrature on three finite intervals $(E, E', \xi)$.
-All axes use single-panel GL quadrature with appropriate coordinate mappings;
-the E' axis uses a ridge-based three-region split (see
-[Ridge-Based E' Integration](#ridge-based-e-integration) below).
+The E axis uses **feature-aware sub-interval GL** with per-sub-interval coordinate
+mapping selection (linear, log, or rlog).  The E' axis uses a ridge-based
+three-region split (see [Ridge-Based E' Integration](#ridge-based-e-integration)
+below).  The $\xi$ axis uses peak-focused splitting.
 
-**Rationale:** The Compton kernel has a sharp recoil-band peak in $E'$ that is
-well-localized around the cold-Compton ridge.  The ridge-based scheme exploits
-this structure by concentrating quadrature nodes in edge sub-intervals near the
-ridge boundaries where the integrand varies most rapidly, while using a coarser
-interior rule where the integrand is smooth.  The $E$ and $\xi$ integrands, being
-weighted integrals over the $E'$ axis result, are already smooth.  Convergence is
-controlled by increasing GL orders for edge and interior regions rather than
-adaptive bisection.
+The deterministic implementation is organized as three nested integration
+helpers:
 
-**Cold-temperature regime:** Below 0.005 keV the Compton kernel narrows to
-near-Thomson scattering, requiring more quadrature nodes for convergence.
-When $T <$ `COLD_TEMPERATURE_THRESHOLD` (defined in `compton_common.hpp`),
-the integrator automatically substitutes `cold_temperature_order` (default 48)
-for `base_order` on the E and $\xi$ axes.  The threshold was determined
-empirically: `base_order=24` produces < 0.05% self-convergence error above
-0.002 keV but degrades to ~8% at 0.0001 keV.
+- `integrate_xi_bin` integrates over one $\xi$ bin for fixed $(E, E')$.
+- `integrate_Ep_xi_bin` integrates over an outgoing-energy interval and one
+  $\xi$ bin for fixed $E$, reusing the ridge-based $E'$ split.
+- `integrate_E_Ep_xi_bin` integrates the weighted numerator over the incoming
+  energy group for one selected $(g, g', \xi_i)$ bin, subdividing the E-axis
+  at boundary layers and the weight-function peak, and selecting the
+  appropriate coordinate mapping for each sub-interval.
+
+**E-axis sub-interval splitting.**  For each incoming energy group $g$,
+`integrate_E_Ep_xi_bin` subdivides the integration domain
+$[E_\text{lo}, E_\text{hi}]$ into up to four sub-intervals using two
+feature sources:
+
+1. **Boundary layers.**  The Compton ridge has significant thermal width
+   near the group edges.  Boundary-layer points
+   $\text{bl\_lo} = E_\text{lo} + k_b \cdot \sigma(E_\text{lo})$ and
+   $\text{bl\_hi} = E_\text{hi} - k_b \cdot \sigma(E_\text{hi})$
+   (where $\sigma$ is `ridge_thermal_width` at $\xi = -1$ and $k_b$ is
+   `e_boundary_k`) isolate thin edge regions from the interior.
+   When the boundary layers overlap ($\text{bl\_lo} \ge \text{bl\_hi}$),
+   no edge split is applied.
+2. **Weight function peak.**  If the weight-function peak energy (e.g.
+   $2.821\,k_B T$ for Planck) falls strictly inside the middle region,
+   that region is split at the peak so each piece has a monotone weight.
+
+Each sub-interval $[a, b]$ is integrated with `e_panel_order` GL points
+(default 12) using a coordinate mapping chosen by the weight profile:
+
+| Condition | Mapping | Rationale |
+|-----------|---------|-----------|
+| $b/a \le$ `log_e_panel_ratio` | **Linear** | Narrow sub-interval; uniform nodes adequate |
+| $w(a,T) \ge w(b,T)$ | **LogLower** | Weight falls toward $b$; cluster nodes near $a$ |
+| $w(a,T) < w(b,T)$ | **LogUpper** | Weight rises toward $b$; cluster nodes near $b$ |
+
+Zero-width sub-intervals (where $b \le a$) are skipped, which naturally
+handles cases where boundary-layer points coincide with group edges.
+
+**Cold-temperature ξ regime:** Below 0.005 keV the Compton kernel narrows to
+near-Thomson scattering, requiring more quadrature nodes for the ξ axis.
+The temperature-dependent elastic threshold (tiered by $\tau = kT/m_e c^2$)
+routes near-elastic $\xi$ bins to rlog quadrature for improved resolution.
 
 Group centers are placed at the geometric mean $\sqrt{E_\text{lo} \cdot E_\text{hi}}$.
 Angle bins partition $[-1, 1]$ into $N$ equal segments of width $2/N$.  The $2\pi$
@@ -326,16 +355,24 @@ group-to-group cross section.
 
 Three weight functions are supported:
 
-| Weight | $w(E,T)$ | Denominator |
-|--------|-----------|-------------|
-| **Planck** | $x^3/(e^x - 1)$, capped at $x = $ `cap_x` | Clark (1987) polylogarithm series |
-| **Wien** | $x^3 e^{-x}$, capped at `cap_x` | Taylor / closed-form (see below) |
-| **Uniform** | 1 | $E_\text{right} - E_\text{left}$ |
+| Weight | $w(E,T)$ | Peak energy | Analytic denominator |
+|--------|-----------|-------------|---------------------|
+| **Planck** | $x^3/(e^x - 1)$, capped at $x = $ `cap_x` | $2.821439 \cdot k_B T$ | Clark (1987) polylogarithm series |
+| **Wien** | $x^3 e^{-x}$, capped at `cap_x` | $3.0 \cdot k_B T$ | Taylor / closed-form (see below) |
+| **Uniform** | 1 | none (`std::nullopt`) | $E_\text{right} - E_\text{left}$ |
 
 The Planck cap avoids evaluating $x^3/(e^x - 1)$ in the exponential tail where
 it underflows; above `cap_x` the weight is held constant at its value at the cap.
-The denominator is computed **analytically** (not by quadrature) to avoid
-introducing quadrature noise into the normalization.
+
+Each weight function provides a `peak_energy(T)` method that returns the energy
+at which $w(E,T)$ attains its maximum (or `std::nullopt` for the uniform weight).
+This is used by the E-axis sub-interval splitting to place a split point at the
+weight peak, ensuring each sub-interval has a monotone weight function.
+
+**Analytic denominator.**  The denominator $D(g) = \int_{\Delta E_g} w(E,T)\,dE$
+is computed analytically via `WeightFunction::compute_denominator()`, which uses
+Clark (1987) polylogarithm series for the Planck weight and closed-form
+expressions for Wien and uniform weights.
 
 #### Wien Denominator — Taylor Series for Small x
 
@@ -389,10 +426,9 @@ This is a local width (depends on $\xi$) and is Gaussian-curvature based, so it
 may be less accurate if prefactors vary strongly in the wings.
 
 The old `thermal_half_width` formula ($E\sqrt{2\tau}$, with a 5x cold multiplier)
-was an ad-hoc, $\xi$-independent estimate.  The new formula is derived from the
-kernel's curvature and provides a tighter, angle-dependent width.  The old
-function `thermal_half_width` remains in use for E-axis boundary layer sizing,
-which is independent of the E' integration scheme.
+was an ad-hoc, $\xi$-independent estimate and has been removed.  The
+`ridge_thermal_width` formula is derived from the kernel's curvature and
+provides a tighter, angle-dependent width used by the E' ridge quadrature.
 
 #### Retained Interval and Truncation
 
@@ -413,17 +449,14 @@ Groups entirely outside the retained interval return exactly zero in default mod
 The outward-from-peak group cutoff (`cutoff_ratio`) breaks immediately on these
 zeros, providing an automatic performance benefit.
 
-#### Right-Tail Cap
+#### Right Tail
 
-Beyond the retained interval, a right tail is always integrated from
-$\text{keep\_hi}$ up to $\min(E'_\text{hi},\; \max(\gamma'_C(\xi_\text{lo}) + k_\text{tail}\,\sigma_\text{lo},\; \gamma'_C(\xi_\text{hi}) + k_\text{tail}\,\sigma_\text{hi}))$
-using log Gauss-Legendre quadrature with `ep_edge_order` nodes.  The cap
-prevents the log-GL from spreading nodes over a huge dead zone where the
-integrand is zero, which caused poor convergence when the upper limit was
-the full group boundary $E'_\text{hi}$.
-
-The default `ep_k_tail = 10` (i.e. $2 \times k_\text{cut}$) suffices for
-T ≤ 10 keV; `warm_default()` uses 15 for reliable accuracy up to ~100 keV.
+Beyond the retained interval, the remaining target-group tail
+$[\text{keep\_hi}, E'_\text{hi}]$ is still integrated when non-empty.  It uses
+log Gauss-Legendre quadrature with `ep_edge_order` nodes when
+$E'_\text{hi}/\text{keep\_hi} > 2$, and ordinary linear GL otherwise.  There is
+no separate tail-width configuration; the retained interval is controlled by
+`ep_k_cut`.
 
 #### Three-Region Split
 
@@ -488,31 +521,21 @@ $\sigma_\text{lo} / \sigma_\text{hi} > 10$.  Non-last bins have a sigma ratio
 of 1--3 and remain on the standard three-region path unchanged.  All region
 boundaries are defensively clipped, and empty intervals are skipped.
 
-#### Diagnostic Tail Mode
-
-When `ep_diagnostic_tails` is true, the far tails $[E'_\text{lo}, \text{keep\_lo}]$
-and $[\text{keep\_hi}, E'_\text{hi}]$ are integrated using log Gauss-Legendre,
-clustering nodes near the boundary closest to the ridge.  This mode is for
-validation only -- it confirms that the truncated tails contribute negligibly.
-
 #### `MGIntegrationConfig`
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `base_order` | 24 | GL panel order for E axes |
-| `cold_temperature_order` | 48 | GL order for E/ξ axes when T < 0.005 keV |
-| `xi_order` | `nullopt` → `base_order` | GL order for the ξ peak panel |
+| `xi_order` | `nullopt` → 48 | GL order for the ξ peak panel |
 | `xi_peak_k` | 5.0 | Half-width of the ξ peak window in sigma units |
 | `xi_tail_order` | `nullopt` → 16 | GL order for ξ tail sub-intervals |
-| `integration_tolerance` | 1e-3 | Overall relative tolerance for the outer integral |
 | `cutoff_ratio` | 1e-8 | Outward-from-peak early-termination ratio |
 | `ep_k_cut` | 5.0 | E' truncation width in sigma units (must be > 0) |
 | `ep_k_in` | 2.0 | E' interior-edge separator in sigma units (must be >= 0, < `ep_k_cut`) |
-| `ep_k_tail` | 10.0 | Right-tail extent in sigma units (must be >= `ep_k_cut`) |
-| `ep_edge_order` | `nullopt` → `base_order` | GL order for E' edge regions |
-| `ep_interior_order` | `nullopt` → `base_order` | GL order for E' ridge interior |
-| `ep_diagnostic_tails` | false | Include far tails via log-GL (validation only) |
-| `ep_diagnostic_tail_order` | `nullopt` → 16 | GL order for diagnostic tail integrations |
+| `ep_edge_order` | `nullopt` → 24 | GL order for E' edge regions |
+| `ep_interior_order` | `nullopt` → 24 | GL order for E' ridge interior |
+| `e_panel_order` | `nullopt` → 12 | GL order for E-axis sub-intervals |
+| `log_e_panel_ratio` | 2.0 | Sub-interval width ratio threshold for log/rlog-E mapping (must be > 1) |
+| `e_boundary_k` | 5.0 | Incoming-E boundary-layer width in sigma units |
 
 All E' sub-regions use fixed-order GL (no adaptive refinement):
 
@@ -525,8 +548,6 @@ All E' sub-regions use fixed-order GL (no adaptive refinement):
 | Elastic-core | `ep_edge_order` | linear GL | Double-peak 4-region path |
 | Broad-right | `ep_interior_order` | linear GL | Double-peak 4-region path |
 | Right tail (always-on) | `ep_edge_order` | log or linear GL | Both paths |
-| Diagnostic left tail | `ep_diagnostic_tail_order` | rlog GL | When `ep_diagnostic_tails` is true |
-| Diagnostic right tail | `ep_diagnostic_tail_order` | log GL | When `ep_diagnostic_tails` is true |
 
 #### Migration from Previous Scheme
 
@@ -538,10 +559,10 @@ tails + log/rlog far groups) and flat (single dense GL rule per target group,
 |---|---|---|
 | `peak_max_depth` | removed | No adaptive E' refinement; convergence via GL order |
 | `tail_order` | `ep_edge_order` | Edge regions replace log/rlog tails |
-| `far_order` | `ep_diagnostic_tail_order` | Only used in diagnostic mode |
+| `far_order` | removed | Diagnostic tail mode removed |
 | `flat_ep` (`FlatEpConfig`) | removed | Ridge scheme supersedes both adaptive and flat modes |
 | `flat_E` | removed | E-axis always uses boundary layers |
-| `warm_flat()` | `warm_default()` | Renamed; no longer implies flat E' mode |
+| `warm_flat()` | removed | Factory presets removed; construct `MGIntegrationConfig` directly |
 
 #### ξ Peak-Focused Splitting
 
@@ -671,62 +692,23 @@ The peak core is skipped if core_hi $\le$ core_lo (floating-point edge case).
 
 #### Recommended Production Configurations
 
-Two factory methods provide validated high-accuracy configurations:
-
-**`MGIntegrationConfig::cold_adaptive()`** — for T < 0.1 keV:
-
-| Parameter | Value | Rationale |
-|-----------|-------|-----------|
-| `base_order` | 192 | Resolves narrow Compton recoil band at cold T |
-| `xi_order` | 512 | Resolves sharp ξ peak (σ_ξ very narrow at high E + cold T) |
-| `xi_peak_k` | 5 | 5σ half-width (10σ total window) captures >99.99% of ξ peak area |
-| `xi_tail_order` | 24 | Higher tail order for cold regime where tails carry more signal |
-| `ep_k_cut` | 5 | Truncation at 5σ from cold-Compton ridge |
-| `ep_k_in` | 2 | Interior/edge boundary at 2σ |
-| `ep_k_tail` | 10 | Right-tail cap at 10σ (sufficient for T < 0.1 keV) |
-| `ep_edge_order` | 48 | Higher order for narrow edge sub-intervals |
-| `ep_interior_order` | 32 | Interior GL order |
-| `integration_tolerance` | 1e-8 | Tight tolerance |
-| `cutoff_ratio` | 1e-12 | Conservative group cutoff |
-| `cold_temperature_order` | 192 | Matches base_order |
-
-Validated accuracy: MC converges as 1/√N against this reference with no
-detectable det bias. At N=10^9: mid-group row-sum error ~5e-5 (pure MC
-noise), element-wise RMS ~3e-3.
-
-**`MGIntegrationConfig::warm_default()`** — for T ≥ 0.1 keV:
-
-| Parameter | Value | Rationale |
-|-----------|-------|-----------|
-| `base_order` | 96 | High-order GL for E axis |
-| `xi_order` | 96 | Adequate for broader ξ peaks at warm T |
-| `xi_peak_k` | 5 | 5σ half-width (10σ total window) |
-| `xi_tail_order` | 16 | Default tail order (tails negligible at warm T) |
-| `ep_k_cut` | 5 | Truncation at 5σ from cold-Compton ridge |
-| `ep_k_in` | 2 | Interior/edge boundary at 2σ |
-| `ep_k_tail` | 15 | Right-tail cap at 15σ (needed for T ≤ 100 keV) |
-| `cutoff_ratio` | 1e-12 | Conservative group cutoff |
-
-Validated accuracy: MC converges as 1/√N with no bias. At N=10^9:
-mid-group row-sum error < 1e-4 for T ≥ 1 keV, ~5e-4 at T=0.1 keV.
-
-**Temperature switch at T = 0.1 keV:** Below this threshold, the Compton
-kernel narrows dramatically, requiring high GL order (bo=192) to
-resolve. Above, the kernel is broad enough that moderate orders suffice.
-Both configs use `xi_peak_k=5` (5σ half-width) with configurable
-`xi_tail_order` for the ξ peak-aware splitting, and the ridge-based E'
-scheme with `ep_k_cut=5`, `ep_k_in=2`, `ep_k_tail=10` (cold) or `15` (warm).
+The `cold_adaptive()` and `warm_default()` factory presets have been removed.
+Construct `MGIntegrationConfig` directly with the desired parameters.
+For cold temperatures (T < 0.1 keV), use higher GL orders (e.g.
+`xi_order=512`, `ep_edge_order=192`, `ep_interior_order=192`,
+`cutoff_ratio=1e-12`).  For warm temperatures, moderate orders suffice
+(e.g. `xi_order=96`, `ep_edge_order=96`, `ep_interior_order=96`).
 
 Python usage:
 ```python
-import _compton_multigroup as cm
+import compton_matrix._compton_multigroup as cm
 
-# Select config based on temperature
-if T_kev < 0.1:
-    cfg = cm.MGIntegrationConfig.cold_adaptive()
-else:
-    cfg = cm.MGIntegrationConfig.warm_default()
-
+cfg = cm.MGIntegrationConfig(
+    cutoff_ratio=1e-12,
+    xi_order=96,
+    ep_edge_order=96,
+    ep_interior_order=96,
+)
 det = cm.ComptonMultigroupKernel(bounds_erg, wf, cfg)
 S = det.compute_sigma_matrix(kernel=kernel, T=T_K, Ne=1.0)
 ```
