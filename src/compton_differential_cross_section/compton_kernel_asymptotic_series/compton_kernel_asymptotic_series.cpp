@@ -1,5 +1,6 @@
 #include "compton_differential_cross_section/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.hpp"
 #include "compton_common/compton_common.hpp"
+#include "utilities/units.hpp"
 
 #include <algorithm>
 #include <cmath>

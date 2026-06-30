@@ -114,7 +114,7 @@ struct Tql2Result {
 inline Tql2Result
 tql2(int const n, std::vector<double> diag, std::vector<double> offdiag)
 {
-    std::vector<double> Z(n * n, 0.0);
+    std::vector<double> Z(static_cast<std::size_t>(n) * n, 0.0);
     for (int i = 0; i < n; ++i)
         Z[i * n + i] = 1.0;
 
@@ -152,7 +152,7 @@ tql2(int const n, std::vector<double> diag, std::vector<double> offdiag)
 
             for (int i = m - 1; i >= l; --i) {
                 double f = s * offdiag[i];
-                double b = c * offdiag[i];
+                double const b = c * offdiag[i];
 
                 r = std::hypot(f, g);
                 offdiag[i + 1] = r;
@@ -195,7 +195,7 @@ tql2(int const n, std::vector<double> diag, std::vector<double> offdiag)
     });
 
     std::vector<double> sorted_diag(n);
-    std::vector<double> sorted_Z(n * n);
+    std::vector<double> sorted_Z(static_cast<std::size_t>(n) * n);
     for (int i = 0; i < n; ++i) {
         sorted_diag[i] = diag[idx[i]];
         for (int k = 0; k < n; ++k) {

@@ -1,9 +1,9 @@
 #include "compton_differential_cross_section/compton_kernel_power_series/compton_kernel_power_series.hpp"
 #include "compton_common/compton_common.hpp"
+#include "utilities/units.hpp"
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <stdexcept>
 
 namespace compton {
@@ -35,7 +35,7 @@ ComptonResult ComptonPowerSeries::power_series(
     using namespace details;
     using namespace constants;
 
-    KershawParams<T> p = compute_params<T>(gamma, gamma_p, xi, tau);
+    KershawParams<T> const p = compute_params<T>(gamma, gamma_p, xi, tau);
     double const sigma0 = sigma0_E(E, tau, to_double(p.lambda_plus), Ne);
 
     T const omega = param_sqrt(p.omega2);
@@ -176,7 +176,7 @@ ComptonResult ComptonPowerSeries::power_series_derivative(
     using namespace details;
     using namespace constants;
 
-    KershawParams<T> p = compute_params<T>(gamma, gamma_p, xi, tau);
+    KershawParams<T> const p = compute_params<T>(gamma, gamma_p, xi, tau);
     double const sigma0 = sigma0_E(E, tau, to_double(p.lambda_plus), Ne);
     double const kappa_val = kappa_ratio(tau);
 

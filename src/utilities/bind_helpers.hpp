@@ -79,7 +79,7 @@ template <typename Class, typename MemberFunction>
 py::tuple vectorize_sigma(
     Class const& self,
     double E,
-    py::array_t<double, py::array::c_style | py::array::forcecast> E_prime_arr,
+    py::array_t<double, py::array::c_style | py::array::forcecast> const& E_prime_arr,
     double xi,
     double T,
     double Ne,
@@ -94,7 +94,7 @@ py::tuple vectorize_sigma(
     auto out_errors = errors.mutable_unchecked<1>();
 
     for (py::ssize_t i = 0; i < n; ++i) {
-        ComptonResult r = (self.*fn)(E, in(i), xi, T, Ne);
+        ComptonResult const r = (self.*fn)(E, in(i), xi, T, Ne);
         out_values(i) = r.value;
         out_errors(i) = r.estimated_abs_error;
     }

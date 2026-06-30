@@ -1,13 +1,22 @@
 #include "compton_multigroup/compton_multigroup_deterministic/compton_multigroup_deterministic.hpp"
 #include "compton_common/compton_common.hpp"
+#include "compton_differential_cross_section/compton_kernel_solver/compton_kernel_solver.hpp"
+#include "compton_multigroup/weight_function.hpp"
 #include "utilities/compute_logger.hpp"
+#include "utilities/gauss_legendre.hpp"
+#include "utilities/units.hpp"
 
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstddef>
 #include <format>
+#include <memory>
 #include <numbers>
+#include <optional>
 #include <stdexcept>
+#include <utility>
+#include <vector>
 
 namespace compton {
 

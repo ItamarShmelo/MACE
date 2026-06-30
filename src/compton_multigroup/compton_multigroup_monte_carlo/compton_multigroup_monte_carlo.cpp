@@ -1,3 +1,4 @@
+// NOLINTBEGIN(misc-include-cleaner) -- clang-tidy cannot parse this TU
 #include "compton_multigroup/compton_multigroup_monte_carlo/compton_multigroup_monte_carlo.hpp"
 #include "compton_common/compton_common.hpp"
 #include "utilities/compute_logger.hpp"
@@ -8,6 +9,7 @@
 #include <format>
 #include <numbers>
 #include <stdexcept>
+// NOLINTEND(misc-include-cleaner)
 
 namespace compton {
 
