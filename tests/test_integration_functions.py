@@ -5,8 +5,8 @@ Validates node/weight properties, polynomial exactness, and convergence
 against known analytic integrals.
 """
 
-import sys
 import math
+import sys
 
 import numpy as np
 import pytest
@@ -39,7 +39,7 @@ class TestGaussLaguerre:
         assert n1[0] == pytest.approx(1.0, abs=1e-14)
         assert w1[0] == pytest.approx(1.0, abs=1e-14)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="must be"):
             cq.gauss_laguerre_rule(0)
 
     def test_polynomial_exactness(self):
@@ -76,7 +76,8 @@ class TestGaussLegendre:
     def test_rule_properties(self):
         nodes, weights = cm.gauss_legendre_rule(32)
         assert weights.sum() == pytest.approx(2.0, abs=1e-14)
-        assert np.all(nodes > -1) and np.all(nodes < 1)
+        assert np.all(nodes > -1)
+        assert np.all(nodes < 1)
         assert np.all(weights > 0)
 
         s = np.argsort(nodes)
@@ -89,7 +90,7 @@ class TestGaussLegendre:
         assert n1[0] == pytest.approx(0.0, abs=1e-14)
         assert w1[0] == pytest.approx(2.0, abs=1e-14)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="must be"):
             cm.gauss_legendre_rule(0)
 
     def test_polynomial_exactness(self):
@@ -143,7 +144,7 @@ class TestAdaptiveLegendre:
         exact = math.atan(100.0)  # integral of 1/(1+100*x^2) from 0 to inf... no
         # ∫₀¹ 1/(1 + (10*(x-0.5))^2) dx  -- peaked at x=0.5
         from scipy.integrate import quad as scipy_quad
-        f = lambda x: 1.0 / (1.0 + (10.0 * (x - 0.5))**2)
+        def f(x): return 1.0 / (1.0 + (10.0 * (x - 0.5))**2)
         exact, _ = scipy_quad(f, 0.0, 1.0)
 
         for tol in [1e-3, 1e-6]:
@@ -156,7 +157,7 @@ class TestAdaptiveLegendre:
     def test_oscillatory_function(self):
         """Adaptive integration of sin(20x) on [0, 1] -- needs many panels."""
         exact = (1.0 - math.cos(20.0)) / 20.0  # ~0.0979
-        f = lambda x: math.sin(20.0 * x)
+        def f(x): return math.sin(20.0 * x)
 
         result = cm.adaptive_legendre_integrate(
             f, base_order=8, a=0.0, b=1.0, tol=1e-6)
@@ -175,7 +176,7 @@ class TestAdaptiveLegendre:
 
     def test_near_zero_integral(self):
         """Adaptive integration handles near-zero integrals without division issues."""
-        f = lambda x: math.sin(2.0 * math.pi * x)  # ∫₀¹ sin(2πx) dx = 0
+        def f(x): return math.sin(2.0 * math.pi * x)  # ∫₀¹ sin(2πx) dx = 0
         result = cm.adaptive_legendre_integrate(
             f, base_order=4, a=0.0, b=1.0, tol=1e-8)
         assert abs(result) < 1e-12, f"expected ~0, got {result:.2e}"
@@ -198,7 +199,7 @@ class TestAdaptiveLogLegendre:
     def test_exp_decay(self):
         """Log-space integration handles exponential decay well (clusters near a)."""
         from scipy.integrate import quad as scipy_quad
-        f = lambda x: math.exp(-x)
+        def f(x): return math.exp(-x)
         exact, _ = scipy_quad(f, 1.0, 100.0)
         result = cm.adaptive_log_legendre_integrate(
             f, base_order=8, a=1.0, b=100.0, tol=1e-6)
@@ -216,7 +217,7 @@ class TestAdaptiveLogLegendre:
     def test_narrow_interval(self):
         """Integration over a very narrow interval [1.0, 1.001]."""
         from scipy.integrate import quad as scipy_quad
-        f = lambda x: math.sin(x)
+        def f(x): return math.sin(x)
         exact, _ = scipy_quad(f, 1.0, 1.001)
         result = cm.adaptive_log_legendre_integrate(
             f, base_order=4, a=1.0, b=1.001, tol=1e-8)
@@ -253,7 +254,7 @@ class TestAdaptiveRlogLegendre:
         """
         from scipy.integrate import quad as scipy_quad
         b = 10.0
-        f = lambda x: math.exp(-(b - x))
+        def f(x): return math.exp(-(b - x))
         exact, _ = scipy_quad(f, 1.0, b)
         result = cm.adaptive_rlog_legendre_integrate(
             f, base_order=8, a=1.0, b=b, tol=1e-6)
@@ -271,7 +272,7 @@ class TestAdaptiveRlogLegendre:
     def test_matches_log_on_smooth(self):
         """Both log and rlog should give the same answer for a smooth integrand."""
         from scipy.integrate import quad as scipy_quad
-        f = lambda x: math.sin(x)
+        def f(x): return math.sin(x)
         exact, _ = scipy_quad(f, 1.0, 5.0)
 
         r_log = cm.adaptive_log_legendre_integrate(
@@ -286,7 +287,7 @@ class TestAdaptiveRlogLegendre:
     def test_narrow_interval(self):
         """Integration over a very narrow interval [5.0, 5.001]."""
         from scipy.integrate import quad as scipy_quad
-        f = lambda x: math.cos(x)
+        def f(x): return math.cos(x)
         exact, _ = scipy_quad(f, 5.0, 5.001)
         result = cm.adaptive_rlog_legendre_integrate(
             f, base_order=4, a=5.0, b=5.001, tol=1e-8)

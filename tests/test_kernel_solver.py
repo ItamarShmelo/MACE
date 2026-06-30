@@ -14,10 +14,8 @@ import pytest
 sys.path.insert(0, "cpp_modules")
 
 import _compton_differential_cross_section as cq
-from _compton_differential_cross_section import ComptonPowerSeries
-from _compton_differential_cross_section import ComptonKernelAsymptoticSeries
-from _compton_differential_cross_section import ComptonKernelSolver
-from _units import kev, kev_kelvin, me_c2
+from _compton_differential_cross_section import ComptonKernelAsymptoticSeries, ComptonKernelSolver, ComptonPowerSeries
+from _units import kev, kev_kelvin
 
 QUAD_REF = cq.ComptonKernelQuadrature(256, cq.QuadratureForm.PostIBP)
 DD_SERIES = ComptonPowerSeries(high_precision=True)

@@ -18,7 +18,7 @@ sys.path.insert(0, "cpp_modules")
 
 import _compton_multigroup as cm
 from _compton_differential_cross_section import ComptonKernelSolver
-from _units import kev, kev_kelvin, me_c2, k_boltz
+from _units import k_boltz, kev, kev_kelvin, me_c2
 
 KERNEL = ComptonKernelSolver()
 REFERENCE_DIR = os.path.join(os.path.dirname(__file__), "ridge_reference")

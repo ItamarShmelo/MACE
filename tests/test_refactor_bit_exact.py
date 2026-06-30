@@ -149,7 +149,7 @@ class TestBitExact:
 class TestNewPublicAPI:
     """Smoke tests for the four new compute_*_integral_* methods."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def mg(self):
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
         return cm.ComptonMultigroupKernel(

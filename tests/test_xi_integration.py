@@ -22,7 +22,6 @@ import _compton_multigroup as cm
 from _compton_differential_cross_section import ComptonKernelSolver
 from _units import kev, kev_kelvin
 
-
 KERNEL = ComptonKernelSolver()
 
 
@@ -209,12 +208,12 @@ class TestPeakRight:
                                             T=T, Ne=1.0)
 
         g_in = 0
-        for i, (lo, hi) in enumerate(zip(bounds[:-1], bounds[1:])):
+        for i, (lo, hi) in enumerate(zip(bounds[:-1], bounds[1:], strict=True)):
             if lo <= E_in <= hi:
                 g_in = i
                 break
         g_out = 0
-        for i, (lo, hi) in enumerate(zip(bounds[:-1], bounds[1:])):
+        for i, (lo, hi) in enumerate(zip(bounds[:-1], bounds[1:], strict=True)):
             if lo <= E_out <= hi:
                 g_out = i
                 break

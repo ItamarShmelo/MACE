@@ -15,10 +15,9 @@ import pytest
 
 sys.path.insert(0, "cpp_modules")
 
-import _compton_multigroup as mc
 import _compton_multigroup as cm
+import _compton_multigroup as mc
 from _units import kev, kev_kelvin
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -204,14 +203,14 @@ class TestBasicSanity:
         np.testing.assert_allclose(S_int, S_summed, rtol=1e-14, atol=0)
 
     def test_invalid_boundaries(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError, match="boundaries"):
             mc.ComptonMonteCarloKernel(
                 energy_group_boundaries=[5.0 * kev, 1.0 * kev],
                 weight_function=cm.WienWeightFunction(cap_x=25.0))
 
     def test_invalid_temperature(self):
         mc_obj = _make_mc(BOUNDARIES_ERG, num_samples=100)
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError, match="[Tt]emperature"):
             mc_obj.compute_sigma_matrix(T=-1.0, Ne=1.0)
 
 

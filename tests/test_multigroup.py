@@ -20,8 +20,7 @@ sys.path.insert(0, "cpp_modules")
 
 import _compton_multigroup as cm
 from _compton_differential_cross_section import ComptonKernelSolver
-from _units import kev, kev_kelvin, k_boltz
-
+from _units import k_boltz, kev, kev_kelvin
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -576,11 +575,11 @@ class TestNewConfigFields:
         assert cfg.log_e_panel_ratio == pytest.approx(3.0)
 
     def test_log_e_panel_ratio_validation(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError, match="log_e_panel_ratio"):
             cm.MGIntegrationConfig(log_e_panel_ratio=1.0)
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError, match="log_e_panel_ratio"):
             cm.MGIntegrationConfig(log_e_panel_ratio=0.5)
 
     def test_e_panel_order_validation(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError, match="e_panel_order"):
             cm.MGIntegrationConfig(e_panel_order=0)

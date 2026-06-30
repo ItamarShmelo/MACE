@@ -18,7 +18,6 @@ import textwrap
 import numpy as np
 import pytest
 
-
 WORKER_DETERMINISTIC = textwrap.dedent("""\
     import sys, os, numpy as np
     sys.path.insert(0, "cpp_modules")
