@@ -9,16 +9,12 @@ after the engine replacement.
 import json
 import math
 import os
-import sys
 
+import compton_matrix._compton_multigroup as cm
 import numpy as np
 import pytest
-
-sys.path.insert(0, "cpp_modules")
-
-import _compton_multigroup as cm
-from _compton_differential_cross_section import ComptonKernelSolver
-from _units import k_boltz, kev, kev_kelvin, me_c2
+from compton_matrix._compton_differential_cross_section import ComptonKernelSolver
+from compton_matrix._units import k_boltz, kev, kev_kelvin, me_c2
 
 KERNEL = ComptonKernelSolver()
 REFERENCE_DIR = os.path.join(os.path.dirname(__file__), "ridge_reference")
@@ -27,14 +23,14 @@ REFERENCE_DIR = os.path.join(os.path.dirname(__file__), "ridge_reference")
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _tau(T):
     """Dimensionless temperature tau = k_B T / (m_e c^2)."""
     return T * k_boltz / me_c2
 
 
 def _config(order, **kwargs):
-    for key in ("xi_order", "xi_tail_order", "ep_edge_order",
-                "ep_interior_order", "e_panel_order"):
+    for key in ("xi_order", "xi_tail_order", "ep_edge_order", "ep_interior_order", "e_panel_order"):
         if kwargs.get(key) is None:
             kwargs[key] = order
     return cm.MGIntegrationConfig(**kwargs)
@@ -43,6 +39,7 @@ def _config(order, **kwargs):
 # ---------------------------------------------------------------------------
 # Tests for ridge_thermal_width
 # ---------------------------------------------------------------------------
+
 
 class TestRidgeThermalWidth:
     """Validate ridge_thermal_width against limiting cases and analytic formulas."""
@@ -100,19 +97,21 @@ class TestRidgeThermalWidth:
         assert math.isfinite(sigma)
         assert sigma > 0.0
 
-    @pytest.mark.parametrize("E,xi,T", [
-        (100 * kev, 0.0, 10 * kev_kelvin),
-        (10 * kev, -1.0, 1 * kev_kelvin),
-        (500 * kev, 0.5, 50 * kev_kelvin),
-    ])
+    @pytest.mark.parametrize(
+        "E,xi,T",
+        [
+            (100 * kev, 0.0, 10 * kev_kelvin),
+            (10 * kev, -1.0, 1 * kev_kelvin),
+            (500 * kev, 0.5, 50 * kev_kelvin),
+        ],
+    )
     def test_analytic_formula(self, E, xi, T):
         """Compare C++ result against Python computation of the formula."""
         gamma = E / me_c2
         tau = _tau(T)
         u = max(0.0, 1.0 - xi)
         d = 1.0 + gamma * u
-        expected = (E / (d * d)) * math.sqrt(
-            tau * u * (2.0 + 2.0 * gamma * u + gamma * gamma * u))
+        expected = (E / (d * d)) * math.sqrt(tau * u * (2.0 + 2.0 * gamma * u + gamma * gamma * u))
 
         result = cm.ridge_thermal_width(E, xi, T)
         assert abs(result - expected) < 1e-14 * max(abs(expected), 1e-30)
@@ -122,22 +121,34 @@ class TestRidgeThermalWidth:
 # Tests for compute_ridge_bounds
 # ---------------------------------------------------------------------------
 
+
 class TestComputeRidgeBounds:
     """Validate compute_ridge_bounds struct fields."""
 
     @pytest.mark.parametrize("E", [1 * kev, 100 * kev, 1000 * kev])
-    @pytest.mark.parametrize("xi_lo,xi_hi", [
-        (-1.0, -0.5), (-0.5, 0.0), (0.0, 0.5), (-1.0, 0.999999999),
-    ])
+    @pytest.mark.parametrize(
+        "xi_lo,xi_hi",
+        [
+            (-1.0, -0.5),
+            (-0.5, 0.0),
+            (0.0, 0.5),
+            (-1.0, 0.999999999),
+        ],
+    )
     def test_cold_lo_leq_cold_hi(self, E, xi_lo, xi_hi):
         """cold_lo <= cold_hi for xi_lo < xi_hi (monotonicity of cold ridge)."""
         rb = cm.compute_ridge_bounds(E, xi_lo, xi_hi, 10 * kev_kelvin)
         assert rb.cold_lo <= rb.cold_hi
 
     @pytest.mark.parametrize("E", [1 * kev, 50 * kev, 500 * kev])
-    @pytest.mark.parametrize("xi_lo,xi_hi", [
-        (-1.0, 0.0), (-0.5, 0.5), (0.0, 0.9),
-    ])
+    @pytest.mark.parametrize(
+        "xi_lo,xi_hi",
+        [
+            (-1.0, 0.0),
+            (-0.5, 0.5),
+            (0.0, 0.9),
+        ],
+    )
     def test_cold_recoil_agreement(self, E, xi_lo, xi_hi):
         """At T=0, cold endpoints must be bitwise equal to cold_recoil_lo/hi."""
         rb = cm.compute_ridge_bounds(E, xi_lo, xi_hi, 0.0)
@@ -170,6 +181,7 @@ class TestComputeRidgeBounds:
 # Phase 2: Integration-level tests for the new ridge engine
 # ---------------------------------------------------------------------------
 
+
 class TestColdRecoilBitwiseCompat:
     """cold_recoil_lo/hi (reimplemented via compute_ridge_bounds) must match
     the Phase 1 reference values bitwise."""
@@ -182,10 +194,8 @@ class TestColdRecoilBitwiseCompat:
             E_str, xi_str = key.rsplit("_", 1)
             E = float(E_str)
             xi = float(xi_str)
-            assert cm.cold_recoil_lo(E, xi) == vals["lo"], \
-                f"cold_recoil_lo mismatch at E={E}, xi={xi}"
-            assert cm.cold_recoil_hi(E, xi) == vals["hi"], \
-                f"cold_recoil_hi mismatch at E={E}, xi={xi}"
+            assert cm.cold_recoil_lo(E, xi) == vals["lo"], f"cold_recoil_lo mismatch at E={E}, xi={xi}"
+            assert cm.cold_recoil_hi(E, xi) == vals["hi"], f"cold_recoil_hi mismatch at E={E}, xi={xi}"
 
 
 class TestConservationComparison:
@@ -201,10 +211,8 @@ class TestConservationComparison:
         config_no_tails = _config(32, ep_k_cut=5.0, ep_k_in=2.0)
         config_tails = _config(32, ep_k_cut=5.0, ep_k_in=2.0)
 
-        mg_no = cm.ComptonMultigroupKernel(
-            bounds, cm.PlanckWeightFunction(cap_x=25.0), config_no_tails)
-        mg_yes = cm.ComptonMultigroupKernel(
-            bounds, cm.PlanckWeightFunction(cap_x=25.0), config_tails)
+        mg_no = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config_no_tails)
+        mg_yes = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config_tails)
 
         m_no = mg_no.compute_sigma_matrix(KERNEL, num_angle_bins=8, T=T, Ne=1.0)
         m_yes = mg_yes.compute_sigma_matrix(KERNEL, num_angle_bins=8, T=T, Ne=1.0)
@@ -214,8 +222,7 @@ class TestConservationComparison:
             diag_yes = m_yes[g, g].sum()
             if abs(diag_yes) > 1e-35:
                 rel = abs(diag_no - diag_yes) / abs(diag_yes)
-                assert rel < 0.15, \
-                    f"Diagonal g={g}: rel diff = {rel:.2e}"
+                assert rel < 0.15, f"Diagonal g={g}: rel diff = {rel:.2e}"
 
     def test_tails_add_to_row_sum(self):
         """With diagnostic tails, row sums should be >= no-tails row sums
@@ -226,10 +233,8 @@ class TestConservationComparison:
         config_no = _config(24, cutoff_ratio=1e-14, ep_k_cut=5.0)
         config_yes = _config(24, cutoff_ratio=1e-14, ep_k_cut=5.0)
 
-        mg_no = cm.ComptonMultigroupKernel(
-            bounds, cm.PlanckWeightFunction(cap_x=25.0), config_no)
-        mg_yes = cm.ComptonMultigroupKernel(
-            bounds, cm.PlanckWeightFunction(cap_x=25.0), config_yes)
+        mg_no = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config_no)
+        mg_yes = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config_yes)
 
         m_no = mg_no.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T, Ne=1.0)
         m_yes = mg_yes.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T, Ne=1.0)
@@ -238,8 +243,7 @@ class TestConservationComparison:
         rows_yes = m_yes.sum(axis=(1, 2))
 
         for g in range(len(rows_no)):
-            assert rows_yes[g] >= rows_no[g] - 1e-35, \
-                f"Row {g}: tails reduced row sum unexpectedly"
+            assert rows_yes[g] >= rows_no[g] - 1e-35, f"Row {g}: tails reduced row sum unexpectedly"
 
 
 class TestOverlapCollapse:
@@ -250,8 +254,7 @@ class TestOverlapCollapse:
         bounds = [1.0 * kev, 5.0 * kev, 50.0 * kev]
         T = 10.0 * kev_kelvin
         config = _config(16, ep_k_cut=5.0, ep_k_in=2.0)
-        mg = cm.ComptonMultigroupKernel(
-            bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
+        mg = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
         m = mg.compute_sigma_matrix(KERNEL, num_angle_bins=32, T=T, Ne=1.0)
         assert np.all(np.isfinite(m))
         assert np.any(m != 0.0)
@@ -265,8 +268,7 @@ class TestFullyOutsideGroup:
         bounds = [0.01 * kev, 0.05 * kev, 0.1 * kev, 500 * kev, 1000 * kev]
         T = 1.0 * kev_kelvin
         config = _config(16, ep_k_cut=5.0)
-        mg = cm.ComptonMultigroupKernel(
-            bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
+        mg = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
         m = mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T, Ne=1.0)
         assert m[0, 3, 0] == 0.0, "far above-ridge group should be exactly 0"
 
@@ -274,8 +276,7 @@ class TestFullyOutsideGroup:
         bounds = [0.01 * kev, 0.05 * kev, 0.1 * kev, 500 * kev, 1000 * kev]
         T = 1.0 * kev_kelvin
         config = _config(16, ep_k_cut=5.0)
-        mg = cm.ComptonMultigroupKernel(
-            bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
+        mg = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
         m = mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T, Ne=1.0)
         assert np.all(np.isfinite(m))
 
@@ -287,8 +288,7 @@ class TestZeroSigmaBehavior:
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
         T = 0.001 * kev_kelvin  # near-cold
         config = _config(16, ep_k_cut=5.0)
-        mg = cm.ComptonMultigroupKernel(
-            bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
+        mg = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
         m = mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T, Ne=1.0)
         assert np.all(np.isfinite(m))
         assert np.any(m != 0.0)
@@ -301,8 +301,7 @@ class TestClippedRetainedInterval:
         bounds = [1.0 * kev, 2.0 * kev, 100.0 * kev]
         T = 50.0 * kev_kelvin  # wide thermal width
         config = _config(16, ep_k_cut=6.0)
-        mg = cm.ComptonMultigroupKernel(
-            bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
+        mg = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
         m = mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T, Ne=1.0)
         assert np.all(np.isfinite(m))
 
@@ -318,10 +317,8 @@ class TestDiagnosticTailEndToEnd:
         config_off = _config(16, ep_k_cut=5.0)
         config_on = _config(16, ep_k_cut=5.0)
 
-        mg_off = cm.ComptonMultigroupKernel(
-            bounds, cm.PlanckWeightFunction(cap_x=25.0), config_off)
-        mg_on = cm.ComptonMultigroupKernel(
-            bounds, cm.PlanckWeightFunction(cap_x=25.0), config_on)
+        mg_off = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config_off)
+        mg_on = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config_on)
 
         m_off = mg_off.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T, Ne=1.0)
         m_on = mg_on.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T, Ne=1.0)
@@ -341,10 +338,8 @@ class TestKcutConvergence:
         matrices = {}
         for k in [4.0, 5.0, 6.0]:
             config = _config(24, ep_k_cut=k)
-            mg = cm.ComptonMultigroupKernel(
-                bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
-            matrices[k] = mg.compute_sigma_matrix(
-                KERNEL, num_angle_bins=2, T=T, Ne=1.0)
+            mg = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
+            matrices[k] = mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T, Ne=1.0)
 
         diff_45 = np.max(np.abs(matrices[5.0] - matrices[4.0]))
         diff_56 = np.max(np.abs(matrices[6.0] - matrices[5.0]))
@@ -352,8 +347,7 @@ class TestKcutConvergence:
         scale = np.max(np.abs(matrices[5.0]))
         rel_56 = diff_56 / scale
         assert diff_56 < diff_45 or rel_56 < 1e-4, (
-            f"k_cut convergence failed: diff(5,6)={diff_56:.2e} >= "
-            f"diff(4,5)={diff_45:.2e}, rel(5,6)={rel_56:.2e}"
+            f"k_cut convergence failed: diff(5,6)={diff_56:.2e} >= diff(4,5)={diff_45:.2e}, rel(5,6)={rel_56:.2e}"
         )
 
 
@@ -378,20 +372,15 @@ class TestDoublePeakLastBinConvergence:
 
         vals_by_order = {}
         for order in [16, 24, 32, 48, 64]:
-            config = _config(
-                24, ep_k_cut=5.0, ep_k_in=2.0,
-                ep_edge_order=order, ep_interior_order=order)
-            mg = cm.ComptonMultigroupKernel(
-                [Ep_lo, Ep_hi], cm.UniformWeightFunction(), config)
-            vals = np.asarray(mg.compute_Ep_xi_integral_sigma(
-                KERNEL, E, Ep_lo, Ep_hi, num_xi_bins, T, 1.0))
+            config = _config(24, ep_k_cut=5.0, ep_k_in=2.0, ep_edge_order=order, ep_interior_order=order)
+            mg = cm.ComptonMultigroupKernel([Ep_lo, Ep_hi], cm.UniformWeightFunction(), config)
+            vals = np.asarray(mg.compute_Ep_xi_integral_sigma(KERNEL, E, Ep_lo, Ep_hi, num_xi_bins, T, 1.0))
             vals_by_order[order] = vals
 
         ref = vals_by_order[64]
         for order in [32, 48]:
             delta = np.abs(vals_by_order[order] - ref) / np.maximum(np.abs(ref), 1e-30)
-            assert delta[3] < 1e-3, \
-                f"T={T_keV} keV, order={order}: last-bin delta={delta[3]:.2e} >= 1e-3"
+            assert delta[3] < 1e-3, f"T={T_keV} keV, order={order}: last-bin delta={delta[3]:.2e} >= 1e-3"
 
 
 class TestDoublePeakNonLastBinUnchanged:
@@ -407,28 +396,19 @@ class TestDoublePeakNonLastBinUnchanged:
         Ep_hi = 2.0 * E
         num_xi_bins = 4
 
-        config = _config(
-            24, ep_k_cut=5.0, ep_k_in=2.0,
-            ep_edge_order=24, ep_interior_order=24)
-        mg = cm.ComptonMultigroupKernel(
-            [Ep_lo, Ep_hi], cm.UniformWeightFunction(), config)
+        config = _config(24, ep_k_cut=5.0, ep_k_in=2.0, ep_edge_order=24, ep_interior_order=24)
+        mg = cm.ComptonMultigroupKernel([Ep_lo, Ep_hi], cm.UniformWeightFunction(), config)
 
-        vals_24 = np.asarray(mg.compute_Ep_xi_integral_sigma(
-            KERNEL, E, Ep_lo, Ep_hi, num_xi_bins, T, 1.0))
+        vals_24 = np.asarray(mg.compute_Ep_xi_integral_sigma(KERNEL, E, Ep_lo, Ep_hi, num_xi_bins, T, 1.0))
 
-        config_48 = _config(
-            24, ep_k_cut=5.0, ep_k_in=2.0,
-            ep_edge_order=48, ep_interior_order=48)
-        mg_48 = cm.ComptonMultigroupKernel(
-            [Ep_lo, Ep_hi], cm.UniformWeightFunction(), config_48)
-        vals_48 = np.asarray(mg_48.compute_Ep_xi_integral_sigma(
-            KERNEL, E, Ep_lo, Ep_hi, num_xi_bins, T, 1.0))
+        config_48 = _config(24, ep_k_cut=5.0, ep_k_in=2.0, ep_edge_order=48, ep_interior_order=48)
+        mg_48 = cm.ComptonMultigroupKernel([Ep_lo, Ep_hi], cm.UniformWeightFunction(), config_48)
+        vals_48 = np.asarray(mg_48.compute_Ep_xi_integral_sigma(KERNEL, E, Ep_lo, Ep_hi, num_xi_bins, T, 1.0))
 
         for a in range(3):
             if abs(vals_48[a]) > 1e-30:
                 delta = abs(vals_24[a] - vals_48[a]) / abs(vals_48[a])
-                assert delta < 1e-6, \
-                    f"bin {a}: delta={delta:.2e} >= 1e-6, values not converged"
+                assert delta < 1e-6, f"bin {a}: delta={delta:.2e} >= 1e-6, values not converged"
 
 
 class TestDoublePeakThresholdBoundary:
@@ -443,17 +423,11 @@ class TestDoublePeakThresholdBoundary:
         Ep_hi = 2.0 * E
 
         for num_xi_bins in [2, 4, 8, 16]:
-            config = _config(
-                24, ep_k_cut=5.0, ep_k_in=2.0,
-                ep_edge_order=24, ep_interior_order=24)
-            mg = cm.ComptonMultigroupKernel(
-                [Ep_lo, Ep_hi], cm.UniformWeightFunction(), config)
-            vals = np.asarray(mg.compute_Ep_xi_integral_sigma(
-                KERNEL, E, Ep_lo, Ep_hi, num_xi_bins, T, 1.0))
-            assert np.all(np.isfinite(vals)), \
-                f"num_xi_bins={num_xi_bins}: non-finite values"
-            assert np.all(vals > 0), \
-                f"num_xi_bins={num_xi_bins}: non-positive values"
+            config = _config(24, ep_k_cut=5.0, ep_k_in=2.0, ep_edge_order=24, ep_interior_order=24)
+            mg = cm.ComptonMultigroupKernel([Ep_lo, Ep_hi], cm.UniformWeightFunction(), config)
+            vals = np.asarray(mg.compute_Ep_xi_integral_sigma(KERNEL, E, Ep_lo, Ep_hi, num_xi_bins, T, 1.0))
+            assert np.all(np.isfinite(vals)), f"num_xi_bins={num_xi_bins}: non-finite values"
+            assert np.all(vals > 0), f"num_xi_bins={num_xi_bins}: non-positive values"
 
     def test_threshold_transition_smooth(self):
         """With increasing num_xi_bins, total integral should remain stable."""
@@ -464,19 +438,14 @@ class TestDoublePeakThresholdBoundary:
 
         totals = []
         for num_xi_bins in [4, 8, 16]:
-            config = _config(
-                24, ep_k_cut=5.0, ep_k_in=2.0,
-                ep_edge_order=32, ep_interior_order=32)
-            mg = cm.ComptonMultigroupKernel(
-                [Ep_lo, Ep_hi], cm.UniformWeightFunction(), config)
-            vals = np.asarray(mg.compute_Ep_xi_integral_sigma(
-                KERNEL, E, Ep_lo, Ep_hi, num_xi_bins, T, 1.0))
+            config = _config(24, ep_k_cut=5.0, ep_k_in=2.0, ep_edge_order=32, ep_interior_order=32)
+            mg = cm.ComptonMultigroupKernel([Ep_lo, Ep_hi], cm.UniformWeightFunction(), config)
+            vals = np.asarray(mg.compute_Ep_xi_integral_sigma(KERNEL, E, Ep_lo, Ep_hi, num_xi_bins, T, 1.0))
             totals.append(float(vals.sum()))
 
         for i in range(1, len(totals)):
             rel = abs(totals[i] - totals[0]) / abs(totals[0])
-            assert rel < 0.05, \
-                f"Total integral changed by {rel:.2e} between num_xi_bins settings"
+            assert rel < 0.05, f"Total integral changed by {rel:.2e} between num_xi_bins settings"
 
 
 class TestDoublePeakEpOrderSweep:
@@ -492,20 +461,14 @@ class TestDoublePeakEpOrderSweep:
 
         vals_list = []
         for order in [8, 16, 24, 32, 48, 64]:
-            config = _config(
-                24, ep_k_cut=5.0, ep_k_in=2.0,
-                ep_edge_order=order, ep_interior_order=order)
-            mg = cm.ComptonMultigroupKernel(
-                [Ep_lo, Ep_hi], cm.UniformWeightFunction(), config)
-            vals = np.asarray(mg.compute_Ep_xi_integral_sigma(
-                KERNEL, E, Ep_lo, Ep_hi, num_xi_bins, T, 1.0))
+            config = _config(24, ep_k_cut=5.0, ep_k_in=2.0, ep_edge_order=order, ep_interior_order=order)
+            mg = cm.ComptonMultigroupKernel([Ep_lo, Ep_hi], cm.UniformWeightFunction(), config)
+            vals = np.asarray(mg.compute_Ep_xi_integral_sigma(KERNEL, E, Ep_lo, Ep_hi, num_xi_bins, T, 1.0))
             vals_list.append(vals)
 
         ref = vals_list[-1]
 
         deltas = [abs(v[3] - ref[3]) / abs(ref[3]) for v in vals_list[:-1]]
 
-        assert deltas[-1] < deltas[0], \
-            f"Last-bin delta not decreasing: first={deltas[0]:.2e}, last={deltas[-1]:.2e}"
-        assert deltas[-1] < 1e-4, \
-            f"Last-bin delta at order 48 still {deltas[-1]:.2e} >= 1e-4"
+        assert deltas[-1] < deltas[0], f"Last-bin delta not decreasing: first={deltas[0]:.2e}, last={deltas[-1]:.2e}"
+        assert deltas[-1] < 1e-4, f"Last-bin delta at order 48 still {deltas[-1]:.2e} >= 1e-4"

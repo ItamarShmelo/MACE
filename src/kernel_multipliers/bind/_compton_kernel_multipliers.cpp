@@ -51,7 +51,7 @@ PYBIND11_MODULE(_compton_kernel_multipliers, m)
 {
     m.doc() = "Concrete kernel multipliers for multigroup Compton integrals";
 
-    py::module_::import("_compton_multigroup");
+    py::module_::import("compton_matrix._compton_multigroup");
 
     py::class_<EnergyTransferMultiplier, KernelMultiplier>(
         m,

@@ -19,8 +19,8 @@ PYBIND11_MODULE(_compton_multigroup, m)
 {
     m.doc() = "Weighted multigroup-multiangle Compton scattering matrix";
 
-    py::module_::import("_compton_common");
-    py::module_::import("_compton_differential_cross_section");
+    py::module_::import("compton_matrix._compton_common");
+    py::module_::import("compton_matrix._compton_differential_cross_section");
 
     py::class_<KernelMultiplier>(m, "KernelMultiplier");
 

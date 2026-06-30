@@ -17,7 +17,7 @@ PYBIND11_MODULE(_compton_differential_cross_section, m)
     m.doc() = "Compton differential cross-section kernels: power series, "
               "asymptotic series, quadrature, and adaptive solver";
 
-    py::module_::import("_compton_common");
+    py::module_::import("compton_matrix._compton_common");
 
     // --- Power Series ---
     py::class_<ComptonPowerSeries>(m, "ComptonPowerSeries")

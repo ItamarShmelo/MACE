@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(compton_cross_section LANGUAGES CXX)
+project(compton_matrix LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -46,9 +46,6 @@ pybind11_add_module(_compton_common
 target_compile_options(_compton_common PRIVATE
     -O3 -Wall -Wextra -Wpedantic
 )
-set_target_properties(_compton_common PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
-)
 
 pybind11_add_module(_compton_differential_cross_section
     src/compton_differential_cross_section/bind/_compton_differential_cross_section.cpp
@@ -60,18 +57,12 @@ pybind11_add_module(_compton_differential_cross_section
 target_compile_options(_compton_differential_cross_section PRIVATE
     -O3 -Wall -Wextra -Wpedantic
 )
-set_target_properties(_compton_differential_cross_section PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
-)
 
 pybind11_add_module(_units
     src/utilities/bind/_units.cpp
 )
 target_compile_options(_units PRIVATE
     -O3 -Wall -Wextra -Wpedantic
-)
-set_target_properties(_units PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
 )
 
 pybind11_add_module(_compton_multigroup
@@ -90,18 +81,12 @@ target_compile_options(_compton_multigroup PRIVATE
 if(COMPTON_ENABLE_OMP)
     target_link_libraries(_compton_multigroup PRIVATE OpenMP::OpenMP_CXX)
 endif()
-set_target_properties(_compton_multigroup PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
-)
 
 pybind11_add_module(_utilities
     src/utilities/bind/_utilities.cpp
 )
 target_compile_options(_utilities PRIVATE
     -O3 -Wall -Wextra -Wpedantic
-)
-set_target_properties(_utilities PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
 )
 
 pybind11_add_module(_compton_kernel_multipliers
@@ -110,6 +95,13 @@ pybind11_add_module(_compton_kernel_multipliers
 target_compile_options(_compton_kernel_multipliers PRIVATE
     -O3 -Wall -Wextra -Wpedantic
 )
-set_target_properties(_compton_kernel_multipliers PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp_modules"
+
+install(TARGETS
+    _compton_common
+    _compton_differential_cross_section
+    _compton_multigroup
+    _compton_kernel_multipliers
+    _units
+    _utilities
+    LIBRARY DESTINATION compton_matrix
 )

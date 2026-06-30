@@ -701,7 +701,7 @@ For cold temperatures (T < 0.1 keV), use higher GL orders (e.g.
 
 Python usage:
 ```python
-import _compton_multigroup as cm
+import compton_matrix._compton_multigroup as cm
 
 cfg = cm.MGIntegrationConfig(
     cutoff_ratio=1e-12,
