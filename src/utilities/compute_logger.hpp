@@ -16,21 +16,20 @@ class ComputeLogger {
     ComputeLogger(std::string_view tag, std::string_view params)
         : tag_(tag),
           wall_t0_(std::chrono::steady_clock::now()),
-          file_(
-              std::format("compton_multigroup_{}.log", ::getpid()),
-              std::ios::app)
+          log_path_(std::format("compton_multigroup_{}.log", ::getpid()))
     {
-        if (!file_) {
+        std::ofstream file(log_path_, std::ios::app);
+        if (!file) {
             return;
         }
         auto const now = std::chrono::system_clock::now();
-        std::println(file_, "{:%H:%M:%S} [compton] {}: {}", now, tag_, params);
-        file_.flush();
+        std::println(file, "{:%H:%M:%S} [compton] {}: {}", now, tag_, params);
     }
 
-    void done() // NOLINT(readability-convert-member-functions-to-static)
+    void done()
     {
-        if (!file_) {
+        std::ofstream file(log_path_, std::ios::app);
+        if (!file) {
             return;
         }
         auto const t1 = std::chrono::steady_clock::now();
@@ -38,7 +37,7 @@ class ComputeLogger {
             std::chrono::duration<double>(t1 - wall_t0_).count();
         auto const now = std::chrono::system_clock::now();
         std::println(
-            file_,
+            file,
             "{:%H:%M:%S} [compton] {}: done in {:g} s",
             now,
             tag_,
@@ -48,7 +47,7 @@ class ComputeLogger {
   private:
     std::string tag_;
     std::chrono::steady_clock::time_point wall_t0_;
-    std::ofstream file_;
+    std::string log_path_;
 };
 
 } // namespace compton
