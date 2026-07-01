@@ -166,10 +166,10 @@ class KernelMultiplier {
   public:
     virtual ~KernelMultiplier() = default;
     KernelMultiplier() = default;
-    KernelMultiplier(KernelMultiplier const&) = delete;
-    KernelMultiplier& operator=(KernelMultiplier const&) = delete;
-    KernelMultiplier(KernelMultiplier&&) = delete;
-    KernelMultiplier& operator=(KernelMultiplier&&) = delete;
+    KernelMultiplier(KernelMultiplier const&) = default;
+    KernelMultiplier& operator=(KernelMultiplier const&) = default;
+    KernelMultiplier(KernelMultiplier&&) = default;
+    KernelMultiplier& operator=(KernelMultiplier&&) = default;
     virtual double
     operator()(double E, double Ep, double xi, double T, double Ne) const = 0;
 };

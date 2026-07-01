@@ -13,7 +13,7 @@ setup:
     uv pip install -e .
 
 test:
-    uv run pytest
+    env -u PYTHONPATH uv run pytest
 
 format-python:
     uv run ruff format .
