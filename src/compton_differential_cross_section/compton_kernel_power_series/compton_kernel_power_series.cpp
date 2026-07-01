@@ -91,8 +91,9 @@ ComptonResult ComptonPowerSeries::power_series(
         if (n >= n_min_ &&
             last_diff_change /
                     (param_abs(p.Psi + (P_plus - P_minus)) + eps_tiny) <
-                eps_rel_)
+                eps_rel_) {
             break;
+        }
 
         if (n < n_max_) {
             T const inv_np1 = T(1.0) / T(n + 1.0);
@@ -277,8 +278,9 @@ ComptonResult ComptonPowerSeries::power_series_derivative(
             last_deriv_diff_change + abs_dlnSig0 * last_P_diff_change;
         if (n >= n_min_ &&
             total_trunc_est / (param_abs(deriv_normalized) + eps_tiny) <
-                eps_rel_)
+                eps_rel_) {
             break;
+        }
 
         if (n < n_max_) {
             T const inv_np1 = T(1.0) / T(n + 1.0);
@@ -381,10 +383,10 @@ ComptonResult ComptonPowerSeries::sigma_E(
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
-    if (high_precision_)
+    if (high_precision_) {
         return power_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
-    else
-        return power_series<double>(gamma, gamma_p, xi, tau, E, Ne);
+    }
+    return power_series<double>(gamma, gamma_p, xi, tau, E, Ne);
 }
 
 double ComptonPowerSeries::sigma_E_precision_check(
@@ -421,13 +423,14 @@ ComptonResult ComptonPowerSeries::dsigma_E_dT(
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
-    ComptonResult dtau_result;
-    if (high_precision_)
+    ComptonResult dtau_result{};
+    if (high_precision_) {
         dtau_result =
             power_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);
-    else
+    } else {
         dtau_result =
             power_series_derivative<double>(gamma, gamma_p, xi, tau, E, Ne);
+    }
 
     return ComptonResult{
         dtau_result.value * dtau_dT,

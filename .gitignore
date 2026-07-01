@@ -1,15 +1,38 @@
+# LaTeX
 *.aux
 *.fdb_latexmk
 *.fls
 *.log
 *.synctex.gz
 
+# Build
 build/
-reports/generated/
-tests/output/
-**__pycache__**
-references/
+build-tidy/
+dist/
 cpp_modules/
 
+# Generated data & outputs
+reports/
+scripts/
 benchmarks
 experiments
+references/
+tests/output/
+tests/refactor_snapshots/
+tests/ridge_reference/
+
+# Python
+__pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# IDE / tooling
+.vscode/
+.clangd
+compile_commands.json
+
+# Binary / media
+*.so
+*.png
+*.npy

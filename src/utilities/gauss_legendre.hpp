@@ -82,14 +82,15 @@ struct GaussLegendreRule {
  */
 inline GaussLegendreRule compute_gauss_legendre(int const N)
 {
-    if (N < 1)
+    if (N < 1) {
         throw std::invalid_argument("N must be >= 1");
+    }
 
     std::vector<double> diag(N, 0.0);
     std::vector<double> offdiag(N, 0.0);
 
     for (int i = 1; i < N; ++i) {
-        double const n = static_cast<double>(i);
+        auto const n = static_cast<double>(i);
         offdiag[i] = n / std::sqrt(4.0 * n * n - 1.0);
     }
 
@@ -122,7 +123,7 @@ inline GaussLegendreRule compute_gauss_legendre(int const N)
  */
 template <typename F>
 inline double legendre_integrate(
-    F&& integrand,
+    F const& integrand,
     GaussLegendreRule const& rule,
     double const a,
     double const b)
@@ -157,7 +158,7 @@ inline double legendre_integrate(
  */
 template <typename F>
 inline double log_legendre_integrate(
-    F&& integrand,
+    F const& integrand,
     GaussLegendreRule const& rule,
     double const a,
     double const b)
@@ -191,7 +192,7 @@ inline double log_legendre_integrate(
  */
 template <typename F>
 inline double rlog_legendre_integrate(
-    F&& integrand,
+    F const& integrand,
     GaussLegendreRule const& rule,
     double const a,
     double const b)
@@ -226,7 +227,7 @@ inline double rlog_legendre_integrate(
  */
 template <typename F>
 double adaptive_legendre_integrate(
-    F&& integrand,
+    F const& integrand,
     GaussLegendreRule const& rule,
     double const a,
     double const b,
@@ -286,7 +287,7 @@ double adaptive_legendre_integrate(
  */
 template <typename F>
 double adaptive_log_legendre_integrate(
-    F&& integrand,
+    F const& integrand,
     GaussLegendreRule const& rule,
     double const a,
     double const b,
@@ -332,7 +333,7 @@ double adaptive_log_legendre_integrate(
  */
 template <typename F>
 double adaptive_rlog_legendre_integrate(
-    F&& integrand,
+    F const& integrand,
     GaussLegendreRule const& rule,
     double const a,
     double const b,

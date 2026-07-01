@@ -22,26 +22,32 @@ class EnergyTransferMultiplier : public KernelMultiplier {
         : boundaries_(std::move(boundaries)),
           centers_(std::move(centers))
     {
-        if (boundaries_.size() != centers_.size() + 1)
+        if (boundaries_.size() != centers_.size() + 1) {
             throw std::invalid_argument(
                 "boundaries.size() must equal centers.size() + 1");
-        for (std::size_t i = 0; i + 1 < boundaries_.size(); ++i)
-            if (boundaries_[i] >= boundaries_[i + 1])
+        }
+        for (std::size_t i = 0; i + 1 < boundaries_.size(); ++i) {
+            if (boundaries_[i] >= boundaries_[i + 1]) {
                 throw std::invalid_argument(
                     "boundaries must be strictly increasing");
+            }
+        }
     }
 
     double
-    operator()(double E, double Ep, double, double, double) const override
+    operator()(double E, double Ep, double /*xi*/, double /*T*/, double /*Ne*/)
+        const override
     {
         auto it_g = std::upper_bound(boundaries_.begin(), boundaries_.end(), E);
         auto it_gp =
             std::upper_bound(boundaries_.begin(), boundaries_.end(), Ep);
-        int const g = static_cast<int>(std::distance(boundaries_.begin(), it_g)) - 1;
+        int const g =
+            static_cast<int>(std::distance(boundaries_.begin(), it_g)) - 1;
         int const gp =
             static_cast<int>(std::distance(boundaries_.begin(), it_gp)) - 1;
-        if (g == gp)
+        if (g == gp) {
             return 1.0;
+        }
         return (Ep - E) / (centers_[gp] - centers_[g]);
     }
 

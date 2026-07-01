@@ -115,16 +115,19 @@ inline Tql2Result
 tql2(int const n, std::vector<double> diag, std::vector<double> offdiag)
 {
     std::vector<double> Z(static_cast<std::size_t>(n) * n, 0.0);
-    for (int i = 0; i < n; ++i)
+    for (int i = 0; i < n; ++i) {
         Z[i * n + i] = 1.0;
+    }
 
-    if (n == 1)
+    if (n == 1) {
         return Tql2Result{std::move(diag), std::move(Z)};
+    }
 
     // Shift offdiag so that subdiagonal is in offdiag[0..n-2]
     // (offdiag passed in has subdiag in [1..n-1])
-    for (int i = 0; i < n - 1; ++i)
+    for (int i = 0; i < n - 1; ++i) {
         offdiag[i] = offdiag[i + 1];
+    }
     offdiag[n - 1] = 0.0;
 
     for (int l = 0; l < n; ++l) {
@@ -135,20 +138,25 @@ tql2(int const n, std::vector<double> diag, std::vector<double> offdiag)
             int m = l;
             for (; m < n - 1; ++m) {
                 double const dd = std::abs(diag[m]) + std::abs(diag[m + 1]);
-                if (std::abs(offdiag[m]) <= 1e-15 * dd)
+                if (std::abs(offdiag[m]) <= 1e-15 * dd) {
                     break;
+                }
             }
-            if (m == l)
+            if (m == l) {
                 break;
+            }
 
-            if (iter++ >= max_iter)
+            if (iter++ >= max_iter) {
                 throw std::runtime_error("tql2: too many iterations");
+            }
 
             double g = (diag[l + 1] - diag[l]) / (2.0 * offdiag[l]);
             double r = std::hypot(g, 1.0);
             g = diag[m] - diag[l] + offdiag[l] / (g + std::copysign(r, g));
 
-            double s = 1.0, c = 1.0, p = 0.0;
+            double s = 1.0;
+            double c = 1.0;
+            double p = 0.0;
 
             for (int i = m - 1; i >= l; --i) {
                 double f = s * offdiag[i];
@@ -178,8 +186,9 @@ tql2(int const n, std::vector<double> diag, std::vector<double> offdiag)
                 }
             }
 
-            if (r == 0.0 && iter > 0)
+            if (r == 0.0 && iter > 0) {
                 continue;
+            }
 
             diag[l] -= p;
             offdiag[l] = g;
@@ -222,8 +231,9 @@ tql2(int const n, std::vector<double> diag, std::vector<double> offdiag)
  */
 inline GaussLaguerreRule compute_gauss_laguerre(int N)
 {
-    if (N < 1)
+    if (N < 1) {
         throw std::invalid_argument("N must be >= 1");
+    }
 
     // For Laguerre polynomials L_n(x) with alpha=0:
     // Three-term recurrence: (n+1) L_{n+1}(x) = (2n+1-x) L_n(x) - n L_{n-1}(x)
@@ -259,7 +269,8 @@ inline GaussLaguerreRule compute_gauss_laguerre(int N)
  * @brief Integrate a function using a precomputed Gauss-Laguerre rule.
  */
 template <typename F>
-inline double laguerre_integrate(F&& integrand, GaussLaguerreRule const& rule)
+inline double
+laguerre_integrate(F const& integrand, GaussLaguerreRule const& rule)
 {
     double sum = 0.0;
     int const n = static_cast<int>(rule.nodes.size());

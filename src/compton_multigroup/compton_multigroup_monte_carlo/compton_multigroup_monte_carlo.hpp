@@ -188,19 +188,7 @@ class ComptonMonteCarloKernel {
         int num_angle_bins,
         double T,
         double Ne,
-        MultiplierFn&& multiplier_fn) const;
-
-    /**
-     * @brief Sample electron Lorentz factor from the velocity-weighted
-     *        Maxwell-Jüttner distribution via three-branch inverse CDF.
-     */
-    double sample_gamma(double theta) const;
-
-    /** @brief Thread-safe overload accepting external RNG state. */
-    static double sample_gamma(
-        double theta,
-        boost::random::mt19937_64& rng,
-        boost::random::uniform_01<>& dist);
+        MultiplierFn const& multiplier_fn) const;
 
     std::vector<double> group_boundaries_;
     std::vector<double> group_centers_;

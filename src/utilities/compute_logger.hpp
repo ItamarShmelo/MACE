@@ -20,17 +20,19 @@ class ComputeLogger {
               std::format("compton_multigroup_{}.log", ::getpid()),
               std::ios::app)
     {
-        if (!file_)
+        if (!file_) {
             return;
+        }
         auto const now = std::chrono::system_clock::now();
         std::println(file_, "{:%H:%M:%S} [compton] {}: {}", now, tag_, params);
         file_.flush();
     }
 
-    void done()
+    void done() // NOLINT(readability-convert-member-functions-to-static)
     {
-        if (!file_)
+        if (!file_) {
             return;
+        }
         auto const t1 = std::chrono::steady_clock::now();
         double const elapsed =
             std::chrono::duration<double>(t1 - wall_t0_).count();

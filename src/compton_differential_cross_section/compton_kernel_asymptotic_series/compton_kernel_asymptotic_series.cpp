@@ -158,8 +158,9 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
 
         prev_combined_mag = combined_mag;
 
-        if (!param_isfinite(factorial_n) || !std::isfinite(combined_mag))
+        if (!param_isfinite(factorial_n) || !std::isfinite(combined_mag)) {
             break;
+        }
 
         T const n_dbl = static_cast<T>(n);
         T const Pp_next = ((static_cast<T>(2.0) * n_dbl + static_cast<T>(3.0)) *
@@ -338,8 +339,9 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
 
         prev_dcombined_mag = dcombined_mag;
 
-        if (!param_isfinite(factorial_n) || !std::isfinite(dcombined_mag))
+        if (!param_isfinite(factorial_n) || !std::isfinite(dcombined_mag)) {
             break;
+        }
 
         T const n_dbl = static_cast<T>(n);
         T const Pp_next = ((static_cast<T>(2.0) * n_dbl + static_cast<T>(3.0)) *
@@ -389,10 +391,10 @@ ComptonResult ComptonKernelAsymptoticSeries::sigma_E(
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
-    if (high_precision_)
+    if (high_precision_) {
         return asymptotic_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
-    else
-        return asymptotic_series<double>(gamma, gamma_p, xi, tau, E, Ne);
+    }
+    return asymptotic_series<double>(gamma, gamma_p, xi, tau, E, Ne);
 }
 
 double ComptonKernelAsymptoticSeries::sigma_E_precision_check(
@@ -429,11 +431,11 @@ ComptonResult ComptonKernelAsymptoticSeries::dsigma_E_dT(
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
-    ComptonResult dtau_result;
-    if (high_precision_)
+    ComptonResult dtau_result{};
+    if (high_precision_) {
         dtau_result =
             asymptotic_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);
-    else
+    } else {
         dtau_result = asymptotic_series_derivative<double>(
             gamma,
             gamma_p,
@@ -441,6 +443,7 @@ ComptonResult ComptonKernelAsymptoticSeries::dsigma_E_dT(
             tau,
             E,
             Ne);
+    }
 
     return ComptonResult{
         dtau_result.value * dtau_dT,

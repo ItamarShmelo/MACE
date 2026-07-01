@@ -3,7 +3,7 @@
 #include "utilities/units.hpp"
 
 #include <algorithm>
-#include <cstdio>
+#include <print>
 #include <stdexcept>
 
 namespace compton {
@@ -36,10 +36,11 @@ ComptonResult eval_kernel(
     double T,
     double Ne)
 {
-    if constexpr (Op == ComptonKernelSolver::KernelOp::sigma)
+    if constexpr (Op == ComptonKernelSolver::KernelOp::sigma) {
         return s.sigma_E(E, Ep, xi, T, Ne);
-    else
+    } else {
         return s.dsigma_E_dT(E, Ep, xi, T, Ne);
+    }
 }
 
 } // namespace
@@ -68,18 +69,22 @@ ComptonResult ComptonKernelSolver::dispatch(
         try {
             auto const r =
                 eval_kernel<Op>(asymp_series_, E, E_prime, xi, T, Ne);
-            if (r.estimated_rel_error < asymp_self_tol_)
+            if (r.estimated_rel_error < asymp_self_tol_) {
                 return r;
-        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next backend
+            }
+        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next
+                        // backend
         }
 
         // A2: DD asymptotic
         try {
             auto const r =
                 eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T, Ne);
-            if (r.estimated_rel_error < dd_asymp_self_tol_)
+            if (r.estimated_rel_error < dd_asymp_self_tol_) {
                 return r;
-        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next backend
+            }
+        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next
+                        // backend
         }
     } else {
         // --- Power series regime ---
@@ -89,9 +94,11 @@ ComptonResult ComptonKernelSolver::dispatch(
             auto const r =
                 eval_kernel<Op>(power_series_, E, E_prime, xi, T, Ne);
             if (r.estimated_rel_error < power_series_self_tol_ &&
-                (Op == KernelOp::dsigma_dT || r.value >= 0.0))
+                (Op == KernelOp::dsigma_dT || r.value >= 0.0)) {
                 return r;
-        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next backend
+            }
+        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next
+                        // backend
         }
 
         // P2: DD power series
@@ -99,9 +106,11 @@ ComptonResult ComptonKernelSolver::dispatch(
             auto const r =
                 eval_kernel<Op>(power_series_dd_, E, E_prime, xi, T, Ne);
             if (r.estimated_rel_error < dd_power_series_self_tol_ &&
-                (Op == KernelOp::dsigma_dT || r.value >= 0.0))
+                (Op == KernelOp::dsigma_dT || r.value >= 0.0)) {
                 return r;
-        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next backend
+            }
+        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next
+                        // backend
         }
     }
 
@@ -115,7 +124,7 @@ ComptonResult ComptonKernelSolver::sigma_E(
     double const T,
     double const Ne) const
 {
-    ComptonResult result;
+    ComptonResult result{};
     try {
         result = dispatch<KernelOp::sigma>(E, E_prime, xi, T, Ne);
     } catch (...) {
@@ -123,10 +132,11 @@ ComptonResult ComptonKernelSolver::sigma_E(
         double const gamma_p = E_prime / units::me_c2;
         double const T_kev = T / units::kev_kelvin;
         double const tau = T * units::k_boltz / units::me_c2;
-        std::fprintf(
+        std::println(
             stderr,
             "WARNING sigma_E: all backends failed, returning 0"
-            "  (gamma=%.6e, gamma'=%.6e, T=%.6e keV, tau=%.6e, xi=%.6e)\n",
+            "  (gamma={:.6e}, gamma'={:.6e}, T={:.6e} keV, tau={:.6e}, "
+            "xi={:.6e})",
             gamma,
             gamma_p,
             T_kev,
@@ -139,11 +149,12 @@ ComptonResult ComptonKernelSolver::sigma_E(
         double const gamma_p = E_prime / units::me_c2;
         double const T_kev = T / units::kev_kelvin;
         double const tau = T * units::k_boltz / units::me_c2;
-        std::fprintf(
+        std::println(
             stderr,
-            "WARNING sigma_E: %.6e clamped to 0"
-            "  (gamma=%.6e, gamma'=%.6e, T=%.6e keV, tau=%.6e, xi=%.6e, "
-            "err=%.3e)\n",
+            "WARNING sigma_E: {:.6e} clamped to 0"
+            "  (gamma={:.6e}, gamma'={:.6e}, T={:.6e} keV, tau={:.6e}, "
+            "xi={:.6e}, "
+            "err={:.3e})",
             result.value,
             gamma,
             gamma_p,
@@ -170,10 +181,11 @@ ComptonResult ComptonKernelSolver::dsigma_E_dT(
         double const gamma_p = E_prime / units::me_c2;
         double const T_kev = T / units::kev_kelvin;
         double const tau = T * units::k_boltz / units::me_c2;
-        std::fprintf(
+        std::println(
             stderr,
             "WARNING dsigma_E_dT: all backends failed, returning 0"
-            "  (gamma=%.6e, gamma'=%.6e, T=%.6e keV, tau=%.6e, xi=%.6e)\n",
+            "  (gamma={:.6e}, gamma'={:.6e}, T={:.6e} keV, tau={:.6e}, "
+            "xi={:.6e})",
             gamma,
             gamma_p,
             T_kev,

@@ -18,13 +18,14 @@ at each phase-space point based on the scattering kinematics.
 
 | Dependency | Role |
 |------------|------|
-| CMake >= 3.22 | Build system |
+| CMake >= 3.25 | Build system |
 | C++23 compiler | Language standard |
 | [pybind11](https://pybind11.readthedocs.io/) | Python bindings |
 | [Boost](https://www.boost.org/) | Modified Bessel functions ($K_1$, $K_2$) |
 | [doubledouble](https://github.com/WarrenWeckesser/doubledouble) | ~31-digit arithmetic for HP power series (fetched automatically by CMake) |
 | [planck_integral](https://github.com/menahemkrief/planck_integral) | Planck integral for weight-function denominators (fetched automatically by CMake) |
 | OpenMP (optional) | Parallel multigroup integration (enabled by default via `COMPTON_ENABLE_OMP`) |
+| [LLVM 18+](https://llvm.org/) (clang-tidy, clang++) | C++ static analysis (`just lint-cpp`), auto-discovered from PATH |
 
 **System prerequisites:** Boost development headers and (optionally) OpenMP must be
 installed system-wide. On RHEL/CentOS: `dnf install boost-devel`. The
@@ -48,9 +49,74 @@ This builds all pybind11 extension modules and installs them inside the
 ### Manual CMake build (for C++ development / IDE support)
 
 ```bash
+cmake --preset dev
+cmake --build --preset dev
+```
+
+Or equivalently:
+
+```bash
 cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 cmake --build build -j
 ```
+
+## Development
+
+The project uses [just](https://github.com/casey/just) as a task runner.
+Install it with `cargo install just`, `brew install just`, or see the
+[just installation docs](https://just.systems/man/en/packages.html).
+
+Prepare the local development environment:
+
+```bash
+just setup
+```
+
+Run tests:
+
+```bash
+just test
+```
+
+Format Python and C++ code:
+
+```bash
+just format
+```
+
+Run all lint checks (ruff, clang-format, clang-tidy):
+
+```bash
+just lint
+```
+
+Run the full local validation suite (lint + test + build):
+
+```bash
+just check
+```
+
+Build the Python package:
+
+```bash
+just build
+```
+
+**Note:** `just lint-cpp` auto-discovers `clang-tidy`, `clang++` (both >= 18),
+and the GCC install directory (>= 15) from PATH. It configures a separate
+`build-tidy` directory with clang++ and OpenMP disabled, producing a
+`compile_commands.json` tailored for clang-tidy analysis. The `dev` preset
+remains on GCC with OpenMP for production builds. `clang-format` must also be
+available on PATH. To override the discovered tools:
+
+```bash
+just clang_tidy=/path/to/clang-tidy clang_cxx=/path/to/clang++ \
+     gcc_install_dir=/path/to/gcc/lib/gcc/triplet/version lint-cpp
+```
+
+**CI:** No CI pipeline exists yet. The CMake build fetches `planck_integral`
+over SSH, which requires deploy keys or switching to HTTPS before CI can be
+set up. This is a planned follow-up.
 
 ### Extension modules
 

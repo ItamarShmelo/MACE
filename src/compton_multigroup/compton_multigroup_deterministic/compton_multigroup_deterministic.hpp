@@ -165,6 +165,11 @@ struct MGIntegrationConfig {
 class KernelMultiplier {
   public:
     virtual ~KernelMultiplier() = default;
+    KernelMultiplier() = default;
+    KernelMultiplier(KernelMultiplier const&) = delete;
+    KernelMultiplier& operator=(KernelMultiplier const&) = delete;
+    KernelMultiplier(KernelMultiplier&&) = delete;
+    KernelMultiplier& operator=(KernelMultiplier&&) = delete;
     virtual double
     operator()(double E, double Ep, double xi, double T, double Ne) const = 0;
 };
@@ -174,7 +179,12 @@ class KernelMultiplier {
  */
 class ConstantMultiplier : public KernelMultiplier {
   public:
-    double operator()(double, double, double, double, double) const override
+    double operator()(
+        double /*E*/,
+        double /*E_prime*/,
+        double /*xi*/,
+        double /*T*/,
+        double /*Ne*/) const override
     {
         return 1.0;
     }
@@ -439,8 +449,9 @@ ridge_thermal_width(double const E, double const xi, double const T)
     double const gamma = E / units::me_c2;
     double const tau = T * units::k_boltz / units::me_c2;
     double const u = std::max(0.0, 1.0 - xi);
-    if (tau <= 0.0 || u <= 0.0)
+    if (tau <= 0.0 || u <= 0.0) {
         return 0.0;
+    }
     double const d = 1.0 + gamma * u;
     return (E / (d * d)) *
            std::sqrt(tau * u * (2.0 + 2.0 * gamma * u + gamma * gamma * u));
