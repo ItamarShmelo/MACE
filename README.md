@@ -18,7 +18,7 @@ at each phase-space point based on the scattering kinematics.
 
 | Dependency | Role |
 |------------|------|
-| CMake >= 3.22 | Build system |
+| CMake >= 3.25 | Build system |
 | C++23 compiler | Language standard |
 | [pybind11](https://pybind11.readthedocs.io/) | Python bindings |
 | [Boost](https://www.boost.org/) | Modified Bessel functions ($K_1$, $K_2$) |
@@ -48,9 +48,66 @@ This builds all pybind11 extension modules and installs them inside the
 ### Manual CMake build (for C++ development / IDE support)
 
 ```bash
+cmake --preset dev
+cmake --build --preset dev
+```
+
+Or equivalently:
+
+```bash
 cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 cmake --build build -j
 ```
+
+## Development
+
+The project uses [just](https://github.com/casey/just) as a task runner.
+Install it with `cargo install just`, `brew install just`, or see the
+[just installation docs](https://just.systems/man/en/packages.html).
+
+Prepare the local development environment:
+
+```bash
+just setup
+```
+
+Run tests:
+
+```bash
+just test
+```
+
+Format Python and C++ code:
+
+```bash
+just format
+```
+
+Run all lint checks (ruff, clang-format, clang-tidy):
+
+```bash
+just lint
+```
+
+Run the full local validation suite (lint + test + build):
+
+```bash
+just check
+```
+
+Build the Python package:
+
+```bash
+just build
+```
+
+**Note:** `just lint` and `just check` automatically run `cmake --preset dev`
+to produce the `compile_commands.json` needed by clang-tidy. The C++ linting
+tools (`clang-format`, `clang-tidy`) must be available on `PATH`.
+
+**CI:** No CI pipeline exists yet. The CMake build fetches `planck_integral`
+over SSH, which requires deploy keys or switching to HTTPS before CI can be
+set up. This is a planned follow-up.
 
 ### Extension modules
 
