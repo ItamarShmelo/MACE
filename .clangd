@@ -1,6 +1,0 @@
-CompileFlags:
-  CompilationDatabase: build/
-  Compiler: /software/x86_64/5.14.0/gcc/15.1.0/bin/c++
-  Remove:
-    - -flto
-    - -fno-fat-lto-objects

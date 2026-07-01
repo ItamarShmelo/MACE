@@ -1,7 +1,0 @@
-{
-    "clangd.path": "/software/x86_64/5.14.0/llvm/18.1.8/bin/clangd",
-    "clangd.arguments": [
-        "--query-driver=/software/x86_64/5.14.0/gcc/15.1.0/bin/*"
-    ],
-    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python"
-}
