@@ -9,6 +9,7 @@ after the engine replacement.
 import json
 import math
 import os
+import sys
 
 import compton_matrix._compton_multigroup as cm
 import numpy as np
@@ -18,6 +19,51 @@ from compton_matrix._units import k_boltz, kev, kev_kelvin, me_c2
 
 KERNEL = ComptonKernelSolver()
 REFERENCE_DIR = os.path.join(os.path.dirname(__file__), "ridge_reference")
+
+
+def _cold_recoil_snapshot_path() -> str:
+    return os.path.join(REFERENCE_DIR, "cold_recoil_reference.json")
+
+
+def generate_cold_recoil_snapshot():
+    """Generate a cold_recoil_lo/hi reference snapshot for bitwise checks."""
+    os.makedirs(REFERENCE_DIR, exist_ok=True)
+
+    energies = [
+        0.1 * kev,
+        1.0 * kev,
+        10.0 * kev,
+        50.0 * kev,
+        100.0 * kev,
+        500.0 * kev,
+        1000.0 * kev,
+    ]
+    xis = [
+        -1.0,
+        -0.9,
+        -0.5,
+        -0.1,
+        0.0,
+        0.1,
+        0.5,
+        0.9,
+        0.99,
+        0.999999999,
+    ]
+
+    data = {}
+    for E in energies:
+        for xi in xis:
+            key = f"{E:.17e}_{xi:.17e}"
+            data[key] = {
+                "lo": cm.cold_recoil_lo(E, xi),
+                "hi": cm.cold_recoil_hi(E, xi),
+            }
+
+    path = _cold_recoil_snapshot_path()
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, sort_keys=True)
+    print(f"Snapshot written to {path}")
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -187,7 +233,11 @@ class TestColdRecoilBitwiseCompat:
     the Phase 1 reference values bitwise."""
 
     def test_bitwise_match(self):
-        path = os.path.join(REFERENCE_DIR, "cold_recoil_reference.json")
+        path = _cold_recoil_snapshot_path()
+        if not os.path.exists(path):
+            pytest.fail(
+                f"Missing snapshot file '{path}': snapshot needs to be regenerated."
+            )
         with open(path) as f:
             data = json.load(f)
         for key, vals in data.items():
@@ -472,3 +522,11 @@ class TestDoublePeakEpOrderSweep:
 
         assert deltas[-1] < deltas[0], f"Last-bin delta not decreasing: first={deltas[0]:.2e}, last={deltas[-1]:.2e}"
         assert deltas[-1] < 1e-4, f"Last-bin delta at order 48 still {deltas[-1]:.2e} >= 1e-4"
+
+
+if __name__ == "__main__":
+    if "--snapshot" in sys.argv:
+        generate_cold_recoil_snapshot()
+    else:
+        print("Usage: python test_ridge_helpers.py --snapshot")
+        print("  Generates JSON reference file in tests/ridge_reference/")
