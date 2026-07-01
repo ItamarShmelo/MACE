@@ -5,6 +5,7 @@
 *.synctex.gz
 
 build/
+build-tidy/
 reports/generated/
 tests/output/
 **__pycache__**
@@ -13,3 +14,7 @@ cpp_modules/
 
 benchmarks
 experiments
+
+*.so
+*.png
+*.npy

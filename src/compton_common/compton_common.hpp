@@ -178,7 +178,7 @@ template <> struct EhatAmpBudget<DD> {
 template <typename T> struct EulerMascheroni;
 
 template <> struct EulerMascheroni<double> {
-    static constexpr double value = 0.57721566490153286;
+    static constexpr double value = std::numbers::egamma_v<double>;
 };
 
 template <> struct EulerMascheroni<DD> {

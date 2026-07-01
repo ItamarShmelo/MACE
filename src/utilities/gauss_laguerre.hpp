@@ -269,7 +269,8 @@ inline GaussLaguerreRule compute_gauss_laguerre(int N)
  * @brief Integrate a function using a precomputed Gauss-Laguerre rule.
  */
 template <typename F>
-inline double laguerre_integrate(F&& integrand, GaussLaguerreRule const& rule)
+inline double
+laguerre_integrate(F const& integrand, GaussLaguerreRule const& rule)
 {
     double sum = 0.0;
     int const n = static_cast<int>(rule.nodes.size());

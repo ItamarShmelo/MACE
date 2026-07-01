@@ -165,6 +165,11 @@ struct MGIntegrationConfig {
 class KernelMultiplier {
   public:
     virtual ~KernelMultiplier() = default;
+    KernelMultiplier() = default;
+    KernelMultiplier(KernelMultiplier const&) = delete;
+    KernelMultiplier& operator=(KernelMultiplier const&) = delete;
+    KernelMultiplier(KernelMultiplier&&) = delete;
+    KernelMultiplier& operator=(KernelMultiplier&&) = delete;
     virtual double
     operator()(double E, double Ep, double xi, double T, double Ne) const = 0;
 };

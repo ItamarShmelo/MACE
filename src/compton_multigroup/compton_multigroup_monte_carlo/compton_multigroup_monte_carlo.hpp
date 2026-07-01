@@ -188,7 +188,7 @@ class ComptonMonteCarloKernel {
         int num_angle_bins,
         double T,
         double Ne,
-        MultiplierFn&& multiplier_fn) const;
+        MultiplierFn const& multiplier_fn) const;
 
     std::vector<double> group_boundaries_;
     std::vector<double> group_centers_;

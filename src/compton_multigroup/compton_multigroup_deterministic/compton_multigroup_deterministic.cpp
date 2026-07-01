@@ -166,9 +166,8 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
         throw std::invalid_argument("need at least 2 boundaries (1 group)");
     }
 
-    for (std::size_t i = 0; i < energy_group_boundaries.size(); ++i) {
-        if (!(energy_group_boundaries[i] > 0.0) ||
-            !std::isfinite(energy_group_boundaries[i])) {
+    for (auto const& boundary : energy_group_boundaries) {
+        if (!(boundary > 0.0) || !std::isfinite(boundary)) {
             throw std::invalid_argument(
                 "all boundaries must be finite and > 0");
         }
@@ -186,7 +185,7 @@ namespace {
 
 template <typename F>
 double integrate_Ep_ridge(
-    F&& f,
+    F const& f,
     double Ep_lo,
     double Ep_hi,
     RidgeBounds const& rb,

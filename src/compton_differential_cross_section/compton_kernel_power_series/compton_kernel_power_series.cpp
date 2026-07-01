@@ -421,7 +421,7 @@ ComptonResult ComptonPowerSeries::dsigma_E_dT(
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
-    ComptonResult dtau_result;
+    ComptonResult dtau_result{};
     if (high_precision_) {
         dtau_result =
             power_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);

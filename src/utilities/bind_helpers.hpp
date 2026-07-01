@@ -32,9 +32,9 @@ namespace compton::bind {
  */
 template <typename Fn>
 py::array_t<double>
-flat_to_numpy_3d(int const G, int const num_angle_bins, Fn&& fn)
+flat_to_numpy_3d(int const G, int const num_angle_bins, Fn const& fn)
 {
-    std::vector<double> flat = std::forward<Fn>(fn)();
+    std::vector<double> flat = fn();
     py::array_t<double> arr({G, G, num_angle_bins});
     auto buf = arr.mutable_unchecked<3>();
     std::size_t idx = 0;
@@ -56,9 +56,9 @@ flat_to_numpy_3d(int const G, int const num_angle_bins, Fn&& fn)
  * @param fn  Callable that produces the flat data.
  */
 template <typename Fn>
-py::array_t<double> flat_to_numpy_2d(int const G, Fn&& fn)
+py::array_t<double> flat_to_numpy_2d(int const G, Fn const& fn)
 {
-    std::vector<double> flat = std::forward<Fn>(fn)();
+    std::vector<double> flat = fn();
     py::array_t<double> arr({G, G});
     auto buf = arr.mutable_unchecked<2>();
     std::size_t idx = 0;

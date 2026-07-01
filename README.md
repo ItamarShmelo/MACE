@@ -25,6 +25,7 @@ at each phase-space point based on the scattering kinematics.
 | [doubledouble](https://github.com/WarrenWeckesser/doubledouble) | ~31-digit arithmetic for HP power series (fetched automatically by CMake) |
 | [planck_integral](https://github.com/menahemkrief/planck_integral) | Planck integral for weight-function denominators (fetched automatically by CMake) |
 | OpenMP (optional) | Parallel multigroup integration (enabled by default via `COMPTON_ENABLE_OMP`) |
+| [LLVM 18+](https://llvm.org/) (clang-tidy, clang++) | C++ static analysis (`just lint-cpp`), auto-discovered from PATH |
 
 **System prerequisites:** Boost development headers and (optionally) OpenMP must be
 installed system-wide. On RHEL/CentOS: `dnf install boost-devel`. The
@@ -101,9 +102,17 @@ Build the Python package:
 just build
 ```
 
-**Note:** `just lint` and `just check` automatically run `cmake --preset dev`
-to produce the `compile_commands.json` needed by clang-tidy. The C++ linting
-tools (`clang-format`, `clang-tidy`) must be available on `PATH`.
+**Note:** `just lint-cpp` auto-discovers `clang-tidy`, `clang++` (both >= 18),
+and the GCC install directory (>= 15) from PATH. It configures a separate
+`build-tidy` directory with clang++ and OpenMP disabled, producing a
+`compile_commands.json` tailored for clang-tidy analysis. The `dev` preset
+remains on GCC with OpenMP for production builds. `clang-format` must also be
+available on PATH. To override the discovered tools:
+
+```bash
+just clang_tidy=/path/to/clang-tidy clang_cxx=/path/to/clang++ \
+     gcc_install_dir=/path/to/gcc/lib/gcc/triplet/version lint-cpp
+```
 
 **CI:** No CI pipeline exists yet. The CMake build fetches `planck_integral`
 over SSH, which requires deploy keys or switching to HTTPS before CI can be

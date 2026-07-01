@@ -1,4 +1,3 @@
-// NOLINTBEGIN(misc-include-cleaner) -- clang-tidy cannot parse this TU
 #include "compton_multigroup/compton_multigroup_monte_carlo/compton_multigroup_monte_carlo.hpp"
 #include "compton_common/compton_common.hpp"
 #include "utilities/compute_logger.hpp"
@@ -9,7 +8,6 @@
 #include <format>
 #include <numbers>
 #include <stdexcept>
-// NOLINTEND(misc-include-cleaner)
 
 namespace compton {
 
@@ -107,7 +105,7 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
     int const num_angle_bins,
     double const T,
     double const Ne,
-    MultiplierFn&& multiplier_fn) const
+    MultiplierFn const& multiplier_fn) const
 {
     if (num_angle_bins < 1) {
         throw std::invalid_argument("num_angle_bins must be >= 1");
@@ -280,12 +278,11 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
 
 // ── Public API ──────────────────────────────────────────────────────────
 
-std::vector<double> ComptonMonteCarloKernel::
-    compute_sigma_matrix( // NOLINT(readability-convert-member-functions-to-static)
-        int const num_angle_bins,
-        double const T,
-        double const Ne,
-        KernelMultiplier const& multiplier) const
+std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
+    int const num_angle_bins,
+    double const T,
+    double const Ne,
+    KernelMultiplier const& multiplier) const
 {
     return mc_integrate(
         num_angle_bins,
@@ -304,12 +301,11 @@ std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
     return compute_sigma_matrix(1, T, Ne, multiplier);
 }
 
-std::vector<double> ComptonMonteCarloKernel::
-    compute_dsigma_dT_matrix( // NOLINT(readability-convert-member-functions-to-static)
-        int const num_angle_bins,
-        double const T,
-        double const Ne,
-        KernelMultiplier const& multiplier) const
+std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
+    int const num_angle_bins,
+    double const T,
+    double const Ne,
+    KernelMultiplier const& multiplier) const
 {
     double const tau = units::k_boltz * T / units::me_c2;
     double const tau2 = tau * tau;

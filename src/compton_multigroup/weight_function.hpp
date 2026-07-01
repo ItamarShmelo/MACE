@@ -16,6 +16,11 @@ namespace compton {
 class WeightFunction {
   public:
     virtual ~WeightFunction() = default;
+    WeightFunction() = default;
+    WeightFunction(WeightFunction const&) = delete;
+    WeightFunction& operator=(WeightFunction const&) = delete;
+    WeightFunction(WeightFunction&&) = delete;
+    WeightFunction& operator=(WeightFunction&&) = delete;
 
     virtual double weight(double E, double T) const = 0;
 
