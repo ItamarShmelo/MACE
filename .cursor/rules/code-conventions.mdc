@@ -6,7 +6,7 @@ alwaysApply: true
 # Code Conventions
 
 - Prefer east-const style where applicable (for example, `T const` over `const T`).
-- Prefer `const` for variables and parameters that are not reassigned when it
+- Prefer `const` for variables that are not reassigned when it
   improves clarity; apply east-const style (`T const value`).
 - Keep declarations stylistically consistent in code you are actively editing.
 - Do not mass-reformat untouched files only to enforce style; apply conventions incrementally as files are changed for functional work.

@@ -82,8 +82,9 @@ struct GaussLegendreRule {
  */
 inline GaussLegendreRule compute_gauss_legendre(int const N)
 {
-    if (N < 1)
+    if (N < 1) {
         throw std::invalid_argument("N must be >= 1");
+    }
 
     std::vector<double> diag(N, 0.0);
     std::vector<double> offdiag(N, 0.0);

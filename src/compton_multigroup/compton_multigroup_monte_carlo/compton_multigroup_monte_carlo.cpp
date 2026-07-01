@@ -23,8 +23,9 @@ MCIntegrationConfig::MCIntegrationConfig(
       seed(seed),
       discard_out_of_grid(discard_out_of_grid)
 {
-    if (num_samples < 1)
+    if (num_samples < 1) {
         throw std::invalid_argument("num_samples must be >= 1");
+    }
 }
 
 // ── ComptonMonteCarloKernel ─────────────────────────────────────────────
@@ -43,16 +44,19 @@ ComptonMonteCarloKernel::ComptonMonteCarloKernel(
       uniform_dist_()
 {
     int const G = static_cast<int>(group_boundaries_.size()) - 1;
-    if (G < 1)
+    if (G < 1) {
         throw std::invalid_argument(
             "need at least 2 boundaries (1 energy group)");
+    }
 
     for (int g = 0; g < G; ++g) {
-        if (group_boundaries_[g] <= 0.0)
+        if (group_boundaries_[g] <= 0.0) {
             throw std::invalid_argument("energy group boundaries must be > 0");
-        if (group_boundaries_[g] >= group_boundaries_[g + 1])
+        }
+        if (group_boundaries_[g] >= group_boundaries_[g + 1]) {
             throw std::invalid_argument(
                 "energy group boundaries must be strictly increasing");
+        }
     }
 
     group_centers_.resize(G);
@@ -66,12 +70,10 @@ ComptonMonteCarloKernel::ComptonMonteCarloKernel(
 
 // ── Maxwell-Jüttner sampling ────────────────────────────────────────────
 
-double ComptonMonteCarloKernel::sample_gamma(double const theta) const
-{
-    return sample_gamma(theta, rng_, uniform_dist_);
-}
+namespace {
 
-double ComptonMonteCarloKernel::sample_gamma(
+/** @brief Thread-safe Maxwell-Jüttner sampling accepting external RNG state. */
+double sample_gamma(
     double const theta,
     boost::random::mt19937_64& rng,
     boost::random::uniform_01<>& dist)
@@ -96,6 +98,8 @@ double ComptonMonteCarloKernel::sample_gamma(
     return 1.0 - theta * std::log(r1);
 }
 
+} // anonymous namespace
+
 // ── Core MC integration ──────────────────────────────────────────────────
 
 template <typename MultiplierFn>
@@ -105,10 +109,12 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
     double const Ne,
     MultiplierFn&& multiplier_fn) const
 {
-    if (num_angle_bins < 1)
+    if (num_angle_bins < 1) {
         throw std::invalid_argument("num_angle_bins must be >= 1");
-    if (T <= 0.0)
+    }
+    if (T <= 0.0) {
         throw std::invalid_argument("temperature T must be > 0");
+    }
 
     int const G = num_groups();
     std::size_t const total = static_cast<std::size_t>(G) * G * num_angle_bins;
@@ -224,8 +230,9 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
                 long g = std::distance(group_boundaries_.begin(), it) - 1;
 
                 if (discard_out_of_grid_) {
-                    if (g < 0 || g >= G)
+                    if (g < 0 || g >= G) {
                         continue;
+                    }
                 } else {
                     g = std::clamp(g, 0L, static_cast<long>(G) - 1);
                 }
@@ -256,13 +263,14 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
             units::sigma_thomson /
             (static_cast<double>(num_samples_) * beta_avg * weight_avg);
 
-        for (int gp = 0; gp < G; ++gp)
+        for (int gp = 0; gp < G; ++gp) {
             for (int a = 0; a < num_angle_bins; ++a) {
                 std::size_t const idx =
                     static_cast<std::size_t>(g0) * G * num_angle_bins +
                     static_cast<std::size_t>(gp) * num_angle_bins + a;
                 result[idx] *= norm;
             }
+        }
     }
 
     logger.done();
@@ -272,11 +280,12 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
 
 // ── Public API ──────────────────────────────────────────────────────────
 
-std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
-    int const num_angle_bins,
-    double const T,
-    double const Ne,
-    KernelMultiplier const& multiplier) const
+std::vector<double> ComptonMonteCarloKernel::
+    compute_sigma_matrix( // NOLINT(readability-convert-member-functions-to-static)
+        int const num_angle_bins,
+        double const T,
+        double const Ne,
+        KernelMultiplier const& multiplier) const
 {
     return mc_integrate(
         num_angle_bins,
@@ -295,11 +304,12 @@ std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
     return compute_sigma_matrix(1, T, Ne, multiplier);
 }
 
-std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
-    int const num_angle_bins,
-    double const T,
-    double const Ne,
-    KernelMultiplier const& multiplier) const
+std::vector<double> ComptonMonteCarloKernel::
+    compute_dsigma_dT_matrix( // NOLINT(readability-convert-member-functions-to-static)
+        int const num_angle_bins,
+        double const T,
+        double const Ne,
+        KernelMultiplier const& multiplier) const
 {
     double const tau = units::k_boltz * T / units::me_c2;
     double const tau2 = tau * tau;

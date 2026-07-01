@@ -1,4 +1,4 @@
-#include <pybind11/numpy.h>  // NOLINT(misc-include-cleaner) -- implicit numpy converters
+#include <pybind11/numpy.h> // NOLINT(misc-include-cleaner) -- implicit numpy converters
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h> // NOLINT(misc-include-cleaner) -- implicit STL converters
 
@@ -43,7 +43,7 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
                 std::optional<int>,
                 double,
                 double>(),
-            "cutoff_ratio"_a = 1e-8, // NOLINT(misc-include-cleaner)
+            "cutoff_ratio"_a = 1e-8,     // NOLINT(misc-include-cleaner)
             "xi_order"_a = std::nullopt, // NOLINT(misc-include-cleaner)
             "xi_peak_k"_a = 5.0,
             "xi_tail_order"_a = std::nullopt,
@@ -386,8 +386,8 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
         "gauss_legendre_rule",
         [](int N) {
             auto rule = compton::compute_gauss_legendre(N);
-            py::array_t<double> nodes(
-                static_cast<py::ssize_t>(rule.nodes.size())); // NOLINT(misc-include-cleaner)
+            py::array_t<double> nodes(static_cast<py::ssize_t>(
+                rule.nodes.size())); // NOLINT(misc-include-cleaner)
             py::array_t<double> weights(
                 static_cast<py::ssize_t>(rule.weights.size()));
             auto nodes_buf = nodes.mutable_unchecked<1>();

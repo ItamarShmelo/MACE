@@ -38,10 +38,13 @@ flat_to_numpy_3d(int const G, int const num_angle_bins, Fn&& fn)
     py::array_t<double> arr({G, G, num_angle_bins});
     auto buf = arr.mutable_unchecked<3>();
     std::size_t idx = 0;
-    for (int g = 0; g < G; ++g)
-        for (int gp = 0; gp < G; ++gp)
-            for (int a = 0; a < num_angle_bins; ++a)
+    for (int g = 0; g < G; ++g) {
+        for (int gp = 0; gp < G; ++gp) {
+            for (int a = 0; a < num_angle_bins; ++a) {
                 buf(g, gp, a) = flat[idx++];
+            }
+        }
+    }
     return arr;
 }
 
@@ -59,9 +62,11 @@ py::array_t<double> flat_to_numpy_2d(int const G, Fn&& fn)
     py::array_t<double> arr({G, G});
     auto buf = arr.mutable_unchecked<2>();
     std::size_t idx = 0;
-    for (int g = 0; g < G; ++g)
-        for (int gp = 0; gp < G; ++gp)
+    for (int g = 0; g < G; ++g) {
+        for (int gp = 0; gp < G; ++gp) {
             buf(g, gp) = flat[idx++];
+        }
+    }
     return arr;
 }
 
@@ -79,7 +84,8 @@ template <typename Class, typename MemberFunction>
 py::tuple vectorize_sigma(
     Class const& self,
     double E,
-    py::array_t<double, py::array::c_style | py::array::forcecast> const& E_prime_arr,
+    py::array_t<double, py::array::c_style | py::array::forcecast> const&
+        E_prime_arr,
     double xi,
     double T,
     double Ne,

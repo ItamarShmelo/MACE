@@ -36,10 +36,11 @@ ComptonResult eval_kernel(
     double T,
     double Ne)
 {
-    if constexpr (Op == ComptonKernelSolver::KernelOp::sigma)
+    if constexpr (Op == ComptonKernelSolver::KernelOp::sigma) {
         return s.sigma_E(E, Ep, xi, T, Ne);
-    else
+    } else {
         return s.dsigma_E_dT(E, Ep, xi, T, Ne);
+    }
 }
 
 } // namespace
@@ -68,18 +69,22 @@ ComptonResult ComptonKernelSolver::dispatch(
         try {
             auto const r =
                 eval_kernel<Op>(asymp_series_, E, E_prime, xi, T, Ne);
-            if (r.estimated_rel_error < asymp_self_tol_)
+            if (r.estimated_rel_error < asymp_self_tol_) {
                 return r;
-        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next backend
+            }
+        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next
+                        // backend
         }
 
         // A2: DD asymptotic
         try {
             auto const r =
                 eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T, Ne);
-            if (r.estimated_rel_error < dd_asymp_self_tol_)
+            if (r.estimated_rel_error < dd_asymp_self_tol_) {
                 return r;
-        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next backend
+            }
+        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next
+                        // backend
         }
     } else {
         // --- Power series regime ---
@@ -89,9 +94,11 @@ ComptonResult ComptonKernelSolver::dispatch(
             auto const r =
                 eval_kernel<Op>(power_series_, E, E_prime, xi, T, Ne);
             if (r.estimated_rel_error < power_series_self_tol_ &&
-                (Op == KernelOp::dsigma_dT || r.value >= 0.0))
+                (Op == KernelOp::dsigma_dT || r.value >= 0.0)) {
                 return r;
-        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next backend
+            }
+        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next
+                        // backend
         }
 
         // P2: DD power series
@@ -99,9 +106,11 @@ ComptonResult ComptonKernelSolver::dispatch(
             auto const r =
                 eval_kernel<Op>(power_series_dd_, E, E_prime, xi, T, Ne);
             if (r.estimated_rel_error < dd_power_series_self_tol_ &&
-                (Op == KernelOp::dsigma_dT || r.value >= 0.0))
+                (Op == KernelOp::dsigma_dT || r.value >= 0.0)) {
                 return r;
-        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next backend
+            }
+        } catch (...) { // NOLINT(bugprone-empty-catch) -- fallthrough to next
+                        // backend
         }
     }
 

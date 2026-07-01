@@ -123,10 +123,12 @@ inline double param_clamp(double const value, double const lo, double const hi)
 
 inline DD param_clamp(DD const& value, DD const& lo, DD const& hi)
 {
-    if (value < lo)
+    if (value < lo) {
         return lo;
-    if (value > hi)
+    }
+    if (value > hi) {
         return hi;
+    }
     return value;
 }
 
@@ -211,8 +213,9 @@ template <typename T> inline T ehat_series(T const& x, double const tol)
             static_cast<double>(k) / static_cast<double>((k + 1) * (k + 1));
         term = term * neg_x * T(recur_factor);
         S = S + term;
-        if (param_abs(term) < tol * param_abs(S))
+        if (param_abs(term) < tol * param_abs(S)) {
             break;
+        }
     }
 
     T const E1 = -gamma_euler - ln_x + S;
@@ -306,8 +309,9 @@ inline T ehat(
  */
 inline double scaled_K2(double x)
 {
-    if (!(x > 0.0) || !std::isfinite(x))
+    if (!(x > 0.0) || !std::isfinite(x)) {
         throw std::invalid_argument("scaled_K2 requires finite x > 0");
+    }
 
     if (x < 50.0) {
         return std::exp(x) * boost::math::cyl_bessel_k(2, x);
@@ -342,8 +346,9 @@ inline double scaled_K2(double x)
  */
 inline double scaled_K1(double const x)
 {
-    if (!(x > 0.0) || !std::isfinite(x))
+    if (!(x > 0.0) || !std::isfinite(x)) {
         throw std::invalid_argument("scaled_K1 requires finite x > 0");
+    }
 
     if (x < 50.0) {
         return std::exp(x) * boost::math::cyl_bessel_k(1, x);
@@ -448,10 +453,12 @@ inline KershawParams<T> compute_params(
 
     p.lambda_plus = dg / two + p.Delta;
 
-    if (p.lambda_plus < one - 1e-12)
+    if (p.lambda_plus < one - 1e-12) {
         throw std::runtime_error("lambda_plus significantly below 1");
-    if (p.lambda_plus < one)
+    }
+    if (p.lambda_plus < one) {
         p.lambda_plus = one;
+    }
 
     p.rho_plus = p.lambda_plus + gamma_t;
     p.rho_minus = p.lambda_plus - gamma_p_t;
@@ -518,19 +525,25 @@ inline void assert_parameters(
     double const T,
     double const Ne)
 {
-    if (!(E > 0.0) || !std::isfinite(E))
+    if (!(E > 0.0) || !std::isfinite(E)) {
         throw std::invalid_argument("E must be finite and > 0");
-    if (!(E_prime > 0.0) || !std::isfinite(E_prime))
+    }
+    if (!(E_prime > 0.0) || !std::isfinite(E_prime)) {
         throw std::invalid_argument("E_prime must be finite and > 0");
-    if (!(T > 0.0) || !std::isfinite(T))
+    }
+    if (!(T > 0.0) || !std::isfinite(T)) {
         throw std::invalid_argument("T must be finite and > 0");
-    if (!(xi > -1.0 && xi < 1.0) || !std::isfinite(xi))
+    }
+    if (xi <= -1.0 || xi >= 1.0 || !std::isfinite(xi)) {
         throw std::invalid_argument(
             "xi must be finite and strictly inside (-1, 1)");
-    if (!std::isfinite(Ne))
+    }
+    if (!std::isfinite(Ne)) {
         throw std::invalid_argument("Ne must be finite");
-    if (1.0 - xi < 1e-14)
+    }
+    if (1.0 - xi < 1e-14) {
         throw std::invalid_argument("xi too close to 1");
+    }
 }
 
 } // namespace compton

@@ -55,6 +55,27 @@ static constexpr double XI_ELASTIC_COOL_THR = 1e-3;
 static constexpr double XI_ELASTIC_WARM_THR = 0.01;
 static constexpr double XI_ELASTIC_MOD_THR = 0.05;
 static constexpr double XI_ELASTIC_HOT_THR = 0.3;
+
+double elastic_threshold(double tau)
+{
+    if (tau < XI_ELASTIC_TAU_VCOLD) {
+        return XI_ELASTIC_VCOLD_THR;
+    }
+    if (tau < XI_ELASTIC_TAU_COLD) {
+        return XI_ELASTIC_COLD_THR;
+    }
+    if (tau < XI_ELASTIC_TAU_COOL) {
+        return XI_ELASTIC_COOL_THR;
+    }
+    if (tau < XI_ELASTIC_TAU_WARM) {
+        return XI_ELASTIC_WARM_THR;
+    }
+    if (tau < XI_ELASTIC_TAU_HOT) {
+        return XI_ELASTIC_MOD_THR;
+    }
+    return XI_ELASTIC_HOT_THR;
+}
+
 } // namespace constants
 
 // ── MGIntegrationConfig ─────────────────────────────────────────────────
@@ -83,31 +104,42 @@ MGIntegrationConfig::MGIntegrationConfig(
       log_e_panel_ratio(log_e_panel_ratio),
       e_boundary_k(e_boundary_k)
 {
-    if (cutoff_ratio < 0.0)
+    if (cutoff_ratio < 0.0) {
         throw std::invalid_argument("cutoff_ratio must be >= 0");
-    if (xi_order.has_value() && xi_order.value() < 1)
+    }
+    if (xi_order.has_value() && xi_order.value() < 1) {
         throw std::invalid_argument("xi_order must be >= 1");
-    if (!(xi_peak_k > 0.0))
+    }
+    if (!(xi_peak_k > 0.0)) {
         throw std::invalid_argument("xi_peak_k must be > 0");
-    if (!(ep_k_cut > 0.0))
+    }
+    if (!(ep_k_cut > 0.0)) {
         throw std::invalid_argument("ep_k_cut must be > 0");
-    if (!(ep_k_in >= 0.0))
+    }
+    if (!(ep_k_in >= 0.0)) {
         throw std::invalid_argument("ep_k_in must be >= 0");
-    if (!(ep_k_cut > ep_k_in))
+    }
+    if (!(ep_k_cut > ep_k_in)) {
         throw std::invalid_argument(
             "ep_k_cut must be > ep_k_in "
             "(semantic constraint: the edge region must be narrower than the "
             "retained interval)");
-    if (ep_edge_order.has_value() && ep_edge_order.value() < 1)
+    }
+    if (ep_edge_order.has_value() && ep_edge_order.value() < 1) {
         throw std::invalid_argument("ep_edge_order must be >= 1");
-    if (ep_interior_order.has_value() && ep_interior_order.value() < 1)
+    }
+    if (ep_interior_order.has_value() && ep_interior_order.value() < 1) {
         throw std::invalid_argument("ep_interior_order must be >= 1");
-    if (e_panel_order.has_value() && e_panel_order.value() < 1)
+    }
+    if (e_panel_order.has_value() && e_panel_order.value() < 1) {
         throw std::invalid_argument("e_panel_order must be >= 1");
-    if (!(log_e_panel_ratio > 1.0))
+    }
+    if (!(log_e_panel_ratio > 1.0)) {
         throw std::invalid_argument("log_e_panel_ratio must be > 1.0");
-    if (!(e_boundary_k > 0.0))
+    }
+    if (!(e_boundary_k > 0.0)) {
         throw std::invalid_argument("e_boundary_k must be > 0");
+    }
 }
 
 ComptonMultigroupKernel::ComptonMultigroupKernel(
@@ -130,20 +162,23 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
       log_e_panel_ratio_(config.log_e_panel_ratio),
       e_boundary_k_(config.e_boundary_k)
 {
-    if (energy_group_boundaries.size() < 2)
+    if (energy_group_boundaries.size() < 2) {
         throw std::invalid_argument("need at least 2 boundaries (1 group)");
+    }
 
     for (std::size_t i = 0; i < energy_group_boundaries.size(); ++i) {
         if (!(energy_group_boundaries[i] > 0.0) ||
-            !std::isfinite(energy_group_boundaries[i]))
+            !std::isfinite(energy_group_boundaries[i])) {
             throw std::invalid_argument(
                 "all boundaries must be finite and > 0");
+        }
     }
 
     for (std::size_t i = 0; i + 1 < energy_group_boundaries.size(); ++i) {
-        if (energy_group_boundaries[i] >= energy_group_boundaries[i + 1])
+        if (energy_group_boundaries[i] >= energy_group_boundaries[i + 1]) {
             throw std::invalid_argument(
                 "boundaries must be strictly increasing");
+        }
     }
 }
 
@@ -192,23 +227,26 @@ double integrate_Ep_ridge(
                     rlog_legendre_integrate(f, edge_rule, Ep_lo, keep_lo);
             }
 
-            if (ec_lo > keep_lo)
+            if (ec_lo > keep_lo) {
                 dp_result += legendre_integrate(f, edge_rule, keep_lo, ec_lo);
+            }
 
             dp_result += legendre_integrate(f, elastic_core_rule, ec_lo, ec_hi);
 
-            if (keep_hi > ec_hi)
+            if (keep_hi > ec_hi) {
                 dp_result +=
                     legendre_integrate(f, interior_rule, ec_hi, keep_hi);
+            }
 
             if (Ep_hi > keep_hi) {
                 assert(keep_hi > 0.0);
-                if (Ep_hi / keep_hi > 2.0)
+                if (Ep_hi / keep_hi > 2.0) {
                     dp_result +=
                         log_legendre_integrate(f, edge_rule, keep_hi, Ep_hi);
-                else
+                } else {
                     dp_result +=
                         legendre_integrate(f, edge_rule, keep_hi, Ep_hi);
+                }
             }
 
             return dp_result;
@@ -218,10 +256,12 @@ double integrate_Ep_ridge(
     // Ridge entirely outside [Ep_lo, Ep_hi]: integrate the full group range.
     if (keep_lo >= keep_hi) {
         assert(Ep_lo > 0.0);
-        if (Ep_hi <= rb.cold_lo)
+        if (Ep_hi <= rb.cold_lo) {
             return rlog_legendre_integrate(f, edge_rule, Ep_lo, Ep_hi);
-        if (Ep_hi / Ep_lo > 2.0)
+        }
+        if (Ep_hi / Ep_lo > 2.0) {
             return log_legendre_integrate(f, edge_rule, Ep_lo, Ep_hi);
+        }
         return legendre_integrate(f, edge_rule, Ep_lo, Ep_hi);
     }
 
@@ -243,20 +283,24 @@ double integrate_Ep_ridge(
         double const mid_hi = std::min(keep_hi, edge_hi);
         double const right_lo = std::max(keep_lo, edge_hi);
 
-        if (left_hi > keep_lo)
+        if (left_hi > keep_lo) {
             result += legendre_integrate(f, edge_rule, keep_lo, left_hi);
-        if (mid_hi > mid_lo)
+        }
+        if (mid_hi > mid_lo) {
             result += legendre_integrate(f, interior_rule, mid_lo, mid_hi);
-        if (keep_hi > right_lo)
+        }
+        if (keep_hi > right_lo) {
             result += legendre_integrate(f, edge_rule, right_lo, keep_hi);
+        }
     }
 
     if (Ep_hi > keep_hi) {
         assert(keep_hi > 0.0);
-        if (Ep_hi / keep_hi > 2.0)
+        if (Ep_hi / keep_hi > 2.0) {
             result += log_legendre_integrate(f, edge_rule, keep_hi, Ep_hi);
-        else
+        } else {
             result += legendre_integrate(f, edge_rule, keep_hi, Ep_hi);
+        }
     }
 
     return result;
@@ -288,14 +332,8 @@ double ComptonMultigroupKernel::integrate_xi_bin(
     double const gamma_p = Ep / units::me_c2;
     double const abs_dg = std::abs(gamma - gamma_p);
 
-    double const elastic_thr =
-        tau < constants::XI_ELASTIC_TAU_VCOLD  ? constants::XI_ELASTIC_VCOLD_THR
-        : tau < constants::XI_ELASTIC_TAU_COLD ? constants::XI_ELASTIC_COLD_THR
-        : tau < constants::XI_ELASTIC_TAU_COOL ? constants::XI_ELASTIC_COOL_THR
-        : tau < constants::XI_ELASTIC_TAU_WARM ? constants::XI_ELASTIC_WARM_THR
-        : tau < constants::XI_ELASTIC_TAU_HOT  ? constants::XI_ELASTIC_MOD_THR
-                                               : constants::XI_ELASTIC_HOT_THR;
-    bool const elastic_like = abs_dg / gamma < elastic_thr;
+    bool const elastic_like =
+        abs_dg / gamma < constants::elastic_threshold(tau);
 
     if (elastic_like) {
         double const span = xi_hi - xi_lo;
@@ -426,19 +464,23 @@ double ComptonMultigroupKernel::integrate_E_Ep_xi_bin(
     };
 
     auto integrate_sub = [&](double const a, double const b) -> double {
-        if (!(b > a))
+        if (!(b > a)) {
             return 0.0;
-        if (b / a <= log_e_panel_ratio_)
+        }
+        if (b / a <= log_e_panel_ratio_) {
             return legendre_integrate(E_integrand, e_panel_rule_, a, b);
-        if (weight_func_->weight(a, T) >= weight_func_->weight(b, T))
+        }
+        if (weight_func_->weight(a, T) >= weight_func_->weight(b, T)) {
             return log_legendre_integrate(E_integrand, e_panel_rule_, a, b);
+        }
         return rlog_legendre_integrate(E_integrand, e_panel_rule_, a, b);
     };
 
     auto integrate_middle = [&](double const a, double const b) -> double {
         auto const Epk = weight_func_->peak_energy(T);
-        if (Epk && *Epk > a && *Epk < b)
+        if (Epk && *Epk > a && *Epk < b) {
             return integrate_sub(a, *Epk) + integrate_sub(*Epk, b);
+        }
         return integrate_sub(a, b);
     };
 
@@ -466,12 +508,15 @@ std::vector<double> ComptonMultigroupKernel::compute_xi_integral_impl(
     double const Ne,
     KernelMultiplier const& multiplier) const
 {
-    if (num_xi_bins < 1)
+    if (num_xi_bins < 1) {
         throw std::invalid_argument("num_xi_bins must be >= 1");
-    if (!(E > 0.0) || !std::isfinite(E))
+    }
+    if (!(E > 0.0) || !std::isfinite(E)) {
         throw std::invalid_argument("E must be finite and > 0");
-    if (!(Ep > 0.0) || !std::isfinite(Ep))
+    }
+    if (!(Ep > 0.0) || !std::isfinite(Ep)) {
         throw std::invalid_argument("Ep must be finite and > 0");
+    }
 
     double const dxi = 2.0 / static_cast<double>(num_xi_bins);
 
@@ -507,16 +552,21 @@ std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_impl(
     double const Ne,
     KernelMultiplier const& multiplier) const
 {
-    if (num_xi_bins < 1)
+    if (num_xi_bins < 1) {
         throw std::invalid_argument("num_xi_bins must be >= 1");
-    if (!(E > 0.0) || !std::isfinite(E))
+    }
+    if (!(E > 0.0) || !std::isfinite(E)) {
         throw std::invalid_argument("E must be finite and > 0");
-    if (!(Ep_lo > 0.0) || !std::isfinite(Ep_lo))
+    }
+    if (!(Ep_lo > 0.0) || !std::isfinite(Ep_lo)) {
         throw std::invalid_argument("Ep_lo must be finite and > 0");
-    if (!(Ep_hi > 0.0) || !std::isfinite(Ep_hi))
+    }
+    if (!(Ep_hi > 0.0) || !std::isfinite(Ep_hi)) {
         throw std::invalid_argument("Ep_hi must be finite and > 0");
-    if (Ep_lo >= Ep_hi)
+    }
+    if (Ep_lo >= Ep_hi) {
         throw std::invalid_argument("Ep_lo must be < Ep_hi");
+    }
 
     double const dxi = 2.0 / static_cast<double>(num_xi_bins);
 
@@ -579,8 +629,9 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     double const Ne,
     KernelMultiplier const& multiplier) const
 {
-    if (num_angle_bins < 1)
+    if (num_angle_bins < 1) {
         throw std::invalid_argument("num_angle_bins must be >= 1");
+    }
 
     int const G = num_groups();
 
@@ -650,19 +701,23 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
 
             // Expand rightward (higher E' groups) until below cutoff.
             for (int gp = gp_peak + 1; gp < G; ++gp) {
-                if (do_group(gp) < cutoff)
+                if (do_group(gp) < cutoff) {
                     break;
+                }
             }
             // Expand leftward (lower E' groups) until below cutoff.
             for (int gp = gp_peak - 1; gp >= 0; --gp) {
-                if (do_group(gp) < cutoff)
+                if (do_group(gp) < cutoff) {
                     break;
+                }
             }
         } else {
-            for (int gp = gp_peak + 1; gp < G; ++gp)
+            for (int gp = gp_peak + 1; gp < G; ++gp) {
                 do_group(gp);
-            for (int gp = gp_peak - 1; gp >= 0; --gp)
+            }
+            for (int gp = gp_peak - 1; gp >= 0; --gp) {
                 do_group(gp);
+            }
         }
     }
 
