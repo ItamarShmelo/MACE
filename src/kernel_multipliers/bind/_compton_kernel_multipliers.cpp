@@ -3,7 +3,10 @@
 
 #include "compton_multigroup/compton_multigroup_deterministic/compton_multigroup_deterministic.hpp"
 
+#include "utilities/units.hpp"
+
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <iterator>
 #include <stdexcept>
@@ -56,6 +59,27 @@ class EnergyTransferMultiplier : public KernelMultiplier {
     std::vector<double> centers_;
 };
 
+class EpOverEMultiplier : public KernelMultiplier {
+  public:
+    double
+    operator()(double E, double Ep, double /*xi*/, double /*T*/, double /*Ne*/)
+        const override
+    {
+        return Ep / E;
+    }
+};
+
+class InducedEmissionRatioMultiplier : public KernelMultiplier {
+  public:
+    double
+    operator()(double E, double Ep, double /*xi*/, double T, double /*Ne*/)
+        const override
+    {
+        double const kT = units::k_boltz * T;
+        return std::expm1(-E / kT) / std::expm1(-Ep / kT);
+    }
+};
+
 PYBIND11_MODULE(_compton_kernel_multipliers, m) // NOLINT(misc-include-cleaner)
 {
     m.doc() = "Concrete kernel multipliers for multigroup Compton integrals";
@@ -69,4 +93,14 @@ PYBIND11_MODULE(_compton_kernel_multipliers, m) // NOLINT(misc-include-cleaner)
             py::init<std::vector<double>, std::vector<double>>(),
             "energy_group_boundaries"_a, // NOLINT(misc-include-cleaner)
             "energy_group_centers"_a);
+
+    py::class_<EpOverEMultiplier, KernelMultiplier>(
+        m,
+        "EpOverEMultiplier")
+        .def(py::init<>());
+
+    py::class_<InducedEmissionRatioMultiplier, KernelMultiplier>(
+        m,
+        "InducedEmissionRatioMultiplier")
+        .def(py::init<>());
 }
