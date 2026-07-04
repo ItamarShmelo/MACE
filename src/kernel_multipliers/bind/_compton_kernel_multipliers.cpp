@@ -69,6 +69,16 @@ class EpOverEMultiplier : public KernelMultiplier {
     }
 };
 
+class EMinusEpMultiplier : public KernelMultiplier {
+  public:
+    double
+    operator()(double E, double Ep, double /*xi*/, double /*T*/, double /*Ne*/)
+        const override
+    {
+        return E - Ep;
+    }
+};
+
 class InducedEmissionRatioMultiplier : public KernelMultiplier {
   public:
     double
@@ -97,6 +107,11 @@ PYBIND11_MODULE(_compton_kernel_multipliers, m) // NOLINT(misc-include-cleaner)
     py::class_<EpOverEMultiplier, KernelMultiplier>(
         m,
         "EpOverEMultiplier")
+        .def(py::init<>());
+
+    py::class_<EMinusEpMultiplier, KernelMultiplier>(
+        m,
+        "EMinusEpMultiplier")
         .def(py::init<>());
 
     py::class_<InducedEmissionRatioMultiplier, KernelMultiplier>(
