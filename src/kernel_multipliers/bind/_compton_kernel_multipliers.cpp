@@ -59,6 +59,16 @@ class EnergyTransferMultiplier : public KernelMultiplier {
     std::vector<double> centers_;
 };
 
+class EpMultiplier : public KernelMultiplier {
+  public:
+    double
+    operator()(double /*E*/, double Ep, double /*xi*/, double /*T*/, double /*Ne*/)
+        const override
+    {
+        return Ep;
+    }
+};
+
 class EpOverEMultiplier : public KernelMultiplier {
   public:
     double
@@ -103,6 +113,11 @@ PYBIND11_MODULE(_compton_kernel_multipliers, m) // NOLINT(misc-include-cleaner)
             py::init<std::vector<double>, std::vector<double>>(),
             "energy_group_boundaries"_a, // NOLINT(misc-include-cleaner)
             "energy_group_centers"_a);
+
+    py::class_<EpMultiplier, KernelMultiplier>(
+        m,
+        "EpMultiplier")
+        .def(py::init<>());
 
     py::class_<EpOverEMultiplier, KernelMultiplier>(
         m,
