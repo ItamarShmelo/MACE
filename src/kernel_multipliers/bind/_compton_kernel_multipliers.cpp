@@ -79,6 +79,16 @@ class EpOverEMultiplier : public KernelMultiplier {
     }
 };
 
+class EpOverETimesXiMultiplier : public KernelMultiplier {
+  public:
+    double
+    operator()(double E, double Ep, double xi, double /*T*/, double /*Ne*/)
+        const override
+    {
+        return (Ep / E) * xi;
+    }
+};
+
 class EMinusEpMultiplier : public KernelMultiplier {
   public:
     double
@@ -167,6 +177,11 @@ PYBIND11_MODULE(_compton_kernel_multipliers, m) // NOLINT(misc-include-cleaner)
     py::class_<EpOverEMultiplier, KernelMultiplier>(
         m,
         "EpOverEMultiplier")
+        .def(py::init<>());
+
+    py::class_<EpOverETimesXiMultiplier, KernelMultiplier>(
+        m,
+        "EpOverETimesXiMultiplier")
         .def(py::init<>());
 
     py::class_<EMinusEpMultiplier, KernelMultiplier>(
