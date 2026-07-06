@@ -100,6 +100,26 @@ class InducedEmissionRatioMultiplier : public KernelMultiplier {
     }
 };
 
+class EnergyMomentMultiplier : public KernelMultiplier {
+  public:
+    explicit EnergyMomentMultiplier(int n) : n_(n)
+    {
+        if (n < 0)
+            throw std::invalid_argument("n must be >= 0");
+    }
+
+    double
+    operator()(double E, double Ep, double /*xi*/, double /*T*/, double /*Ne*/)
+        const override
+    {
+        double const x = (Ep - E) / E;
+        return std::pow(x, n_);
+    }
+
+  private:
+    int n_;
+};
+
 class LegendreMultiplier0123 : public KernelMultiplier {
   public:
     explicit LegendreMultiplier0123(int n) : n_(n)
@@ -158,6 +178,11 @@ PYBIND11_MODULE(_compton_kernel_multipliers, m) // NOLINT(misc-include-cleaner)
         m,
         "InducedEmissionRatioMultiplier")
         .def(py::init<>());
+
+    py::class_<EnergyMomentMultiplier, KernelMultiplier>(
+        m,
+        "EnergyMomentMultiplier")
+        .def(py::init<int>(), "n"_a);
 
     py::class_<LegendreMultiplier0123, KernelMultiplier>(
         m,
