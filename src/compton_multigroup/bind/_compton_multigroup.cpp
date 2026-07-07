@@ -32,7 +32,7 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
     py::class_<MGIntegrationConfig>(m, "MGIntegrationConfig")
         .def(
             py::init<
-                double,
+                std::optional<double>,
                 std::optional<int>,
                 double,
                 std::optional<int>,

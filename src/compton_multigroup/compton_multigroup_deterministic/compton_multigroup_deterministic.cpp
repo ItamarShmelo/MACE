@@ -81,7 +81,7 @@ double elastic_threshold(double tau)
 // ── MGIntegrationConfig ─────────────────────────────────────────────────
 
 MGIntegrationConfig::MGIntegrationConfig(
-    double const cutoff_ratio,
+    std::optional<double> const cutoff_ratio,
     std::optional<int> const xi_order,
     double const xi_peak_k,
     std::optional<int> const xi_tail_order,
@@ -104,8 +104,9 @@ MGIntegrationConfig::MGIntegrationConfig(
       log_e_panel_ratio(log_e_panel_ratio),
       e_boundary_k(e_boundary_k)
 {
-    if (cutoff_ratio < 0.0) {
-        throw std::invalid_argument("cutoff_ratio must be >= 0");
+    if (cutoff_ratio.has_value() && !(cutoff_ratio.value() > 0.0)) {
+        throw std::invalid_argument(
+            "cutoff_ratio must be > 0 when provided; use nullopt to disable");
     }
     if (xi_order.has_value() && xi_order.value() < 1) {
         throw std::invalid_argument("xi_order must be >= 1");
@@ -603,10 +604,11 @@ std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_impl(
 //            contains the geometric-mean energy of group g.
 //          - Evaluate gp_peak first; its angle-summed magnitude is the
 //            reference "peak_sum".
-//          - Expand rightward (gp_peak+1, gp_peak+2, …) until the
-//            angle-summed magnitude drops below cutoff_ratio × peak_sum.
-//          - Expand leftward similarly.
-//          - Unevaluated groups are left at zero.
+//          - When cutoff_ratio is set, expand rightward
+//            (gp_peak+1, gp_peak+2, …) until the angle-summed magnitude
+//            drops below cutoff_ratio × peak_sum, then leftward similarly.
+//            Unevaluated groups are left at zero.
+//          - When cutoff_ratio is nullopt, all target groups are evaluated.
 //
 //      This exploits the physical locality of Compton scattering:
 //      most of the scattered energy stays near the incoming energy,
@@ -695,8 +697,8 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
 
         double const peak_sum = do_group(gp_peak);
 
-        if (group_cutoff_ratio_ > 0.0) {
-            double const cutoff = group_cutoff_ratio_ * peak_sum;
+        if (group_cutoff_ratio_.has_value()) {
+            double const cutoff = group_cutoff_ratio_.value() * peak_sum;
 
             // Expand rightward (higher E' groups) until below cutoff.
             for (int gp = gp_peak + 1; gp < G; ++gp) {

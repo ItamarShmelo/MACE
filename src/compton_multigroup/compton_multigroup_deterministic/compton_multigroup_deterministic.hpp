@@ -80,7 +80,7 @@ namespace compton {
 struct MGIntegrationConfig {
     std::optional<int> xi_order;
     std::optional<int> xi_tail_order;
-    double cutoff_ratio;
+    std::optional<double> cutoff_ratio;
     double xi_peak_k;
 
     double ep_k_cut;
@@ -95,7 +95,9 @@ struct MGIntegrationConfig {
     /**
      * @brief Construct with validated defaults.
      *
-     * @param cutoff_ratio            Outward-from-peak early-termination ratio.
+     * @param cutoff_ratio            Outward-from-peak early-termination ratio
+     *                                 (must be > 0 when provided; nullopt
+     *                                 disables cutoff).
      * @param xi_order                GL order for the ξ peak core (defaults to
      * 48).
      * @param xi_peak_k               Half-width of the ξ peak window in sigma
@@ -119,7 +121,7 @@ struct MGIntegrationConfig {
      * @throws std::invalid_argument on invalid parameters.
      */
     MGIntegrationConfig(
-        double cutoff_ratio = 1e-8,
+        std::optional<double> cutoff_ratio = 1e-8,
         std::optional<int> xi_order = std::nullopt,
         double xi_peak_k = 5.0,
         std::optional<int> xi_tail_order = std::nullopt,
@@ -273,9 +275,10 @@ class ComptonMultigroupKernel {
      *
      * Orchestrates the multigroup integration for every incoming group g.
      * For each g the method starts at the peak target group (the one
-     * containing the geometric-mean energy of g) and expands outward,
-     * stopping in each direction once the angle-summed magnitude drops
-     * below group_cutoff_ratio_ × peak_value.
+     * containing the geometric-mean energy of g) and expands outward.
+     * When group_cutoff_ratio_ is set, expansion stops in each direction
+     * once the angle-summed magnitude drops below its value × peak_value;
+     * otherwise all target groups are evaluated.
      *
      * Each selected (g, gp, angle) bin is evaluated by integrate_E_Ep_xi_bin().
      *
@@ -419,7 +422,7 @@ class ComptonMultigroupKernel {
     double xi_peak_k_;
     double ep_k_cut_;
     double ep_k_in_;
-    double group_cutoff_ratio_;
+    std::optional<double> group_cutoff_ratio_;
 
     /// Panel width ratio threshold for switching to log/rlog-E quadrature.
     double log_e_panel_ratio_;

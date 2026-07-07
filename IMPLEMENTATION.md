@@ -446,8 +446,8 @@ The truncation is justified by $\lambda_+ - 1 \ge N\tau$ where $N = k^2/2$:
 The FWHM half-width is not used for truncation because it removes too much area.
 
 Groups entirely outside the retained interval return exactly zero in default mode.
-The outward-from-peak group cutoff (`cutoff_ratio`) breaks immediately on these
-zeros, providing an automatic performance benefit.
+When the outward-from-peak group cutoff is active (`cutoff_ratio` is set), it
+breaks immediately on these zeros, providing an automatic performance benefit.
 
 #### Right Tail
 
@@ -528,7 +528,7 @@ boundaries are defensively clipped, and empty intervals are skipped.
 | `xi_order` | `nullopt` → 48 | GL order for the ξ peak panel |
 | `xi_peak_k` | 5.0 | Half-width of the ξ peak window in sigma units |
 | `xi_tail_order` | `nullopt` → 16 | GL order for ξ tail sub-intervals |
-| `cutoff_ratio` | 1e-8 | Outward-from-peak early-termination ratio |
+| `cutoff_ratio` | 1e-8 | Outward-from-peak early-termination ratio (must be > 0 when set; `nullopt`/`None` disables) |
 | `ep_k_cut` | 5.0 | E' truncation width in sigma units (must be > 0) |
 | `ep_k_in` | 2.0 | E' interior-edge separator in sigma units (must be >= 0, < `ep_k_cut`) |
 | `ep_edge_order` | `nullopt` → 24 | GL order for E' edge regions |
@@ -727,11 +727,14 @@ transfers.  The outward-from-peak cutoff exploits this sparsity.
    elastic forward-scattering peak.
 2. Integrate $g'_\text{peak}$ first, summing the absolute values across all
    angle bins to obtain `peak_sum`.
-3. Expand rightward ($g' = g'_\text{peak}+1, g'_\text{peak}+2, \ldots$): for
-   each group, compute all angle bins and sum absolute values.  Stop when the
-   sum drops below `cutoff_ratio * peak_sum`.  Remaining groups stay at zero.
+3. When `cutoff_ratio` is set: expand rightward
+   ($g' = g'_\text{peak}+1, g'_\text{peak}+2, \ldots$), computing all angle
+   bins and summing absolute values.  Stop when the sum drops below
+   `cutoff_ratio * peak_sum`.  Remaining groups stay at zero.
 4. Expand leftward ($g' = g'_\text{peak}-1, g'_\text{peak}-2, \ldots$):
    same stopping criterion.
+5. When `cutoff_ratio` is `nullopt` (`None` in Python), all target groups are
+   evaluated unconditionally.
 
 **Why this is valid:** Compton scattering conserves total rate per incoming
 group (row sums $\sum_{g'} \sigma(g \to g') \approx \sigma_T$).  The kernel
@@ -741,7 +744,7 @@ for large energy transfers, so the omitted groups contribute a fraction below
 negligible compared to quadrature tolerances.
 
 **Default:** `cutoff_ratio = 1e-8`, set at construction time via
-`MGIntegrationConfig`.
+`MGIntegrationConfig`.  Pass `nullopt` (`None`) to disable cutoff entirely.
 
 
 ## Error Estimation
