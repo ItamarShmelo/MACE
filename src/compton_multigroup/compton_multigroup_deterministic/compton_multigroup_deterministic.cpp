@@ -23,59 +23,6 @@ namespace compton {
 namespace constants {
 static constexpr double XI_UPPER_EPS = 1e-10;
 static constexpr double DOUBLE_PEAK_RATIO_THRESHOLD = 10.0;
-
-// Temperature thresholds (in tau = kT/me_c2) for the elastic-like rlog path.
-// When |E'-E|/E < threshold, the xi integrand peaks steeply near xi=1
-// and rlog quadrature (which clusters nodes at the upper endpoint) is
-// far more effective than peak-splitting GL.
-//
-// The threshold must be tight enough that xi_pk is genuinely near xi_hi
-// when rlog activates.  If too loose, E' values whose xi peak is mid-bin
-// get routed to rlog, which wastes nodes at xi=1 instead of the peak.
-// Conversely, if too tight at warm/hot T, the peak-splitting path has to
-// resolve a steep forward spike that rlog handles effortlessly.
-//
-// Optimal thresholds (validated by sweeping at xi_order=48, measuring
-// bin 3 error vs xi_order=512 reference):
-//
-//   Very cold (tau < 2e-8,  T <   ~10 eV): thr = 1e-5
-//   Cold      (tau < 2e-6,  T <    ~1 keV): thr = 1e-4
-//   Cool      (tau < 2e-4,  T <  ~100 eV ): thr = 1e-3
-//   Warm      (tau < 0.02,  T <   ~10 keV): thr = 0.01
-//   Moderate  (tau < 0.2,   T <  ~100 keV): thr = 0.05
-//   Hot       (tau >= 0.2,  T >= ~100 keV): thr = 0.3
-static constexpr double XI_ELASTIC_TAU_VCOLD = 2e-8;
-static constexpr double XI_ELASTIC_TAU_COLD = 2e-6;
-static constexpr double XI_ELASTIC_TAU_COOL = 2e-4;
-static constexpr double XI_ELASTIC_TAU_WARM = 0.02;
-static constexpr double XI_ELASTIC_TAU_HOT = 0.2;
-static constexpr double XI_ELASTIC_VCOLD_THR = 1e-5;
-static constexpr double XI_ELASTIC_COLD_THR = 1e-4;
-static constexpr double XI_ELASTIC_COOL_THR = 1e-3;
-static constexpr double XI_ELASTIC_WARM_THR = 0.01;
-static constexpr double XI_ELASTIC_MOD_THR = 0.05;
-static constexpr double XI_ELASTIC_HOT_THR = 0.3;
-
-double elastic_threshold(double tau)
-{
-    if (tau < XI_ELASTIC_TAU_VCOLD) {
-        return XI_ELASTIC_VCOLD_THR;
-    }
-    if (tau < XI_ELASTIC_TAU_COLD) {
-        return XI_ELASTIC_COLD_THR;
-    }
-    if (tau < XI_ELASTIC_TAU_COOL) {
-        return XI_ELASTIC_COOL_THR;
-    }
-    if (tau < XI_ELASTIC_TAU_WARM) {
-        return XI_ELASTIC_WARM_THR;
-    }
-    if (tau < XI_ELASTIC_TAU_HOT) {
-        return XI_ELASTIC_MOD_THR;
-    }
-    return XI_ELASTIC_HOT_THR;
-}
-
 } // namespace constants
 
 // ── MGIntegrationConfig ─────────────────────────────────────────────────
@@ -332,10 +279,14 @@ double ComptonMultigroupKernel::integrate_xi_bin(
     double const gamma_p = Ep / units::me_c2;
     double const abs_dg = std::abs(gamma - gamma_p);
 
-    bool const elastic_like =
-        abs_dg / gamma < constants::elastic_threshold(tau);
+    double const peak_distance_from_one = abs_dg / (gamma * gamma_p);
+    double const sigma_xi =
+        std::sqrt(tau * abs_dg * (2.0 + abs_dg)) / (gamma * gamma_p);
 
-    if (elastic_like) {
+    bool const endpoint_localized =
+        endpoint_localized_xi(gamma, gamma_p, tau);
+
+    if (endpoint_localized) {
         double const span = xi_hi - xi_lo;
         double const eps = span * 1e-14;
         return rlog_legendre_integrate(
@@ -345,9 +296,7 @@ double ComptonMultigroupKernel::integrate_xi_bin(
             span);
     }
 
-    double const xi_pk = 1.0 - abs_dg / (gamma * gamma_p);
-    double const sigma_xi =
-        std::sqrt(tau * abs_dg * (2.0 + abs_dg)) / (gamma * gamma_p);
+    double const xi_pk = 1.0 - peak_distance_from_one;
     double const half_w = xi_peak_k_ * sigma_xi;
     double const bin_span = xi_hi - xi_lo;
 

@@ -306,8 +306,8 @@ class ComptonMultigroupKernel {
     /**
      * @brief Integrate the kernel over a single ξ bin for fixed (E, E').
      *
-     * Performs peak-focused GL quadrature with five branches:
-     * elastic-like, peak-left, peak-right, three-region split, full-bin.
+     * Performs peak-focused GL quadrature with four branches:
+     * endpoint-localized rlog, peak-left, peak-right, three-region split.
      *
      * @return ∫_{xi_lo}^{xi_hi} multiplier · kernel dξ
      */
@@ -498,6 +498,63 @@ inline RidgeBounds compute_ridge_bounds(
         E / (1.0 + gamma * (1.0 - xi_hi)),
         ridge_thermal_width(E, xi_lo, T),
         ridge_thermal_width(E, xi_hi, T)};
+}
+
+/// Angular-localization threshold for the endpoint-localized rlog condition.
+/// Calibrated against 50 log-spaced temperatures from 1e-5 to 1e3 keV.
+inline constexpr double XI_ENDPOINT_EPS = 0.1;
+
+/// Minimum dimensionless temperature τ = kT/m_e c² for the near-elastic
+/// Klein–Nishina cusp path.  Below this τ, condition (A) alone is sufficient.
+inline constexpr double XI_CUSP_TAU = 0.001;
+
+/**
+ * @brief Test whether the endpoint-localized reflected-log condition is met.
+ *
+ * The reflected-log ξ quadrature (clustering nodes near ξ = 1) activates
+ * when either of two conditions holds:
+ *
+ *   A. **Thermal endpoint-localisation:** the peak is close to ξ = 1 AND
+ *      narrow:
+ *          Δγ / (γ γ') ≤ σ_ξ   AND   σ_ξ ≤ ε_ξ
+ *
+ *   B. **Near-elastic kinematic cusp:** at warm/hot temperatures the
+ *      fractional energy transfer is small enough that the Klein–Nishina
+ *      forward peak at ξ = 1 still dominates the last angular bin:
+ *          |Δγ| / γ ≤ ε_ξ  AND  τ > τ_cusp
+ *
+ * Condition (A) handles the narrow-peak regime (cold/moderate T).
+ * Condition (B) handles same-group scattering at hot T where σ_ξ ≫ 1
+ * but the KN forward cusp still needs rlog resolution.
+ *
+ * The constants ε_ξ = XI_ENDPOINT_EPS and τ_cusp = XI_CUSP_TAU were
+ * calibrated against a 50-point temperature sweep (1e-5 to 1e3 keV)
+ * measuring last-angular-bin convergence at xi_order=48 vs 512.
+ *
+ * @param gamma   Dimensionless incoming photon energy  E  / m_e c².
+ * @param gamma_p Dimensionless outgoing photon energy E' / m_e c².
+ * @param tau     Dimensionless temperature  k_B T / m_e c².
+ * @return true if the reflected-log path should be used.
+ */
+inline bool endpoint_localized_xi(
+    double const gamma,
+    double const gamma_p,
+    double const tau)
+{
+    double const abs_dg = std::abs(gamma - gamma_p);
+    double const gg = gamma * gamma_p;
+    double const peak_distance_from_one = abs_dg / gg;
+    double const sigma_xi =
+        std::sqrt(tau * abs_dg * (2.0 + abs_dg)) / gg;
+
+    bool const thermal_endpoint =
+        peak_distance_from_one <= sigma_xi &&
+        sigma_xi <= XI_ENDPOINT_EPS;
+    bool const near_elastic_cusp =
+        abs_dg <= gamma * XI_ENDPOINT_EPS &&
+        tau > XI_CUSP_TAU;
+
+    return thermal_endpoint || near_elastic_cusp;
 }
 
 } // namespace compton
