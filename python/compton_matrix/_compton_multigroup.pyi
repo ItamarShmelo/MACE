@@ -91,7 +91,7 @@ class MCIntegrationConfig:
     def seed(self, arg0: typing.SupportsInt | typing.SupportsIndex) -> None:
         ...
 class MGIntegrationConfig:
-    def __init__(self, cutoff_ratio: typing.SupportsFloat | typing.SupportsIndex = 1e-08, xi_order: typing.SupportsInt | typing.SupportsIndex | None = None, xi_peak_k: typing.SupportsFloat | typing.SupportsIndex = 5.0, xi_tail_order: typing.SupportsInt | typing.SupportsIndex | None = None, ep_k_cut: typing.SupportsFloat | typing.SupportsIndex = 5.0, ep_k_in: typing.SupportsFloat | typing.SupportsIndex = 2.0, ep_edge_order: typing.SupportsInt | typing.SupportsIndex | None = None, ep_interior_order: typing.SupportsInt | typing.SupportsIndex | None = None, e_panel_order: typing.SupportsInt | typing.SupportsIndex | None = None, log_e_panel_ratio: typing.SupportsFloat | typing.SupportsIndex = 2.0, e_boundary_k: typing.SupportsFloat | typing.SupportsIndex = 5.0) -> None:
+    def __init__(self, cutoff_ratio: typing.SupportsFloat | typing.SupportsIndex | None = 1e-08, xi_order: typing.SupportsInt | typing.SupportsIndex | None = None, xi_peak_k: typing.SupportsFloat | typing.SupportsIndex = 5.0, xi_tail_order: typing.SupportsInt | typing.SupportsIndex | None = None, ep_k_cut: typing.SupportsFloat | typing.SupportsIndex = 5.0, ep_k_in: typing.SupportsFloat | typing.SupportsIndex = 2.0, ep_edge_order: typing.SupportsInt | typing.SupportsIndex | None = None, ep_interior_order: typing.SupportsInt | typing.SupportsIndex | None = None, e_panel_order: typing.SupportsInt | typing.SupportsIndex | None = None, log_e_panel_ratio: typing.SupportsFloat | typing.SupportsIndex = 2.0, e_boundary_k: typing.SupportsFloat | typing.SupportsIndex = 5.0) -> None:
         ...
     def effective_e_panel_order(self) -> int:
         ...
@@ -104,10 +104,10 @@ class MGIntegrationConfig:
     def effective_xi_tail_order(self) -> int:
         ...
     @property
-    def cutoff_ratio(self) -> float:
+    def cutoff_ratio(self) -> float | None:
         ...
     @cutoff_ratio.setter
-    def cutoff_ratio(self, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None:
+    def cutoff_ratio(self, arg0: typing.SupportsFloat | typing.SupportsIndex | None) -> None:
         ...
     @property
     def e_boundary_k(self) -> float:

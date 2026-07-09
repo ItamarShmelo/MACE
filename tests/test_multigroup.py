@@ -306,10 +306,15 @@ class TestGroupCutoff:
             config=_config(order, cutoff_ratio=cutoff),
         )
 
-    def test_cutoff_zero_disables_cutoff(self):
-        """Setting cutoff_ratio=0 is valid and disables early termination."""
-        cfg = cm.MGIntegrationConfig(cutoff_ratio=0.0)
-        assert cfg.cutoff_ratio == 0.0
+    def test_cutoff_none_disables_cutoff(self):
+        """Setting cutoff_ratio=None disables early termination."""
+        cfg = cm.MGIntegrationConfig(cutoff_ratio=None)
+        assert cfg.cutoff_ratio is None
+
+    def test_cutoff_zero_rejected(self):
+        """cutoff_ratio=0.0 is rejected; use None to disable."""
+        with pytest.raises(ValueError):
+            cm.MGIntegrationConfig(cutoff_ratio=0.0)
 
     def test_default_cutoff(self):
         """Default cutoff (1e-8) produces identical results to explicit 1e-8."""

@@ -32,7 +32,7 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
     py::class_<MGIntegrationConfig>(m, "MGIntegrationConfig")
         .def(
             py::init<
-                double,
+                std::optional<double>,
                 std::optional<int>,
                 double,
                 std::optional<int>,
@@ -524,6 +524,18 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
         "xi_hi"_a,
         "T"_a,
         "Ridge bounds with cold endpoints and thermal widths [erg]");
+
+    m.def(
+        "endpoint_localized_xi",
+        &compton::endpoint_localized_xi,
+        "gamma"_a,
+        "gamma_p"_a,
+        "tau"_a,
+        "Test whether the endpoint-localized reflected-log condition is "
+        "met");
+
+    m.attr("XI_ENDPOINT_EPS") = compton::XI_ENDPOINT_EPS;
+    m.attr("XI_CUSP_TAU") = compton::XI_CUSP_TAU;
 
     // --- Monte Carlo ---
     py::class_<MCIntegrationConfig>(m, "MCIntegrationConfig")

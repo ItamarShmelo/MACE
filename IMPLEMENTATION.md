@@ -341,10 +341,10 @@ Each sub-interval $[a, b]$ is integrated with `e_panel_order` GL points
 Zero-width sub-intervals (where $b \le a$) are skipped, which naturally
 handles cases where boundary-layer points coincide with group edges.
 
-**Cold-temperature ξ regime:** Below 0.005 keV the Compton kernel narrows to
-near-Thomson scattering, requiring more quadrature nodes for the ξ axis.
-The temperature-dependent elastic threshold (tiered by $\tau = kT/m_e c^2$)
-routes near-elastic $\xi$ bins to rlog quadrature for improved resolution.
+**Endpoint-localized ξ regime:** When the Compton peak is genuinely
+localised near $\xi = 1$ and narrow, the integrator routes to reflected-log
+quadrature for improved resolution.  The condition is controlled by the
+analytic endpoint-localization test (see ξ Peak-Focused Splitting below).
 
 Group centers are placed at the geometric mean $\sqrt{E_\text{lo} \cdot E_\text{hi}}$.
 Angle bins partition $[-1, 1]$ into $N$ equal segments of width $2/N$.  The $2\pi$
@@ -446,8 +446,8 @@ The truncation is justified by $\lambda_+ - 1 \ge N\tau$ where $N = k^2/2$:
 The FWHM half-width is not used for truncation because it removes too much area.
 
 Groups entirely outside the retained interval return exactly zero in default mode.
-The outward-from-peak group cutoff (`cutoff_ratio`) breaks immediately on these
-zeros, providing an automatic performance benefit.
+When the outward-from-peak group cutoff is active (`cutoff_ratio` is set), it
+breaks immediately on these zeros, providing an automatic performance benefit.
 
 #### Right Tail
 
@@ -528,7 +528,7 @@ boundaries are defensively clipped, and empty intervals are skipped.
 | `xi_order` | `nullopt` → 48 | GL order for the ξ peak panel |
 | `xi_peak_k` | 5.0 | Half-width of the ξ peak window in sigma units |
 | `xi_tail_order` | `nullopt` → 16 | GL order for ξ tail sub-intervals |
-| `cutoff_ratio` | 1e-8 | Outward-from-peak early-termination ratio |
+| `cutoff_ratio` | 1e-8 | Outward-from-peak early-termination ratio (must be > 0 when set; `nullopt`/`None` disables) |
 | `ep_k_cut` | 5.0 | E' truncation width in sigma units (must be > 0) |
 | `ep_k_in` | 2.0 | E' interior-edge separator in sigma units (must be >= 0, < `ep_k_cut`) |
 | `ep_edge_order` | `nullopt` → 24 | GL order for E' edge regions |
@@ -580,69 +580,46 @@ where $k$ = `xi_peak_k` (default 5) is the half-width in $\sigma_\xi$ units
 (total window = $2k\,\sigma_\xi$).  The raw, unclamped $\xi_\text{pk}$ determines
 which integration regime applies — it is not clamped to the bin domain.
 
-**Elastic-like guard.** When $d = |\gamma'-\gamma|$ is extremely small, the
-FWHM formula produces a degenerate (near-zero or denormalized) width.  A
-combined absolute + relative guard detects this:
+**Endpoint-localized reflected-log condition.**  The reflected-log ξ quadrature
+(clustering nodes near $\xi = 1$) activates when either of two conditions holds:
 
-$$d < 10^{-12} \quad\text{or}\quad d < \gamma\gamma' \cdot \texttt{XI\_UPPER\_EPS}$$
+**(A) Thermal endpoint-localisation:** the peak is close to $\xi = 1$ AND narrow:
 
-The absolute prong catches numerical degeneracy of the width formula.  The
-relative prong detects when $\xi_\text{pk}$ falls inside the excluded endpoint
-zone ($\xi > 1 - \texttt{XI\_UPPER\_EPS}$), making FWHM-based splitting
-pointless.  When elastic-like, the integrator uses `rlog_legendre_integrate` on
-shifted coordinates over the full bin, clustering nodes near $\xi_\text{hi}$
-(toward the elastic peak at ξ = 1).
+$$\frac{|\gamma'-\gamma|}{\gamma\,\gamma'} \;\le\; \sigma_\xi
+\quad\text{AND}\quad \sigma_\xi \;\le\; \varepsilon_\xi$$
 
-**Temperature-dependent elastic-like threshold.**  Beyond the absolute/relative
-guard above, a broader elastic-like path activates when $|E'-E|/E$ is below a
-temperature-dependent threshold.  At these near-elastic $E'$ values, the $\xi$
-integrand develops a steep forward-scattering peak near $\xi = 1$ that the
-peak-splitting scheme (which centres on $\xi_\text{pk}$) cannot resolve
-efficiently, because the peak profile steepens as $E' \to E$.  The `rlog`
-quadrature, which clusters nodes at the upper endpoint, is far more effective
-in this regime.
+**(B) Near-elastic kinematic cusp:** the fractional energy transfer is small,
+so the Klein–Nishina forward peak at $\xi = 1$ dominates the last angular bin
+regardless of thermal width:
 
-The optimal threshold varies with temperature because the location of $\xi_\text{pk}$
-relative to the bin boundary, and the peak's sharpness, both depend on the
-thermal broadening $\tau = kT / m_e c^2$.  If the threshold is too loose at
-cold temperatures, E' values whose $\xi_\text{pk}$ is well inside the bin
-(e.g.\ $\xi_\text{pk} = 0.85$ at $|E'-E|/E = 0.003$) get routed to the rlog
-path, which wastes nodes at $\xi = 1$ instead of near the actual peak.
-Conversely, if too tight at warm/hot T, the peak-splitting path must resolve
-a steep forward spike that rlog handles effortlessly.
+$$\frac{|\Delta\gamma|}{\gamma} \;\le\; \varepsilon_\xi$$
 
-| Regime | $\tau$ boundary | Threshold ($|E'-E|/E$) | $\xi_\text{pk}$ cutoff | T range |
-|--------|----------------|----------------------|----------------------|---------|
-| **Very cold** | $\tau < 2 \times 10^{-8}$ | $10^{-5}$ | $> 0.99999$ | $T \lesssim 10$ eV |
-| **Cold** | $\tau < 2 \times 10^{-6}$ | $10^{-4}$ | $> 0.9999$ | $T \lesssim 1$ keV |
-| **Cool** | $\tau < 2 \times 10^{-4}$ | $10^{-3}$ | $> 0.999$ | $T \lesssim 100$ eV |
-| **Warm** | $\tau < 0.02$ | $0.01$ | $> 0.99$ | $T \lesssim 10$ keV |
-| **Moderate** | $\tau < 0.2$ | $0.05$ | $> 0.95$ | $T \lesssim 100$ keV |
-| **Hot** | $\tau \ge 0.2$ | $0.3$ | $> 0.7$ | $T \gtrsim 100$ keV |
+where $\varepsilon_\xi$ = `XI_ENDPOINT_EPS` = 0.1 and
+$\tau_\text{cusp}$ = `XI_CUSP_TAU` = 0.001 are compile-time constants calibrated
+against a 50-point temperature sweep (1e-5 to 1e3 keV).
 
-These thresholds were determined by sweeping the threshold parameter uniformly
-at each temperature and measuring bin-3 (last angular bin) convergence at
-$\xi$-order 48 vs a reference at $\xi$-order 512.  With 6 regimes, every
-temperature from $10^{-5}$ to $10^3$ keV achieves better than $10^{-5}$
-relative convergence in bin 3 at $\xi$-order 48.
+Condition (A) handles the narrow-peak regime (cold/moderate T), where the
+thermal peak is genuinely localised near $\xi = 1$.  Condition (B) handles
+same-group scattering at hot T where $\sigma_\xi \gg 1$ but the KN forward
+cusp at $\xi = 1$ still requires rlog resolution.  Together, they capture
+both the thermal and kinematic sources of endpoint structure.
 
-The constants are defined in `compton_multigroup_deterministic.cpp`:
+When either condition is met, the integrator uses `rlog_legendre_integrate` on
+shifted coordinates $s \in [\varepsilon, \text{span}]$ with $\xi = \xi_\text{lo} + s$,
+clustering nodes near $\xi_\text{hi}$ (toward $\xi = 1$).
 
-```
-XI_ELASTIC_TAU_VCOLD = 2e-8   // τ boundary: very cold → cold
-XI_ELASTIC_TAU_COLD  = 2e-6   // τ boundary: cold → cool
-XI_ELASTIC_TAU_COOL  = 2e-4   // τ boundary: cool → warm
-XI_ELASTIC_TAU_WARM  = 0.02   // τ boundary: warm → moderate
-XI_ELASTIC_TAU_HOT   = 0.2    // τ boundary: moderate → hot
-XI_ELASTIC_VCOLD_THR = 1e-5   // |E'-E|/E threshold: very cold
-XI_ELASTIC_COLD_THR  = 1e-4   // |E'-E|/E threshold: cold
-XI_ELASTIC_COOL_THR  = 1e-3   // |E'-E|/E threshold: cool
-XI_ELASTIC_WARM_THR  = 0.01   // |E'-E|/E threshold: warm
-XI_ELASTIC_MOD_THR   = 0.05   // |E'-E|/E threshold: moderate
-XI_ELASTIC_HOT_THR   = 0.3    // |E'-E|/E threshold: hot
-```
+The exactly elastic case ($\gamma = \gamma'$) satisfies both conditions: (A)
+evaluates as $0 \le 0$ and $0 \le \varepsilon_\xi$; (B) as $0 \le 0$.
+Non-strict inequalities ($\le$) are required for this case.
 
-**Integration regimes (non-elastic):**
+This replaces the previous temperature-tiered `elastic_threshold(τ)` step
+function, which used 6 empirically calibrated thresholds for different
+temperature regimes.  The analytic two-part condition requires no hand-tuning
+and correctly handles both the narrow-peak and broad-kernel regimes.  The
+standalone predicate `endpoint_localized_xi(gamma, gamma_p, tau, xi_endpoint_eps)`
+is available for direct testing.
+
+**Integration regimes (non-endpoint-localized):**
 
 1. **Peak window entirely left** ($\xi_\text{pk} + k\cdot\sigma_\xi \le \xi_\text{lo}$):
    the integrand decays away from $\xi_\text{lo}$.  Plain `legendre_integrate`
@@ -679,16 +656,20 @@ $10^{-14} \cdot \text{bin\_span}$ (prevents zero-width quadrature).
 The peak core is skipped if core_hi $\le$ core_lo (floating-point edge case).
 
 **Removed mechanisms:**
-- The 5% ratio guard (`XI_PEAK_RATIO_THRESHOLD = 0.05`) is replaced by the
-  tighter elastic-like singularity guard.
+- The temperature-tiered `elastic_threshold(τ)` step function and all 12
+  `XI_ELASTIC_*` constants are replaced by the analytic endpoint-localized
+  condition above.
+- The 5% ratio guard (`XI_PEAK_RATIO_THRESHOLD = 0.05`) is superseded by
+  the endpoint-localized condition.
 - The 80% width check is removed; splitting always applies and naturally
   degrades when the peak window covers the bin.
 - The ratio-based log/rlog fallback (`LOG_XI_EP_RATIO_THRESHOLD = 1.5`) is
   removed; the peak geometry (left/right/overlapping) handles all cases.
 - The `flat_xi` bypass is removed; peak-aware splitting always applies and
   naturally degrades to full-bin GL when the peak window covers the entire bin.
-- Log/rlog mappings for non-elastic far-bin and tail sub-intervals are replaced
-  with plain GL for robustness (avoids exp/log transforms on narrow intervals).
+- Log/rlog mappings for non-endpoint-localized far-bin and tail sub-intervals
+  are replaced with plain GL for robustness (avoids exp/log transforms on
+  narrow intervals).
 
 #### Recommended Production Configurations
 
@@ -727,11 +708,14 @@ transfers.  The outward-from-peak cutoff exploits this sparsity.
    elastic forward-scattering peak.
 2. Integrate $g'_\text{peak}$ first, summing the absolute values across all
    angle bins to obtain `peak_sum`.
-3. Expand rightward ($g' = g'_\text{peak}+1, g'_\text{peak}+2, \ldots$): for
-   each group, compute all angle bins and sum absolute values.  Stop when the
-   sum drops below `cutoff_ratio * peak_sum`.  Remaining groups stay at zero.
+3. When `cutoff_ratio` is set: expand rightward
+   ($g' = g'_\text{peak}+1, g'_\text{peak}+2, \ldots$), computing all angle
+   bins and summing absolute values.  Stop when the sum drops below
+   `cutoff_ratio * peak_sum`.  Remaining groups stay at zero.
 4. Expand leftward ($g' = g'_\text{peak}-1, g'_\text{peak}-2, \ldots$):
    same stopping criterion.
+5. When `cutoff_ratio` is `nullopt` (`None` in Python), all target groups are
+   evaluated unconditionally.
 
 **Why this is valid:** Compton scattering conserves total rate per incoming
 group (row sums $\sum_{g'} \sigma(g \to g') \approx \sigma_T$).  The kernel
@@ -741,7 +725,7 @@ for large energy transfers, so the omitted groups contribute a fraction below
 negligible compared to quadrature tolerances.
 
 **Default:** `cutoff_ratio = 1e-8`, set at construction time via
-`MGIntegrationConfig`.
+`MGIntegrationConfig`.  Pass `nullopt` (`None`) to disable cutoff entirely.
 
 
 ## Error Estimation
