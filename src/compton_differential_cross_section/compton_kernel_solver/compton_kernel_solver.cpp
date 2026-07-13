@@ -13,12 +13,14 @@ ComptonKernelSolver::ComptonKernelSolver(
     double const power_series_self_tol,
     double const asymp_self_tol,
     double const dd_power_series_self_tol,
-    double const dd_asymp_self_tol)
+    double const dd_asymp_self_tol,
+    bool const verbose)
     : asymp_tau_alpha_threshold_(asymp_tau_alpha_threshold),
       power_series_self_tol_(power_series_self_tol),
       asymp_self_tol_(asymp_self_tol),
       dd_power_series_self_tol_(dd_power_series_self_tol),
       dd_asymp_self_tol_(dd_asymp_self_tol),
+      verbose_(verbose),
       asymp_series_(false),
       asymp_series_dd_(true),
       power_series_(false),
@@ -128,40 +130,44 @@ ComptonResult ComptonKernelSolver::sigma_E(
     try {
         result = dispatch<KernelOp::sigma>(E, E_prime, xi, T, Ne);
     } catch (...) {
-        double const gamma = E / units::me_c2;
-        double const gamma_p = E_prime / units::me_c2;
-        double const T_kev = T / units::kev_kelvin;
-        double const tau = T * units::k_boltz / units::me_c2;
-        std::println(
-            stderr,
-            "WARNING sigma_E: all backends failed, returning 0"
-            "  (gamma={:.6e}, gamma'={:.6e}, T={:.6e} keV, tau={:.6e}, "
-            "xi={:.6e})",
-            gamma,
-            gamma_p,
-            T_kev,
-            tau,
-            xi);
+        if (verbose_) {
+            double const gamma = E / units::me_c2;
+            double const gamma_p = E_prime / units::me_c2;
+            double const T_kev = T / units::kev_kelvin;
+            double const tau = T * units::k_boltz / units::me_c2;
+            std::println(
+                stderr,
+                "WARNING sigma_E: all backends failed, returning 0"
+                "  (gamma={:.6e}, gamma'={:.6e}, T={:.6e} keV, tau={:.6e}, "
+                "xi={:.6e})",
+                gamma,
+                gamma_p,
+                T_kev,
+                tau,
+                xi);
+        }
         return ComptonResult{0.0, 1.0};
     }
     if (result.value < 0.0) {
-        double const gamma = E / units::me_c2;
-        double const gamma_p = E_prime / units::me_c2;
-        double const T_kev = T / units::kev_kelvin;
-        double const tau = T * units::k_boltz / units::me_c2;
-        std::println(
-            stderr,
-            "WARNING sigma_E: {:.6e} clamped to 0"
-            "  (gamma={:.6e}, gamma'={:.6e}, T={:.6e} keV, tau={:.6e}, "
-            "xi={:.6e}, "
-            "err={:.3e})",
-            result.value,
-            gamma,
-            gamma_p,
-            T_kev,
-            tau,
-            xi,
-            result.estimated_rel_error);
+        if (verbose_) {
+            double const gamma = E / units::me_c2;
+            double const gamma_p = E_prime / units::me_c2;
+            double const T_kev = T / units::kev_kelvin;
+            double const tau = T * units::k_boltz / units::me_c2;
+            std::println(
+                stderr,
+                "WARNING sigma_E: {:.6e} clamped to 0"
+                "  (gamma={:.6e}, gamma'={:.6e}, T={:.6e} keV, tau={:.6e}, "
+                "xi={:.6e}, "
+                "err={:.3e})",
+                result.value,
+                gamma,
+                gamma_p,
+                T_kev,
+                tau,
+                xi,
+                result.estimated_rel_error);
+        }
         result.value = 0.0;
     }
     return result;
@@ -177,20 +183,22 @@ ComptonResult ComptonKernelSolver::dsigma_E_dT(
     try {
         return dispatch<KernelOp::dsigma_dT>(E, E_prime, xi, T, Ne);
     } catch (...) {
-        double const gamma = E / units::me_c2;
-        double const gamma_p = E_prime / units::me_c2;
-        double const T_kev = T / units::kev_kelvin;
-        double const tau = T * units::k_boltz / units::me_c2;
-        std::println(
-            stderr,
-            "WARNING dsigma_E_dT: all backends failed, returning 0"
-            "  (gamma={:.6e}, gamma'={:.6e}, T={:.6e} keV, tau={:.6e}, "
-            "xi={:.6e})",
-            gamma,
-            gamma_p,
-            T_kev,
-            tau,
-            xi);
+        if (verbose_) {
+            double const gamma = E / units::me_c2;
+            double const gamma_p = E_prime / units::me_c2;
+            double const T_kev = T / units::kev_kelvin;
+            double const tau = T * units::k_boltz / units::me_c2;
+            std::println(
+                stderr,
+                "WARNING dsigma_E_dT: all backends failed, returning 0"
+                "  (gamma={:.6e}, gamma'={:.6e}, T={:.6e} keV, tau={:.6e}, "
+                "xi={:.6e})",
+                gamma,
+                gamma_p,
+                T_kev,
+                tau,
+                xi);
+        }
         return ComptonResult{0.0, 1.0};
     }
 }

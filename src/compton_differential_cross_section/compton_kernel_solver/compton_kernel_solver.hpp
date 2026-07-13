@@ -56,7 +56,8 @@ class ComptonKernelSolver {
         double power_series_self_tol = 1e-7,
         double asymp_self_tol = 1e-7,
         double dd_power_series_self_tol = 0.5,
-        double dd_asymp_self_tol = 0.5);
+        double dd_asymp_self_tol = 0.5,
+        bool verbose = false);
 
     ComptonResult
     sigma_E(double E, double E_prime, double xi, double T, double Ne) const;
@@ -70,6 +71,7 @@ class ComptonKernelSolver {
     double asymp_self_tol_;
     double dd_power_series_self_tol_;
     double dd_asymp_self_tol_;
+    bool verbose_;
 
     ComptonKernelAsymptoticSeries asymp_series_;
     ComptonKernelAsymptoticSeries asymp_series_dd_;

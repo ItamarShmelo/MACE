@@ -339,13 +339,14 @@ PYBIND11_MODULE(
     // --- Solver ---
     py::class_<ComptonKernelSolver>(m, "ComptonKernelSolver")
         .def(
-            py::init<double, double, double, double, double>(),
+            py::init<double, double, double, double, double, bool>(),
             "asymp_tau_alpha_threshold"_a =
                 constants::ASYMP_TAU_ALPHA_THRESHOLD,
             "power_series_self_tol"_a = 1e-7,
             "asymp_self_tol"_a = 1e-7,
             "dd_power_series_self_tol"_a = 0.5,
-            "dd_asymp_self_tol"_a = 0.5)
+            "dd_asymp_self_tol"_a = 0.5,
+            "verbose"_a = false)
         .def(
             "sigma_E",
             &ComptonKernelSolver::sigma_E,
