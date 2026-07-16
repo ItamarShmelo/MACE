@@ -205,7 +205,7 @@ class TestBasicSanity:
 
 
 class TestDerivativeGolden:
-    """Seed-locked golden values for compute_dsigma_dT_matrix."""
+    """Seed-locked golden values for compute_kernel_derivative_contribution."""
 
     def test_derivative_seed_reproducibility(self):
         """Same seed produces reproducible derivative matrices."""
@@ -215,8 +215,8 @@ class TestDerivativeGolden:
         mc1 = _make_mc(bounds, seed=42, num_samples=100_000)
         mc2 = _make_mc(bounds, seed=42, num_samples=100_000)
 
-        dS1 = mc1.compute_dsigma_dT_matrix(T=T, Ne=1.0)
-        dS2 = mc2.compute_dsigma_dT_matrix(T=T, Ne=1.0)
+        dS1 = mc1.compute_kernel_derivative_contribution(T=T, Ne=1.0)
+        dS2 = mc2.compute_kernel_derivative_contribution(T=T, Ne=1.0)
 
         np.testing.assert_allclose(dS1, dS2, rtol=1e-14, atol=0)
 
@@ -230,7 +230,7 @@ class TestDerivativeGolden:
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
 
         mc_obj = _make_mc(bounds, seed=42, num_samples=100_000)
-        dS = mc_obj.compute_dsigma_dT_matrix(T=T, Ne=1.0)
+        dS = mc_obj.compute_kernel_derivative_contribution(T=T, Ne=1.0)
 
         expected = np.array(
             [
@@ -249,12 +249,12 @@ class TestDerivativeGolden:
 
     def test_derivative_output_shape_2d(self):
         mc_obj = _make_mc(BOUNDARIES_ERG, num_samples=1000)
-        dS = mc_obj.compute_dsigma_dT_matrix(T=10.0 * kev_kelvin, Ne=1.0)
+        dS = mc_obj.compute_kernel_derivative_contribution(T=10.0 * kev_kelvin, Ne=1.0)
         assert dS.shape == (G, G)
 
     def test_derivative_output_shape_3d(self):
         mc_obj = _make_mc(BOUNDARIES_ERG, num_samples=1000)
-        dS = mc_obj.compute_dsigma_dT_matrix(num_angle_bins=4, T=10.0 * kev_kelvin, Ne=1.0)
+        dS = mc_obj.compute_kernel_derivative_contribution(num_angle_bins=4, T=10.0 * kev_kelvin, Ne=1.0)
         assert dS.shape == (G, G, 4)
 
 
@@ -264,7 +264,7 @@ class TestDerivativeGolden:
 
 
 class TestFullDerivativeMCvsDet:
-    """Cross-validate MC compute_full_dsigma_dT_matrix against deterministic."""
+    """Cross-validate MC compute_dsigma_dT_matrix against deterministic."""
 
     @pytest.mark.slow
     @pytest.mark.parametrize("T_kev", [10.0])
@@ -283,10 +283,10 @@ class TestFullDerivativeMCvsDet:
             config=cm.MGIntegrationConfig(cutoff_ratio=None),
         )
         kernel = ComptonKernelSolver()
-        det_deriv = det_mg.compute_full_dsigma_dT_matrix(kernel, T=T, Ne=1.0)
+        det_deriv = det_mg.compute_dsigma_dT_matrix(kernel, T=T, Ne=1.0)
 
         mc_mg = _make_mc(bounds, weight_function=wf, num_samples=5_000_000, seed=42)
-        mc_deriv = mc_mg.compute_full_dsigma_dT_matrix(T=T, Ne=1.0)
+        mc_deriv = mc_mg.compute_dsigma_dT_matrix(T=T, Ne=1.0)
 
         # Row-sum comparison (more robust than element-wise for MC)
         det_row = det_deriv.sum(axis=1)
@@ -310,7 +310,7 @@ class TestFullDerivativeMCvsDet:
         mc1 = _make_mc(bounds, weight_function=wf, num_samples=100_000, seed=42)
         mc2 = _make_mc(bounds, weight_function=wf, num_samples=100_000, seed=42)
 
-        full = mc1.compute_full_dsigma_dT_matrix(T=T, Ne=1.0)
-        kernel_only = mc2.compute_dsigma_dT_matrix(T=T, Ne=1.0)
+        full = mc1.compute_dsigma_dT_matrix(T=T, Ne=1.0)
+        kernel_only = mc2.compute_kernel_derivative_contribution(T=T, Ne=1.0)
 
         np.testing.assert_allclose(full, kernel_only, rtol=1e-12, atol=0)

@@ -59,7 +59,7 @@ def _hot_dsigma():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_low_order_config()
     )
-    return mg.compute_dsigma_dT_matrix(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
+    return mg.compute_kernel_derivative_contribution(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
 
 
 def _cold_sigma():

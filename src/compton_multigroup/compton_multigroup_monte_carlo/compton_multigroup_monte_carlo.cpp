@@ -301,7 +301,7 @@ std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
     return compute_sigma_matrix(1, T, Ne, multiplier);
 }
 
-std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
+std::vector<double> ComptonMonteCarloKernel::compute_kernel_derivative_contribution(
     int const num_angle_bins,
     double const T,
     double const Ne,
@@ -328,17 +328,17 @@ std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
         });
 }
 
-std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
+std::vector<double> ComptonMonteCarloKernel::compute_kernel_derivative_contribution(
     double const T,
     double const Ne,
     KernelMultiplier const& multiplier) const
 {
-    return compute_dsigma_dT_matrix(1, T, Ne, multiplier);
+    return compute_kernel_derivative_contribution(1, T, Ne, multiplier);
 }
 
 // ── Full temperature derivative ─────────────────────────────────────────
 
-std::vector<double> ComptonMonteCarloKernel::compute_full_dsigma_dT_matrix(
+std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
     int const num_angle_bins,
     double const T,
     double const Ne,
@@ -420,12 +420,12 @@ std::vector<double> ComptonMonteCarloKernel::compute_full_dsigma_dT_matrix(
     return result;
 }
 
-std::vector<double> ComptonMonteCarloKernel::compute_full_dsigma_dT_matrix(
+std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
     double const T,
     double const Ne,
     KernelMultiplier const& multiplier) const
 {
-    return compute_full_dsigma_dT_matrix(1, T, Ne, multiplier);
+    return compute_dsigma_dT_matrix(1, T, Ne, multiplier);
 }
 
 } // namespace compton

@@ -12,16 +12,16 @@ class ComptonMonteCarloKernel:
     def __init__(self, energy_group_boundaries: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex], weight_function: WeightFunction, config: MCIntegrationConfig = ...) -> None:
         ...
     @typing.overload
+    def compute_kernel_derivative_contribution(self, num_angle_bins: typing.SupportsInt | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex, Ne: typing.SupportsFloat | typing.SupportsIndex, multiplier: KernelMultiplier = ...) -> numpy.typing.NDArray[numpy.float64]:
+        ...
+    @typing.overload
+    def compute_kernel_derivative_contribution(self, T: typing.SupportsFloat | typing.SupportsIndex, Ne: typing.SupportsFloat | typing.SupportsIndex, multiplier: KernelMultiplier = ...) -> numpy.typing.NDArray[numpy.float64]:
+        ...
+    @typing.overload
     def compute_dsigma_dT_matrix(self, num_angle_bins: typing.SupportsInt | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex, Ne: typing.SupportsFloat | typing.SupportsIndex, multiplier: KernelMultiplier = ...) -> numpy.typing.NDArray[numpy.float64]:
         ...
     @typing.overload
     def compute_dsigma_dT_matrix(self, T: typing.SupportsFloat | typing.SupportsIndex, Ne: typing.SupportsFloat | typing.SupportsIndex, multiplier: KernelMultiplier = ...) -> numpy.typing.NDArray[numpy.float64]:
-        ...
-    @typing.overload
-    def compute_full_dsigma_dT_matrix(self, num_angle_bins: typing.SupportsInt | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex, Ne: typing.SupportsFloat | typing.SupportsIndex, multiplier: KernelMultiplier = ...) -> numpy.typing.NDArray[numpy.float64]:
-        ...
-    @typing.overload
-    def compute_full_dsigma_dT_matrix(self, T: typing.SupportsFloat | typing.SupportsIndex, Ne: typing.SupportsFloat | typing.SupportsIndex, multiplier: KernelMultiplier = ...) -> numpy.typing.NDArray[numpy.float64]:
         ...
     @typing.overload
     def compute_sigma_matrix(self, num_angle_bins: typing.SupportsInt | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex, Ne: typing.SupportsFloat | typing.SupportsIndex, multiplier: KernelMultiplier = ...) -> numpy.typing.NDArray[numpy.float64]:
@@ -50,16 +50,16 @@ class ComptonMultigroupKernel:
         Integrate sigma_E over E' range and xi bins for fixed E
         """
     @typing.overload
+    def compute_kernel_derivative_contribution(self, kernel: compton_matrix._compton_differential_cross_section.ComptonKernelSolver, num_angle_bins: typing.SupportsInt | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex, Ne: typing.SupportsFloat | typing.SupportsIndex, multiplier: KernelMultiplier = ...) -> numpy.typing.NDArray[numpy.float64]:
+        ...
+    @typing.overload
+    def compute_kernel_derivative_contribution(self, kernel: compton_matrix._compton_differential_cross_section.ComptonKernelSolver, T: typing.SupportsFloat | typing.SupportsIndex, Ne: typing.SupportsFloat | typing.SupportsIndex, multiplier: KernelMultiplier = ...) -> numpy.typing.NDArray[numpy.float64]:
+        ...
+    @typing.overload
     def compute_dsigma_dT_matrix(self, kernel: compton_matrix._compton_differential_cross_section.ComptonKernelSolver, num_angle_bins: typing.SupportsInt | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex, Ne: typing.SupportsFloat | typing.SupportsIndex, multiplier: KernelMultiplier = ...) -> numpy.typing.NDArray[numpy.float64]:
         ...
     @typing.overload
     def compute_dsigma_dT_matrix(self, kernel: compton_matrix._compton_differential_cross_section.ComptonKernelSolver, T: typing.SupportsFloat | typing.SupportsIndex, Ne: typing.SupportsFloat | typing.SupportsIndex, multiplier: KernelMultiplier = ...) -> numpy.typing.NDArray[numpy.float64]:
-        ...
-    @typing.overload
-    def compute_full_dsigma_dT_matrix(self, kernel: compton_matrix._compton_differential_cross_section.ComptonKernelSolver, num_angle_bins: typing.SupportsInt | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex, Ne: typing.SupportsFloat | typing.SupportsIndex, multiplier: KernelMultiplier = ...) -> numpy.typing.NDArray[numpy.float64]:
-        ...
-    @typing.overload
-    def compute_full_dsigma_dT_matrix(self, kernel: compton_matrix._compton_differential_cross_section.ComptonKernelSolver, T: typing.SupportsFloat | typing.SupportsIndex, Ne: typing.SupportsFloat | typing.SupportsIndex, multiplier: KernelMultiplier = ...) -> numpy.typing.NDArray[numpy.float64]:
         ...
     @typing.overload
     def compute_sigma_matrix(self, kernel: compton_matrix._compton_differential_cross_section.ComptonKernelSolver, num_angle_bins: typing.SupportsInt | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex, Ne: typing.SupportsFloat | typing.SupportsIndex, multiplier: KernelMultiplier = ...) -> numpy.typing.NDArray[numpy.float64]:
