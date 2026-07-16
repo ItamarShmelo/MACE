@@ -176,7 +176,7 @@ the `weight_function` constructor argument.
 - **Constructor**: `ComptonMultigroupKernel(energy_group_boundaries, weight_function, config=MGIntegrationConfig())` -- boundaries are G+1 strictly increasing values in [erg], all > 0. `weight_function` is a `WeightFunction` subclass (e.g. `PlanckWeightFunction`, `UniformWeightFunction`, `WienWeightFunction`). `config` controls quadrature orders, adaptive refinement depth, and convergence tolerance.
 - **`compute_sigma_matrix(kernel, num_angle_bins, T, Ne)`** -- returns a `(G, G, N_angles)` NumPy array.
 - **`compute_sigma_matrix(kernel, T, Ne)`** -- angle-integrated, returns a `(G, G)` NumPy array.
-- **`compute_dsigma_dT_matrix`** -- same signatures, using the temperature-derivative kernel.
+- **`compute_kernel_derivative_contribution`** -- same signatures, using the temperature-derivative kernel.
 
 The `kernel` argument is a `ComptonKernelSolver` instance.
 
@@ -213,7 +213,7 @@ deterministic quadrature of the point-wise kernel. It does not require a
 `ComptonKernelSolver` instance.
 
 - **Constructor**: `ComptonMonteCarloKernel(energy_group_boundaries, weight_function, config=MCIntegrationConfig())` -- same boundary and weight-function conventions as the deterministic kernel. `MCIntegrationConfig` controls `num_samples` (default 1,000,000), `seed` (default -1 for time-based), and `discard_out_of_grid` (default `True`).
-- **`compute_sigma_matrix`** / **`compute_dsigma_dT_matrix`** -- same overloads as the deterministic kernel (angle-resolved and angle-integrated).
+- **`compute_sigma_matrix`** / **`compute_kernel_derivative_contribution`** -- same overloads as the deterministic kernel (angle-resolved and angle-integrated).
 
 ## Equations
 

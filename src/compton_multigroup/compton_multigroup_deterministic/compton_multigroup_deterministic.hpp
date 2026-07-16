@@ -200,7 +200,7 @@ class ConstantMultiplier : public KernelMultiplier {
  *
  * Construct once with the energy group structure, weight function,
  * and quadrature configuration; then call compute_sigma_matrix /
- * compute_dsigma_dT_matrix at any temperature and angular resolution.
+ * compute_kernel_derivative_contribution at any temperature and angular resolution.
  */
 class ComptonMultigroupKernel {
   public:
@@ -263,7 +263,7 @@ class ComptonMultigroupKernel {
      * integration.
      * @return Flat vector of size G×G×N_angles, row-major [g][g'][angle].
      */
-    std::vector<double> compute_dsigma_dT_matrix(
+    std::vector<double> compute_kernel_derivative_contribution(
         ComptonKernelSolver const& kernel,
         int num_angle_bins,
         double T,
@@ -273,7 +273,7 @@ class ComptonMultigroupKernel {
     /**
      * @brief Compute the full d/dT of the multigroup cross section.
      *
-     * Unlike compute_dsigma_dT_matrix (which only differentiates the kernel),
+     * Unlike compute_kernel_derivative_contribution (which only differentiates the kernel),
      * this method applies the quotient rule to account for the temperature
      * dependence of the weight function and its denominator:
      *

@@ -694,7 +694,7 @@ std::vector<double> ComptonMultigroupKernel::compute_sigma_matrix(
         group_cutoff_ratio_);
 }
 
-std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
+std::vector<double> ComptonMultigroupKernel::compute_kernel_derivative_contribution(
     ComptonKernelSolver const& kernel,
     int const num_angle_bins,
     double const T,

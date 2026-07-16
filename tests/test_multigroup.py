@@ -647,7 +647,7 @@ class TestFullDerivative:
         )
 
         full = mg.compute_full_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
-        kernel_only = mg.compute_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
+        kernel_only = mg.compute_kernel_derivative_contribution(KERNEL, T=T, Ne=1.0)
 
         np.testing.assert_allclose(full, kernel_only, rtol=1e-12, atol=0)
 

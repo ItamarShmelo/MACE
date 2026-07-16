@@ -147,7 +147,7 @@ class ComptonMonteCarloKernel {
      * derivative weight (λ − κ)/τ² − 3/τ before accumulation, and the
      * result is multiplied by dτ/dT.  This is NOT the full d/dT of
      * compute_sigma_matrix (which would need quotient-rule terms); it
-     * matches ComptonMultigroupKernel::compute_dsigma_dT_matrix.  Use
+     * matches ComptonMultigroupKernel::compute_kernel_derivative_contribution.  Use
      * compute_full_dsigma_dT_matrix for the complete derivative including
      * weight-function and denominator temperature dependence.
      *
@@ -159,7 +159,7 @@ class ComptonMonteCarloKernel {
      * accumulation.
      * @return Flat vector of size G×G×N_angles, row-major [g][g'][angle].
      */
-    std::vector<double> compute_dsigma_dT_matrix(
+    std::vector<double> compute_kernel_derivative_contribution(
         int num_angle_bins,
         double T,
         double Ne,
@@ -168,10 +168,10 @@ class ComptonMonteCarloKernel {
     /**
      * @brief Compute the angle-integrated ∂σ/∂T matrix via MC.
      *
-     * Equivalent to compute_dsigma_dT_matrix(1, T, Ne, multiplier) reshaped to
+     * Equivalent to compute_kernel_derivative_contribution(1, T, Ne, multiplier) reshaped to
      * G×G.
      */
-    std::vector<double> compute_dsigma_dT_matrix(
+    std::vector<double> compute_kernel_derivative_contribution(
         double T,
         double Ne,
         KernelMultiplier const& multiplier) const;

@@ -859,7 +859,7 @@ the ratio (which would need quotient-rule terms for the denominator).
 
 ### Full Multigroup Temperature Derivative
 
-The methods above (`compute_dsigma_dT_matrix`) only differentiate the kernel
+The methods above (`compute_kernel_derivative_contribution`) only differentiate the kernel
 $\Sigma_E$ with respect to $T$.  The full derivative of the multigroup cross
 section also includes the temperature dependence of the weight function $w(E,T)$
 and the denominator $D(g) = \int_{\Delta E_g} w(E,T)\,dE$:
@@ -869,7 +869,7 @@ $$\frac{d\sigma}{dT}\bigg|_{g \to g'} = \frac{1}{D}\frac{dN_{\text{kd}}}{dT} + \
 where
 
 - $dN_{\text{kd}}/dT$ = numerator integral with the kernel derivative
-  $\partial\Sigma_E/\partial T$ (same as `compute_dsigma_dT_matrix`),
+  $\partial\Sigma_E/\partial T$ (same as `compute_kernel_derivative_contribution`),
 - $dN_{\text{wd}}/dT$ = numerator integral with $\frac{\partial \ln w}{\partial T} \cdot \Sigma_E$
   (weight-function derivative contribution),
 - $dD/dT$ = analytic derivative of the denominator.

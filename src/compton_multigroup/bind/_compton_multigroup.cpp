@@ -134,7 +134,7 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             "multiplier"_a = ConstantMultiplier())
 
         .def(
-            "compute_dsigma_dT_matrix",
+            "compute_kernel_derivative_contribution",
             [](ComptonMultigroupKernel const& self,
                ComptonKernelSolver const& kernel,
                int num_angle_bins,
@@ -142,7 +142,7 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
                double Ne,
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_3d(self.num_groups(), num_angle_bins, [&] {
-                    return self.compute_dsigma_dT_matrix(
+                    return self.compute_kernel_derivative_contribution(
                         kernel,
                         num_angle_bins,
                         T,
@@ -174,7 +174,7 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             "multiplier"_a = ConstantMultiplier())
 
         .def(
-            "compute_dsigma_dT_matrix",
+            "compute_kernel_derivative_contribution",
             [](ComptonMultigroupKernel const& self,
                ComptonKernelSolver const& kernel,
                double T,
@@ -182,7 +182,7 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_2d(self.num_groups(), [&] {
                     return self
-                        .compute_dsigma_dT_matrix(kernel, 1, T, Ne, multiplier);
+                        .compute_kernel_derivative_contribution(kernel, 1, T, Ne, multiplier);
                 });
             },
             "kernel"_a,
@@ -705,14 +705,14 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             "multiplier"_a = ConstantMultiplier())
 
         .def(
-            "compute_dsigma_dT_matrix",
+            "compute_kernel_derivative_contribution",
             [](ComptonMonteCarloKernel const& self,
                int num_angle_bins,
                double T,
                double Ne,
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_3d(self.num_groups(), num_angle_bins, [&] {
-                    return self.compute_dsigma_dT_matrix(
+                    return self.compute_kernel_derivative_contribution(
                         num_angle_bins,
                         T,
                         Ne,
@@ -725,13 +725,13 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             "multiplier"_a = ConstantMultiplier())
 
         .def(
-            "compute_dsigma_dT_matrix",
+            "compute_kernel_derivative_contribution",
             [](ComptonMonteCarloKernel const& self,
                double T,
                double Ne,
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_2d(self.num_groups(), [&] {
-                    return self.compute_dsigma_dT_matrix(T, Ne, multiplier);
+                    return self.compute_kernel_derivative_contribution(T, Ne, multiplier);
                 });
             },
             "T"_a,
