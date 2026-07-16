@@ -59,6 +59,16 @@ class EnergyTransferMultiplier : public KernelMultiplier {
     std::vector<double> centers_;
 };
 
+class EpMultiplier : public KernelMultiplier {
+  public:
+    double
+    operator()(double /*E*/, double Ep, double /*xi*/, double /*T*/, double /*Ne*/)
+        const override
+    {
+        return Ep;
+    }
+};
+
 class EpOverEMultiplier : public KernelMultiplier {
   public:
     double
@@ -66,6 +76,16 @@ class EpOverEMultiplier : public KernelMultiplier {
         const override
     {
         return Ep / E;
+    }
+};
+
+class EpOverETimesXiMultiplier : public KernelMultiplier {
+  public:
+    double
+    operator()(double E, double Ep, double xi, double /*T*/, double /*Ne*/)
+        const override
+    {
+        return (Ep / E) * xi;
     }
 };
 
@@ -90,6 +110,51 @@ class InducedEmissionRatioMultiplier : public KernelMultiplier {
     }
 };
 
+class EnergyMomentMultiplier : public KernelMultiplier {
+  public:
+    explicit EnergyMomentMultiplier(int n) : n_(n)
+    {
+        if (n < 0)
+            throw std::invalid_argument("n must be >= 0");
+    }
+
+    double
+    operator()(double E, double Ep, double /*xi*/, double /*T*/, double /*Ne*/)
+        const override
+    {
+        double const x = (Ep - E) / E;
+        return std::pow(x, n_);
+    }
+
+  private:
+    int n_;
+};
+
+class LegendreMultiplier0123 : public KernelMultiplier {
+  public:
+    explicit LegendreMultiplier0123(int n) : n_(n)
+    {
+        if (n < 0 || n > 3)
+            throw std::invalid_argument("n must be 0, 1, 2, or 3");
+    }
+
+    double
+    operator()(double /*E*/, double /*Ep*/, double xi, double /*T*/, double /*Ne*/)
+        const override
+    {
+        switch (n_) {
+        case 0: return 1.0;
+        case 1: return xi;
+        case 2: return 0.5 * (3.0 * xi * xi - 1.0);
+        case 3: return 0.5 * (5.0 * xi * xi * xi - 3.0 * xi);
+        default: return 0.0;
+        }
+    }
+
+  private:
+    int n_;
+};
+
 PYBIND11_MODULE(_compton_kernel_multipliers, m) // NOLINT(misc-include-cleaner)
 {
     m.doc() = "Concrete kernel multipliers for multigroup Compton integrals";
@@ -104,9 +169,19 @@ PYBIND11_MODULE(_compton_kernel_multipliers, m) // NOLINT(misc-include-cleaner)
             "energy_group_boundaries"_a, // NOLINT(misc-include-cleaner)
             "energy_group_centers"_a);
 
+    py::class_<EpMultiplier, KernelMultiplier>(
+        m,
+        "EpMultiplier")
+        .def(py::init<>());
+
     py::class_<EpOverEMultiplier, KernelMultiplier>(
         m,
         "EpOverEMultiplier")
+        .def(py::init<>());
+
+    py::class_<EpOverETimesXiMultiplier, KernelMultiplier>(
+        m,
+        "EpOverETimesXiMultiplier")
         .def(py::init<>());
 
     py::class_<EMinusEpMultiplier, KernelMultiplier>(
@@ -118,4 +193,14 @@ PYBIND11_MODULE(_compton_kernel_multipliers, m) // NOLINT(misc-include-cleaner)
         m,
         "InducedEmissionRatioMultiplier")
         .def(py::init<>());
+
+    py::class_<EnergyMomentMultiplier, KernelMultiplier>(
+        m,
+        "EnergyMomentMultiplier")
+        .def(py::init<int>(), "n"_a);
+
+    py::class_<LegendreMultiplier0123, KernelMultiplier>(
+        m,
+        "LegendreMultiplier0123")
+        .def(py::init<int>(), "n"_a);
 }

@@ -384,22 +384,30 @@ class TestEndpointLocalizedRegression:
     fast enough for regular pytest runs.
     """
 
+    _E = 0.1 * 511.0 * kev
+    _bounds = [0.95 * _E, 1.05 * _E]
+    _n_bins = 8
+
+    @pytest.fixture(scope="class")
+    @classmethod
+    def mg(cls):
+        return _make_mg(cls._bounds, order=48, xi_order=48)
+
+    @pytest.fixture(scope="class")
+    @classmethod
+    def mg_ref(cls):
+        return _reference_mg(cls._bounds, order=64)
+
     @pytest.mark.parametrize(
         "T_kev",
         [1e-5, 1e-4, 1e-3, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0],
     )
-    def test_last_bin_convergence(self, T_kev):
-        E = 0.1 * 511.0 * kev
-        bounds = [0.95 * E, 1.05 * E]
+    def test_last_bin_convergence(self, T_kev, mg, mg_ref):
         T = T_kev * kev_kelvin
-        n_bins = 8
 
-        mg = _make_mg(bounds, order=48, xi_order=48)
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
-
-        mg_ref = _reference_mg(bounds, order=512)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=self._n_bins, T=T, Ne=1.0)
         S_ref = mg_ref.compute_sigma_matrix(
-            KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0
+            KERNEL, num_angle_bins=self._n_bins, T=T, Ne=1.0
         )
 
         last_bin = S[0, 0, -1]
