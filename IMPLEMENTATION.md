@@ -889,7 +889,7 @@ assumption that the integrand is dominated by near-elastic scattering, which
 may not hold for the weight-derivative term where $d(\ln w)/dT$ varies
 across groups.
 
-**Cost.**  `compute_full_dsigma_dT_matrix` makes 3× the integration calls of
+**Cost.**  `compute_dsigma_dT_matrix` makes 3× the integration calls of
 `compute_sigma_matrix`: once for the kernel derivative, once for the
 weight-derivative multiplier, and once for the original $\sigma$ (needed for
 the denominator correction term).  Future optimization could fuse the weight

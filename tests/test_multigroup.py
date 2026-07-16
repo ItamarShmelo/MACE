@@ -578,7 +578,7 @@ class TestNewConfigFields:
 
 
 class TestFullDerivative:
-    """Validate compute_full_dsigma_dT_matrix against central FD."""
+    """Validate compute_dsigma_dT_matrix against central FD."""
 
     @pytest.mark.parametrize("T_kev", [1.0, 10.0, 100.0])
     @pytest.mark.parametrize("wf_factory", [
@@ -596,7 +596,7 @@ class TestFullDerivative:
             config=cfg,
         )
 
-        deriv = mg.compute_full_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
+        deriv = mg.compute_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
 
         h = T * 1e-5
         sigma_plus = mg.compute_sigma_matrix(KERNEL, T=T + h, Ne=1.0)
@@ -646,7 +646,7 @@ class TestFullDerivative:
             config=cfg,
         )
 
-        full = mg.compute_full_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
+        full = mg.compute_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
         kernel_only = mg.compute_kernel_derivative_contribution(KERNEL, T=T, Ne=1.0)
 
         np.testing.assert_allclose(full, kernel_only, rtol=1e-12, atol=0)
@@ -668,7 +668,7 @@ class TestFullDerivative:
             config=_config(cutoff_ratio=None),
         )
 
-        full_with = mg_with.compute_full_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
-        full_without = mg_without.compute_full_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
+        full_with = mg_with.compute_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
+        full_without = mg_without.compute_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
 
         np.testing.assert_allclose(full_with, full_without, rtol=1e-12, atol=0)

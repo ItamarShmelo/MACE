@@ -742,7 +742,7 @@ class WeightDerivMultiplier : public KernelMultiplier {
 
 // ── Full temperature derivative ─────────────────────────────────────────
 
-std::vector<double> ComptonMultigroupKernel::compute_full_dsigma_dT_matrix(
+std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
     ComptonKernelSolver const& kernel,
     int const num_angle_bins,
     double const T,

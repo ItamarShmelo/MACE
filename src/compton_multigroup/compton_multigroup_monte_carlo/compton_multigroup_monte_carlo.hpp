@@ -148,7 +148,7 @@ class ComptonMonteCarloKernel {
      * result is multiplied by dτ/dT.  This is NOT the full d/dT of
      * compute_sigma_matrix (which would need quotient-rule terms); it
      * matches ComptonMultigroupKernel::compute_kernel_derivative_contribution.  Use
-     * compute_full_dsigma_dT_matrix for the complete derivative including
+     * compute_dsigma_dT_matrix for the complete derivative including
      * weight-function and denominator temperature dependence.
      *
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
@@ -186,13 +186,13 @@ class ComptonMonteCarloKernel {
      *
      * The user-provided multiplier is NOT differentiated with respect to T.
      */
-    std::vector<double> compute_full_dsigma_dT_matrix(
+    std::vector<double> compute_dsigma_dT_matrix(
         int num_angle_bins,
         double T,
         double Ne,
         KernelMultiplier const& multiplier) const;
 
-    std::vector<double> compute_full_dsigma_dT_matrix(
+    std::vector<double> compute_dsigma_dT_matrix(
         double T,
         double Ne,
         KernelMultiplier const& multiplier) const;

@@ -31,7 +31,7 @@ Use one of these unambiguous designs:
 - Add a separate `bool disable_cutoff` or a small enum.
 - Use `std::optional<std::optional<double>>` as a tri-state override, although this is less readable.
 
-Add a regression comparing `compute_full_dsigma_dT_matrix` from kernels configured with `cutoff_ratio=None` and a non-null cutoff. If the full path always disables cutoff, their results should agree to numerical precision.
+Add a regression comparing `compute_dsigma_dT_matrix` from kernels configured with `cutoff_ratio=None` and a non-null cutoff. If the full path always disables cutoff, their results should agree to numerical precision.
 
 ### P0 — “Full derivative” is incomplete for supported temperature-dependent multipliers
 
@@ -54,7 +54,7 @@ This is not merely hypothetical. The repository already ships `InducedEmissionRa
 
 Choose and document one contract before implementation:
 
-1. Restrict `compute_full_dsigma_dT_matrix` to the physical cross section with no custom multiplier.
+1. Restrict `compute_dsigma_dT_matrix` to the physical cross section with no custom multiplier.
 2. State that the multiplier is held fixed and must be temperature-independent; reject or exclude the known temperature-dependent multiplier from this API.
 3. Add a multiplier-derivative contract and integrate the `dm/dT` term. If supported, add a finite-difference test using `InducedEmissionRatioMultiplier`.
 

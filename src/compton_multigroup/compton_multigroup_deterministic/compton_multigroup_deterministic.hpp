@@ -42,7 +42,7 @@
  * The dsigma_dT variants plug the derivative kernel ∂Σ_E/∂T into the same
  * weighted-integral formula.  They are NOT the full ∂σ/∂T of the multigroup
  * cross section (which would need quotient-rule terms).  Use
- * compute_full_dsigma_dT_matrix for the complete derivative including
+ * compute_dsigma_dT_matrix for the complete derivative including
  * weight-function and denominator temperature dependence.
  *
  * ─────────────────────────────────────────────────────────────────────────
@@ -289,7 +289,7 @@ class ComptonMultigroupKernel {
      * @param multiplier      Pointwise kernel multiplier.
      * @return Flat vector of size G*G*N_angles, row-major [g][g'][angle].
      */
-    std::vector<double> compute_full_dsigma_dT_matrix(
+    std::vector<double> compute_dsigma_dT_matrix(
         ComptonKernelSolver const& kernel,
         int num_angle_bins,
         double T,
