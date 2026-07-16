@@ -483,8 +483,8 @@ inline KershawParams<T> compute_params(
 }
 
 /**
- * @brief Compute the prefactor σ₀ = Nₑ r_e² m_e c² / (4E²τ)
- *                                    × exp(−(λ₊−1)/τ) / K̃₂(1/τ).
+ * @brief Compute the microscopic prefactor σ₀ = r_e² m_e c² / (4E²τ)
+ *                                               × exp(−(λ₊−1)/τ) / K̃₂(1/τ).
  *
  * The exponential suppression factor exp(−(λ₊−1)/τ) controls the kernel
  * magnitude: elastic scattering (λ₊→1) has no suppression, while large
@@ -493,23 +493,22 @@ inline KershawParams<T> compute_params(
 inline double sigma0_E(
     double const E,
     double const tau,
-    double const lambda_plus,
-    double const Ne)
+    double const lambda_plus)
 {
-    return Ne * units::r_e2 * units::me_c2 / (4.0 * E * E * tau) *
+    return units::r_e2 * units::me_c2 / (4.0 * E * E * tau) *
            std::exp(-(lambda_plus - 1.0) / tau) / scaled_K2(1.0 / tau);
 }
 
 /// Result of a kernel evaluation: value plus heuristic error estimates.
 struct ComptonResult {
-    double value;               /// Σ_E in [cm²/erg] (Nₑ=1) or [1/(cm·erg)]
+    double value;               /// Σ_E in [cm²/erg] (microscopic, per free electron)
     double estimated_abs_error; ///
     double estimated_rel_error; /// abs_error / |value|
     int terms_used = 0;         /// number of series terms evaluated (0 for quadrature)
 };
 
 /**
- * @brief Validate the five common kernel parameters.
+ * @brief Validate the four common kernel parameters.
  *
  * Throws std::invalid_argument when any precondition is violated.
  *
@@ -517,14 +516,12 @@ struct ComptonResult {
  * @param E_prime  Scattered photon energy [erg]
  * @param xi       cos(scattering angle), strictly in (-1, 1)
  * @param T        Electron temperature [K]
- * @param Ne       Electron number density [cm^-3]
  */
 inline void assert_parameters(
     double const E,
     double const E_prime,
     double const xi,
-    double const T,
-    double const Ne)
+    double const T)
 {
     if (!(E > 0.0) || !std::isfinite(E)) {
         throw std::invalid_argument("E must be finite and > 0");
@@ -538,9 +535,6 @@ inline void assert_parameters(
     if (xi <= -1.0 || xi >= 1.0 || !std::isfinite(xi)) {
         throw std::invalid_argument(
             "xi must be finite and strictly inside (-1, 1)");
-    }
-    if (!std::isfinite(Ne)) {
-        throw std::invalid_argument("Ne must be finite");
     }
     if (1.0 - xi < 1e-14) {
         throw std::invalid_argument("xi too close to 1");

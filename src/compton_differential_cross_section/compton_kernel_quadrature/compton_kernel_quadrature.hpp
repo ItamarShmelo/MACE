@@ -17,7 +17,7 @@
  *
  * The kernel factorizes as:
  *
- *     Σ_E = σ₀(E, τ, λ₊, Nₑ)  ×  I_Q(γ, γ', ξ, τ)
+ *     Σ_E = σ₀(E, τ, λ₊)  ×  I_Q(γ, γ', ξ, τ)
  *
  * where:
  *   - γ = E / m_e c²,  γ' = E' / m_e c²   (dimensionless photon energies)
@@ -31,8 +31,8 @@
  * UNITS AND API
  * ─────────────────────────────────────────────────────────────────────────
  *
- * The function sigma_E returns the macroscopic kernel in
- * [1/(cm·erg)] when Nₑ = electron density [cm⁻³].
+ * The function sigma_E returns the microscopic kernel in [cm²/erg]
+ * (per free electron).
  *
  * ─────────────────────────────────────────────────────────────────────────
  * REFERENCE
@@ -73,17 +73,16 @@ class ComptonKernelQuadrature {
         QuadratureForm form = QuadratureForm::PostIntegrationByParts);
 
     /**
-     * @brief Evaluate Σ_E(E → E', ξ; T, Nₑ).
+     * @brief Evaluate Σ_E(E → E', ξ; T).
      *
      * @param E        Incident photon energy [erg]
      * @param E_prime  Scattered photon energy [erg]
      * @param xi       cos(scattering angle), strictly in (−1, 1)
      * @param T        Electron temperature [K]
-     * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
      * @return ComptonResult with value and error estimates
      */
     ComptonResult
-    sigma_E(double E, double E_prime, double xi, double T, double Ne) const;
+    sigma_E(double E, double E_prime, double xi, double T) const;
 
     /**
      * @brief Evaluate ∂Σ_E/∂T at a single phase-space point.
@@ -97,11 +96,10 @@ class ComptonKernelQuadrature {
      * @param E_prime  Scattered photon energy [erg]
      * @param xi       cos(scattering angle), strictly in (−1, 1)
      * @param T        Electron temperature [K]
-     * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
      * @return ComptonResult with value and error estimates
      */
     ComptonResult
-    dsigma_E_dT(double E, double E_prime, double xi, double T, double Ne) const;
+    dsigma_E_dT(double E, double E_prime, double xi, double T) const;
 
   private:
     int NL_;

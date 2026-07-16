@@ -116,21 +116,18 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
                ComptonKernelSolver const& kernel,
                int num_angle_bins,
                double T,
-               double Ne,
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_3d(self.num_groups(), num_angle_bins, [&] {
                     return self.compute_sigma_matrix(
                         kernel,
                         num_angle_bins,
                         T,
-                        Ne,
                         multiplier);
                 });
             },
             "kernel"_a,
             "num_angle_bins"_a,
             "T"_a,
-            "Ne"_a,
             "multiplier"_a = ConstantMultiplier())
 
         .def(
@@ -139,21 +136,18 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
                ComptonKernelSolver const& kernel,
                int num_angle_bins,
                double T,
-               double Ne,
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_3d(self.num_groups(), num_angle_bins, [&] {
                     return self.compute_kernel_derivative_contribution(
                         kernel,
                         num_angle_bins,
                         T,
-                        Ne,
                         multiplier);
                 });
             },
             "kernel"_a,
             "num_angle_bins"_a,
             "T"_a,
-            "Ne"_a,
             "multiplier"_a = ConstantMultiplier())
 
         .def(
@@ -161,16 +155,14 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             [](ComptonMultigroupKernel const& self,
                ComptonKernelSolver const& kernel,
                double T,
-               double Ne,
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_2d(self.num_groups(), [&] {
                     return self
-                        .compute_sigma_matrix(kernel, 1, T, Ne, multiplier);
+                        .compute_sigma_matrix(kernel, 1, T, multiplier);
                 });
             },
             "kernel"_a,
             "T"_a,
-            "Ne"_a,
             "multiplier"_a = ConstantMultiplier())
 
         .def(
@@ -178,16 +170,14 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             [](ComptonMultigroupKernel const& self,
                ComptonKernelSolver const& kernel,
                double T,
-               double Ne,
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_2d(self.num_groups(), [&] {
                     return self
-                        .compute_kernel_derivative_contribution(kernel, 1, T, Ne, multiplier);
+                        .compute_kernel_derivative_contribution(kernel, 1, T, multiplier);
                 });
             },
             "kernel"_a,
             "T"_a,
-            "Ne"_a,
             "multiplier"_a = ConstantMultiplier())
 
         .def(
@@ -196,21 +186,18 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
                ComptonKernelSolver const& kernel,
                int num_angle_bins,
                double T,
-               double Ne,
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_3d(self.num_groups(), num_angle_bins, [&] {
                     return self.compute_dsigma_dT_matrix(
                         kernel,
                         num_angle_bins,
                         T,
-                        Ne,
                         multiplier);
                 });
             },
             "kernel"_a,
             "num_angle_bins"_a,
             "T"_a,
-            "Ne"_a,
             "multiplier"_a = ConstantMultiplier())
 
         .def(
@@ -218,20 +205,17 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             [](ComptonMultigroupKernel const& self,
                ComptonKernelSolver const& kernel,
                double T,
-               double Ne,
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_2d(self.num_groups(), [&] {
                     return self.compute_dsigma_dT_matrix(
                         kernel,
                         1,
                         T,
-                        Ne,
                         multiplier);
                 });
             },
             "kernel"_a,
             "T"_a,
-            "Ne"_a,
             "multiplier"_a = ConstantMultiplier())
 
         .def(
@@ -242,7 +226,6 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
                double Ep,
                int num_xi_bins,
                double T,
-               double Ne,
                KernelMultiplier const& multiplier) {
                 auto v = self.compute_xi_integral_impl(
                     kernel,
@@ -251,7 +234,6 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
                     Ep,
                     num_xi_bins,
                     T,
-                    Ne,
                     multiplier);
                 py::array_t<double> arr(v.size());
                 auto buf = arr.mutable_unchecked<1>();
@@ -265,7 +247,6 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             "Ep"_a,
             "num_xi_bins"_a,
             "T"_a,
-            "Ne"_a,
             "multiplier"_a = ConstantMultiplier(),
             "Integrate sigma_E over xi bins for fixed (E, E')")
 
@@ -277,7 +258,6 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
                double Ep,
                int num_xi_bins,
                double T,
-               double Ne,
                KernelMultiplier const& multiplier) {
                 auto v = self.compute_xi_integral_impl(
                     kernel,
@@ -286,7 +266,6 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
                     Ep,
                     num_xi_bins,
                     T,
-                    Ne,
                     multiplier);
                 py::array_t<double> arr(v.size());
                 auto buf = arr.mutable_unchecked<1>();
@@ -300,7 +279,6 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             "Ep"_a,
             "num_xi_bins"_a,
             "T"_a,
-            "Ne"_a,
             "multiplier"_a = ConstantMultiplier(),
             "Integrate dsigma_E/dT over xi bins for fixed (E, E')")
 
@@ -313,7 +291,6 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
                double Ep_hi,
                int num_xi_bins,
                double T,
-               double Ne,
                KernelMultiplier const& multiplier) {
                 auto v = self.compute_Ep_xi_integral_impl(
                     kernel,
@@ -323,7 +300,6 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
                     Ep_hi,
                     num_xi_bins,
                     T,
-                    Ne,
                     multiplier);
                 py::array_t<double> arr(v.size());
                 auto buf = arr.mutable_unchecked<1>();
@@ -338,7 +314,6 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             "Ep_hi"_a,
             "num_xi_bins"_a,
             "T"_a,
-            "Ne"_a,
             "multiplier"_a = ConstantMultiplier(),
             "Integrate sigma_E over E' range and xi bins for fixed E")
 
@@ -351,7 +326,6 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
                double Ep_hi,
                int num_xi_bins,
                double T,
-               double Ne,
                KernelMultiplier const& multiplier) {
                 auto v = self.compute_Ep_xi_integral_impl(
                     kernel,
@@ -361,7 +335,6 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
                     Ep_hi,
                     num_xi_bins,
                     T,
-                    Ne,
                     multiplier);
                 py::array_t<double> arr(v.size());
                 auto buf = arr.mutable_unchecked<1>();
@@ -376,7 +349,6 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             "Ep_hi"_a,
             "num_xi_bins"_a,
             "T"_a,
-            "Ne"_a,
             "multiplier"_a = ConstantMultiplier(),
             "Integrate dsigma_E/dT over E' range and xi bins for fixed E");
 
@@ -675,33 +647,28 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             [](ComptonMonteCarloKernel const& self,
                int num_angle_bins,
                double T,
-               double Ne,
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_3d(self.num_groups(), num_angle_bins, [&] {
                     return self.compute_sigma_matrix(
                         num_angle_bins,
                         T,
-                        Ne,
                         multiplier);
                 });
             },
             "num_angle_bins"_a,
             "T"_a,
-            "Ne"_a,
             "multiplier"_a = ConstantMultiplier())
 
         .def(
             "compute_sigma_matrix",
             [](ComptonMonteCarloKernel const& self,
                double T,
-               double Ne,
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_2d(self.num_groups(), [&] {
-                    return self.compute_sigma_matrix(T, Ne, multiplier);
+                    return self.compute_sigma_matrix(T, multiplier);
                 });
             },
             "T"_a,
-            "Ne"_a,
             "multiplier"_a = ConstantMultiplier())
 
         .def(
@@ -709,33 +676,28 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             [](ComptonMonteCarloKernel const& self,
                int num_angle_bins,
                double T,
-               double Ne,
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_3d(self.num_groups(), num_angle_bins, [&] {
                     return self.compute_kernel_derivative_contribution(
                         num_angle_bins,
                         T,
-                        Ne,
                         multiplier);
                 });
             },
             "num_angle_bins"_a,
             "T"_a,
-            "Ne"_a,
             "multiplier"_a = ConstantMultiplier())
 
         .def(
             "compute_kernel_derivative_contribution",
             [](ComptonMonteCarloKernel const& self,
                double T,
-               double Ne,
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_2d(self.num_groups(), [&] {
-                    return self.compute_kernel_derivative_contribution(T, Ne, multiplier);
+                    return self.compute_kernel_derivative_contribution(T, multiplier);
                 });
             },
             "T"_a,
-            "Ne"_a,
             "multiplier"_a = ConstantMultiplier())
 
         .def(
@@ -743,32 +705,27 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             [](ComptonMonteCarloKernel const& self,
                int num_angle_bins,
                double T,
-               double Ne,
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_3d(self.num_groups(), num_angle_bins, [&] {
                     return self.compute_dsigma_dT_matrix(
                         num_angle_bins,
                         T,
-                        Ne,
                         multiplier);
                 });
             },
             "num_angle_bins"_a,
             "T"_a,
-            "Ne"_a,
             "multiplier"_a = ConstantMultiplier())
 
         .def(
             "compute_dsigma_dT_matrix",
             [](ComptonMonteCarloKernel const& self,
                double T,
-               double Ne,
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_2d(self.num_groups(), [&] {
-                    return self.compute_dsigma_dT_matrix(T, Ne, multiplier);
+                    return self.compute_dsigma_dT_matrix(T, multiplier);
                 });
             },
             "T"_a,
-            "Ne"_a,
             "multiplier"_a = ConstantMultiplier());
 }

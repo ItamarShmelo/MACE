@@ -26,13 +26,12 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
     double const gamma_p,
     double const xi,
     double const tau,
-    double const E,
-    double const Ne) const
+    double const E) const
 {
     using namespace details;
 
     KershawParams<T> const p = compute_params<T>(gamma, gamma_p, xi, tau);
-    double const sigma0 = sigma0_E(E, tau, to_double(p.lambda_plus), Ne);
+    double const sigma0 = sigma0_E(E, tau, to_double(p.lambda_plus));
 
     T const a = p.a;
     T const a2 = a * a;
@@ -186,10 +185,8 @@ template ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series<double>(
     double,
     double,
     double,
-    double,
     double) const;
 template ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series<DD>(
-    double,
     double,
     double,
     double,
@@ -202,13 +199,12 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
     double const gamma_p,
     double const xi,
     double const tau,
-    double const E,
-    double const Ne) const
+    double const E) const
 {
     using namespace details;
 
     KershawParams<T> const p = compute_params<T>(gamma, gamma_p, xi, tau);
-    double const sigma0 = sigma0_E(E, tau, to_double(p.lambda_plus), Ne);
+    double const sigma0 = sigma0_E(E, tau, to_double(p.lambda_plus));
     double const kappa_val = kappa_ratio(tau);
 
     T const a = p.a;
@@ -368,11 +364,9 @@ ComptonKernelAsymptoticSeries::asymptotic_series_derivative<double>(
     double,
     double,
     double,
-    double,
     double) const;
 template ComptonResult
 ComptonKernelAsymptoticSeries::asymptotic_series_derivative<DD>(
-    double,
     double,
     double,
     double,
@@ -383,36 +377,34 @@ ComptonResult ComptonKernelAsymptoticSeries::sigma_E(
     double const E,
     double const E_prime,
     double const xi,
-    double const T,
-    double const Ne) const
+    double const T) const
 {
-    assert_parameters(E, E_prime, xi, T, Ne);
+    assert_parameters(E, E_prime, xi, T);
     double const tau = T * units::k_boltz / units::me_c2;
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
     if (high_precision_) {
-        return asymptotic_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
+        return asymptotic_series<DD>(gamma, gamma_p, xi, tau, E);
     }
-    return asymptotic_series<double>(gamma, gamma_p, xi, tau, E, Ne);
+    return asymptotic_series<double>(gamma, gamma_p, xi, tau, E);
 }
 
 double ComptonKernelAsymptoticSeries::sigma_E_precision_check(
     double const E,
     double const E_prime,
     double const xi,
-    double const T,
-    double const Ne) const
+    double const T) const
 {
-    assert_parameters(E, E_prime, xi, T, Ne);
+    assert_parameters(E, E_prime, xi, T);
     double const tau = T * units::k_boltz / units::me_c2;
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
     ComptonResult const dd_res =
-        asymptotic_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
+        asymptotic_series<DD>(gamma, gamma_p, xi, tau, E);
     ComptonResult const dbl_res =
-        asymptotic_series<double>(gamma, gamma_p, xi, tau, E, Ne);
+        asymptotic_series<double>(gamma, gamma_p, xi, tau, E);
 
     return std::abs(dd_res.value - dbl_res.value) /
            (std::abs(dd_res.value) + constants::REL_ERROR_TINY_SCALE);
@@ -422,10 +414,9 @@ ComptonResult ComptonKernelAsymptoticSeries::dsigma_E_dT(
     double const E,
     double const E_prime,
     double const xi,
-    double const T,
-    double const Ne) const
+    double const T) const
 {
-    assert_parameters(E, E_prime, xi, T, Ne);
+    assert_parameters(E, E_prime, xi, T);
     double const tau = T * units::k_boltz / units::me_c2;
     double const dtau_dT = units::k_boltz / units::me_c2;
     double const gamma = E / units::me_c2;
@@ -434,15 +425,14 @@ ComptonResult ComptonKernelAsymptoticSeries::dsigma_E_dT(
     ComptonResult dtau_result{};
     if (high_precision_) {
         dtau_result =
-            asymptotic_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);
+            asymptotic_series_derivative<DD>(gamma, gamma_p, xi, tau, E);
     } else {
         dtau_result = asymptotic_series_derivative<double>(
             gamma,
             gamma_p,
             xi,
             tau,
-            E,
-            Ne);
+            E);
     }
 
     return ComptonResult{
@@ -456,18 +446,17 @@ double ComptonKernelAsymptoticSeries::dsigma_E_dT_precision_check(
     double const E,
     double const E_prime,
     double const xi,
-    double const T,
-    double const Ne) const
+    double const T) const
 {
-    assert_parameters(E, E_prime, xi, T, Ne);
+    assert_parameters(E, E_prime, xi, T);
     double const tau = T * units::k_boltz / units::me_c2;
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
     ComptonResult const dd_res =
-        asymptotic_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);
+        asymptotic_series_derivative<DD>(gamma, gamma_p, xi, tau, E);
     ComptonResult const dbl_res =
-        asymptotic_series_derivative<double>(gamma, gamma_p, xi, tau, E, Ne);
+        asymptotic_series_derivative<double>(gamma, gamma_p, xi, tau, E);
 
     return std::abs(dd_res.value - dbl_res.value) /
            (std::abs(dd_res.value) + constants::REL_ERROR_TINY_SCALE);

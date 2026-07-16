@@ -29,14 +29,13 @@ ComptonResult ComptonPowerSeries::power_series(
     double const gamma_p,
     double const xi,
     double const tau,
-    double const E,
-    double const Ne) const
+    double const E) const
 {
     using namespace details;
     using namespace constants;
 
     KershawParams<T> const p = compute_params<T>(gamma, gamma_p, xi, tau);
-    double const sigma0 = sigma0_E(E, tau, to_double(p.lambda_plus), Ne);
+    double const sigma0 = sigma0_E(E, tau, to_double(p.lambda_plus));
 
     T const omega = param_sqrt(p.omega2);
     T const tau_t(tau);
@@ -155,10 +154,8 @@ template ComptonResult ComptonPowerSeries::power_series<double>(
     double,
     double,
     double,
-    double,
     double) const;
 template ComptonResult ComptonPowerSeries::power_series<DD>(
-    double,
     double,
     double,
     double,
@@ -171,14 +168,13 @@ ComptonResult ComptonPowerSeries::power_series_derivative(
     double const gamma_p,
     double const xi,
     double const tau,
-    double const E,
-    double const Ne) const
+    double const E) const
 {
     using namespace details;
     using namespace constants;
 
     KershawParams<T> const p = compute_params<T>(gamma, gamma_p, xi, tau);
-    double const sigma0 = sigma0_E(E, tau, to_double(p.lambda_plus), Ne);
+    double const sigma0 = sigma0_E(E, tau, to_double(p.lambda_plus));
     double const kappa_val = kappa_ratio(tau);
 
     T const omega = param_sqrt(p.omega2);
@@ -361,10 +357,8 @@ template ComptonResult ComptonPowerSeries::power_series_derivative<double>(
     double,
     double,
     double,
-    double,
     double) const;
 template ComptonResult ComptonPowerSeries::power_series_derivative<DD>(
-    double,
     double,
     double,
     double,
@@ -375,36 +369,34 @@ ComptonResult ComptonPowerSeries::sigma_E(
     double const E,
     double const E_prime,
     double const xi,
-    double const T,
-    double const Ne) const
+    double const T) const
 {
-    assert_parameters(E, E_prime, xi, T, Ne);
+    assert_parameters(E, E_prime, xi, T);
     double const tau = T * units::k_boltz / units::me_c2;
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
     if (high_precision_) {
-        return power_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
+        return power_series<DD>(gamma, gamma_p, xi, tau, E);
     }
-    return power_series<double>(gamma, gamma_p, xi, tau, E, Ne);
+    return power_series<double>(gamma, gamma_p, xi, tau, E);
 }
 
 double ComptonPowerSeries::sigma_E_precision_check(
     double const E,
     double const E_prime,
     double const xi,
-    double const T,
-    double const Ne) const
+    double const T) const
 {
-    assert_parameters(E, E_prime, xi, T, Ne);
+    assert_parameters(E, E_prime, xi, T);
     double const tau = T * units::k_boltz / units::me_c2;
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
     ComptonResult const dd_res =
-        power_series<DD>(gamma, gamma_p, xi, tau, E, Ne);
+        power_series<DD>(gamma, gamma_p, xi, tau, E);
     ComptonResult const dbl_res =
-        power_series<double>(gamma, gamma_p, xi, tau, E, Ne);
+        power_series<double>(gamma, gamma_p, xi, tau, E);
 
     return std::abs(dd_res.value - dbl_res.value) /
            (std::abs(dd_res.value) + constants::REL_ERROR_TINY_SCALE);
@@ -414,10 +406,9 @@ ComptonResult ComptonPowerSeries::dsigma_E_dT(
     double const E,
     double const E_prime,
     double const xi,
-    double const T,
-    double const Ne) const
+    double const T) const
 {
-    assert_parameters(E, E_prime, xi, T, Ne);
+    assert_parameters(E, E_prime, xi, T);
     double const tau = T * units::k_boltz / units::me_c2;
     double const dtau_dT = units::k_boltz / units::me_c2;
     double const gamma = E / units::me_c2;
@@ -426,10 +417,10 @@ ComptonResult ComptonPowerSeries::dsigma_E_dT(
     ComptonResult dtau_result{};
     if (high_precision_) {
         dtau_result =
-            power_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);
+            power_series_derivative<DD>(gamma, gamma_p, xi, tau, E);
     } else {
         dtau_result =
-            power_series_derivative<double>(gamma, gamma_p, xi, tau, E, Ne);
+            power_series_derivative<double>(gamma, gamma_p, xi, tau, E);
     }
 
     return ComptonResult{
@@ -443,18 +434,17 @@ double ComptonPowerSeries::dsigma_E_dT_precision_check(
     double const E,
     double const E_prime,
     double const xi,
-    double const T,
-    double const Ne) const
+    double const T) const
 {
-    assert_parameters(E, E_prime, xi, T, Ne);
+    assert_parameters(E, E_prime, xi, T);
     double const tau = T * units::k_boltz / units::me_c2;
     double const gamma = E / units::me_c2;
     double const gamma_p = E_prime / units::me_c2;
 
     ComptonResult const dd_res =
-        power_series_derivative<DD>(gamma, gamma_p, xi, tau, E, Ne);
+        power_series_derivative<DD>(gamma, gamma_p, xi, tau, E);
     ComptonResult const dbl_res =
-        power_series_derivative<double>(gamma, gamma_p, xi, tau, E, Ne);
+        power_series_derivative<double>(gamma, gamma_p, xi, tau, E);
 
     return std::abs(dd_res.value - dbl_res.value) /
            (std::abs(dd_res.value) + constants::REL_ERROR_TINY_SCALE);

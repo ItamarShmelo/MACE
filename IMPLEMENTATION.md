@@ -10,10 +10,10 @@ what numerical pitfalls they address, not on the class hierarchy or API.
 
 The point-wise differential scattering kernel factorizes as
 
-$$\Sigma_E(E \to E',\, \xi;\, \tau,\, N_e) \;=\; \Sigma_0 \times \mathcal{M}(\gamma,\gamma',\xi,\tau)$$
+$$\Sigma_E(E \to E',\, \xi;\, \tau) \;=\; \Sigma_0 \times \mathcal{M}(\gamma,\gamma',\xi,\tau)$$
 
 where $\gamma = E / m_e c^2$, $\tau = k_B T / m_e c^2$, and $\Sigma_0$
-carries the prefactor (electron density, exponential suppression, Bessel
+carries the microscopic prefactor (exponential suppression, Bessel
 normalization).  Three complementary methods evaluate $\mathcal{M}$.
 
 ### Gauss–Laguerre Quadrature
@@ -691,7 +691,7 @@ cfg = cm.MGIntegrationConfig(
     ep_interior_order=96,
 )
 det = cm.ComptonMultigroupKernel(bounds_erg, wf, cfg)
-S = det.compute_sigma_matrix(kernel=kernel, T=T_K, Ne=1.0)
+S = det.compute_sigma_matrix(kernel=kernel, T=T_K)
 ```
 
 ### Outward-from-Peak Group Cutoff
@@ -905,7 +905,7 @@ a separate RNG base seed, combined with the analytic $dD/dT \,/\, D$ ratio.
 The MC estimator is consistent (converges as $N \to \infty$).
 
 **Multiplier contract.**  The `KernelMultiplier` interface is purely kinematic:
-`operator()(E, Ep, xi, Ne)`.  It must not depend on temperature; temperature
+`operator()(E, Ep, xi)`.  It must not depend on temperature; temperature
 dependence is handled entirely by the kernel and weight function.
 
 **Cap kink.**  The Planck and Wien weight functions have a cap at $x = $ `cap_x`,

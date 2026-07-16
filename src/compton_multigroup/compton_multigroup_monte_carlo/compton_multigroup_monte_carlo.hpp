@@ -26,10 +26,8 @@
  * ─────────────────────────────────────────────────────────────────────────
  *
  * - Energy group boundaries are in [erg].
- * - Temperature T is in [K], electron density Nₑ in [cm⁻³].
+ * - Temperature T is in [K].
  * - The returned matrix is *microscopic* [cm²] (per free electron).
- *   Nₑ is forwarded to the KernelMultiplier only; it does not scale
- *   the output.
  * - Angle-integrated overloads (no num_angle_bins) integrate ξ over
  *   [−1,1].
  */
@@ -118,8 +116,6 @@ class ComptonMonteCarloKernel {
      *
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
      * @param T               Electron temperature [K].
-     * @param Ne              Electron density [cm⁻³] (forwarded to multiplier
-     * only).
      * @param multiplier      Pointwise kernel multiplier applied before
      * accumulation.
      * @return Flat vector of size G×G×N_angles, row-major [g][g'][angle].
@@ -127,17 +123,15 @@ class ComptonMonteCarloKernel {
     std::vector<double> compute_sigma_matrix(
         int num_angle_bins,
         double T,
-        double Ne,
         KernelMultiplier const& multiplier) const;
 
     /**
      * @brief Compute the angle-integrated σ matrix via MC.
      *
-     * Equivalent to compute_sigma_matrix(1, T, Ne, multiplier) reshaped to G×G.
+     * Equivalent to compute_sigma_matrix(1, T, multiplier) reshaped to G×G.
      */
     std::vector<double> compute_sigma_matrix(
         double T,
-        double Ne,
         KernelMultiplier const& multiplier) const;
 
     /**
@@ -153,8 +147,6 @@ class ComptonMonteCarloKernel {
      *
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
      * @param T               Electron temperature [K].
-     * @param Ne              Electron density [cm⁻³] (forwarded to multiplier
-     * only).
      * @param multiplier      Pointwise kernel multiplier applied before
      * accumulation.
      * @return Flat vector of size G×G×N_angles, row-major [g][g'][angle].
@@ -162,18 +154,16 @@ class ComptonMonteCarloKernel {
     std::vector<double> compute_kernel_derivative_contribution(
         int num_angle_bins,
         double T,
-        double Ne,
         KernelMultiplier const& multiplier) const;
 
     /**
      * @brief Compute the angle-integrated ∂σ/∂T matrix via MC.
      *
-     * Equivalent to compute_kernel_derivative_contribution(1, T, Ne, multiplier) reshaped to
+     * Equivalent to compute_kernel_derivative_contribution(1, T, multiplier) reshaped to
      * G×G.
      */
     std::vector<double> compute_kernel_derivative_contribution(
         double T,
-        double Ne,
         KernelMultiplier const& multiplier) const;
 
     /**
@@ -189,19 +179,17 @@ class ComptonMonteCarloKernel {
     std::vector<double> compute_dsigma_dT_matrix(
         int num_angle_bins,
         double T,
-        double Ne,
         KernelMultiplier const& multiplier) const;
 
     std::vector<double> compute_dsigma_dT_matrix(
         double T,
-        double Ne,
         KernelMultiplier const& multiplier) const;
 
   private:
     /**
      * @brief Core MC integration loop parameterized by a multiplier callable.
      *
-     * @tparam MultiplierFn  Callable (E0, E, xi, T, Ne, lam) -> double.
+     * @tparam MultiplierFn  Callable (E0, E, xi, T, lam) -> double.
      *         For plain sigma this wraps KernelMultiplier (ignoring lam).
      *         For dsigma/dT it wraps KernelMultiplier times the derivative
      *         weight ((λ − κ)/τ² − 3/τ) · dτ/dT.
@@ -210,7 +198,6 @@ class ComptonMonteCarloKernel {
     std::vector<double> mc_integrate(
         int num_angle_bins,
         double T,
-        double Ne,
         MultiplierFn const& multiplier_fn) const;
 
     std::vector<double> group_boundaries_;

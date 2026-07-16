@@ -39,19 +39,19 @@ class TestAsymptoticRegime:
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", ASYMP_POINTS)
     def test_sigma_E_vs_q256(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T)
         if qres.estimated_rel_error > 1e-5:
             pytest.skip("quadrature reference unreliable")
-        sres = SOLVER.sigma_E(E, Ep, xi, T, 1.0)
+        sres = SOLVER.sigma_E(E, Ep, xi, T)
         assert _rel_diff(sres.value, qres.value) < 1e-3
 
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", ASYMP_POINTS)
     def test_dsigma_E_dT_vs_q256(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T)
         if qres.estimated_rel_error > 1e-5:
             pytest.skip("quadrature reference unreliable")
-        sres = SOLVER.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        sres = SOLVER.dsigma_E_dT(E, Ep, xi, T)
         assert _rel_diff(sres.value, qres.value) < 1e-3
 
 
@@ -69,19 +69,19 @@ class TestDoublePowerSeriesRegime:
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", DOUBLE_PS_POINTS)
     def test_sigma_E_vs_q256(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T)
         if qres.estimated_rel_error > 1e-5:
             pytest.skip("quadrature reference unreliable")
-        sres = SOLVER.sigma_E(E, Ep, xi, T, 1.0)
+        sres = SOLVER.sigma_E(E, Ep, xi, T)
         assert _rel_diff(sres.value, qres.value) < 1e-4
 
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", DOUBLE_PS_POINTS)
     def test_dsigma_E_dT_vs_q256(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T)
         if qres.estimated_rel_error > 1e-5:
             pytest.skip("quadrature reference unreliable")
-        sres = SOLVER.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        sres = SOLVER.dsigma_E_dT(E, Ep, xi, T)
         assert _rel_diff(sres.value, qres.value) < 1e-4
 
 
@@ -101,15 +101,15 @@ class TestQ64AcceptedRegime:
     def test_sigma_E_matches_dd(self, E_kev, Ep_kev, xi, T_kev):
         """Solver should be at least as accurate as DD power series here."""
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        dd_res = DD_SERIES.sigma_E(E, Ep, xi, T, 1.0)
-        solver_res = SOLVER.sigma_E(E, Ep, xi, T, 1.0)
+        dd_res = DD_SERIES.sigma_E(E, Ep, xi, T)
+        solver_res = SOLVER.sigma_E(E, Ep, xi, T)
         assert _rel_diff(solver_res.value, dd_res.value) < 1e-5
 
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", Q64_ACCEPTED_POINTS)
     def test_dsigma_E_dT_matches_dd(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        dd_res = DD_SERIES.dsigma_E_dT(E, Ep, xi, T, 1.0)
-        solver_res = SOLVER.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        dd_res = DD_SERIES.dsigma_E_dT(E, Ep, xi, T)
+        solver_res = SOLVER.dsigma_E_dT(E, Ep, xi, T)
         if abs(dd_res.value) < 1e-20:
             assert abs(solver_res.value - dd_res.value) < 1e-20
         else:
@@ -138,20 +138,20 @@ class TestSolverFullSpace:
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", FULL_SPACE_POINTS)
     def test_sigma_E(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T)
         if qres.estimated_rel_error > 1e-5:
             pytest.skip("quadrature reference unreliable")
-        solver_res = SOLVER.sigma_E(E, Ep, xi, T, 1.0)
+        solver_res = SOLVER.sigma_E(E, Ep, xi, T)
         rd = _rel_diff(solver_res.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"
 
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", FULL_SPACE_POINTS)
     def test_dsigma_E_dT(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T)
         if qres.estimated_rel_error > 1e-5:
             pytest.skip("quadrature reference unreliable")
-        solver_res = SOLVER.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        solver_res = SOLVER.dsigma_E_dT(E, Ep, xi, T)
         rd = _rel_diff(solver_res.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"
 
@@ -164,8 +164,8 @@ class TestCustomThresholds:
         """A tighter self-tol falls back to DD more often but still accurate."""
         tight = ComptonKernelSolver(power_series_self_tol=1e-7)
         E, Ep, T = 5.0 * kev, 5.5 * kev, 30.0 * kev_kelvin
-        tight_res = tight.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
-        default_res = SOLVER.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
+        tight_res = tight.sigma_E(E, Ep, xi=0.0, T=T)
+        default_res = SOLVER.sigma_E(E, Ep, xi=0.0, T=T)
         assert _rel_diff(tight_res.value, default_res.value) < 1e-5
 
     def test_zero_power_series_tol_forces_dd(self):
@@ -173,8 +173,8 @@ class TestCustomThresholds:
         dd_only = ComptonKernelSolver(power_series_self_tol=0.0)
         dd_series = ComptonPowerSeries(high_precision=True)
         E, Ep, T = 5.0 * kev, 5.5 * kev, 30.0 * kev_kelvin
-        solver_res = dd_only.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
-        dd_res = dd_series.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
+        solver_res = dd_only.sigma_E(E, Ep, xi=0.0, T=T)
+        dd_res = dd_series.sigma_E(E, Ep, xi=0.0, T=T)
         assert _rel_diff(solver_res.value, dd_res.value) < 1e-6
 
     def test_large_power_series_tol_accepts_everything(self):
@@ -187,8 +187,8 @@ class TestCustomThresholds:
         q_always = ComptonKernelSolver(power_series_self_tol=1.0)
         q64 = cq.ComptonKernelQuadrature(64)
         E, Ep, T = 5.0 * kev, 5.5 * kev, 30.0 * kev_kelvin
-        solver_res = q_always.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
-        q_res = q64.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
+        solver_res = q_always.sigma_E(E, Ep, xi=0.0, T=T)
+        q_res = q64.sigma_E(E, Ep, xi=0.0, T=T)
         assert _rel_diff(solver_res.value, q_res.value) < 1e-6
 
     def test_dd_power_series_tol_tight(self):
@@ -197,8 +197,8 @@ class TestCustomThresholds:
         """
         tight_dd = ComptonKernelSolver(dd_power_series_self_tol=0.0)
         E, Ep, T = 50.0 * kev, 55.0 * kev, 50.0 * kev_kelvin
-        solver_res = tight_dd.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
-        default_res = SOLVER.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
+        solver_res = tight_dd.sigma_E(E, Ep, xi=0.0, T=T)
+        default_res = SOLVER.sigma_E(E, Ep, xi=0.0, T=T)
         assert _rel_diff(solver_res.value, default_res.value) < 1e-4
 
     def test_dd_power_series_tol_loose(self):
@@ -207,8 +207,8 @@ class TestCustomThresholds:
         """
         loose_dd = ComptonKernelSolver(dd_power_series_self_tol=1.0)
         E, Ep, T = 50.0 * kev, 55.0 * kev, 50.0 * kev_kelvin
-        solver_res = loose_dd.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
-        q_res = QUAD_REF.sigma_E(E, Ep, xi=0.0, T=T, Ne=1.0)
+        solver_res = loose_dd.sigma_E(E, Ep, xi=0.0, T=T)
+        q_res = QUAD_REF.sigma_E(E, Ep, xi=0.0, T=T)
         assert _rel_diff(solver_res.value, q_res.value) < 1e-3
 
 
@@ -233,19 +233,19 @@ class TestAsymptoticDDRegime:
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", ASYMP_DD_POINTS)
     def test_sigma_E_vs_q256(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T)
         if qres.estimated_rel_error > 1e-3:
             pytest.skip("quadrature reference unreliable")
-        solver_res = SOLVER.sigma_E(E, Ep, xi, T, 1.0)
+        solver_res = SOLVER.sigma_E(E, Ep, xi, T)
         assert _rel_diff(solver_res.value, qres.value) < 1e-3
 
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", ASYMP_DD_POINTS)
     def test_dsigma_E_dT_vs_q256(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T)
         if qres.estimated_rel_error > 1e-3:
             pytest.skip("quadrature reference unreliable")
-        solver_res = SOLVER.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        solver_res = SOLVER.dsigma_E_dT(E, Ep, xi, T)
         assert _rel_diff(solver_res.value, qres.value) < 1e-3
 
 
@@ -266,20 +266,20 @@ class TestDispatchBoundary:
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev,_ta", BOUNDARY_POINTS, ids=[f"ta~{p[4]}" for p in BOUNDARY_POINTS])
     def test_sigma_E(self, E_kev, Ep_kev, xi, T_kev, _ta):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T)
         if qres.estimated_rel_error > 1e-5:
             pytest.skip("quadrature reference unreliable")
-        sres = SOLVER.sigma_E(E, Ep, xi, T, 1.0)
+        sres = SOLVER.sigma_E(E, Ep, xi, T)
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"
 
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev,_ta", BOUNDARY_POINTS, ids=[f"ta~{p[4]}" for p in BOUNDARY_POINTS])
     def test_dsigma_E_dT(self, E_kev, Ep_kev, xi, T_kev, _ta):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T)
         if qres.estimated_rel_error > 1e-5:
             pytest.skip("quadrature reference unreliable")
-        sres = SOLVER.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        sres = SOLVER.dsigma_E_dT(E, Ep, xi, T)
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"
 
@@ -299,10 +299,10 @@ class TestUltraLowGammaAccuracy:
     @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev", ULTRA_LOW_GAMMA_POINTS)
     def test_sigma_E(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T)
         if qres.estimated_rel_error > 1e-3:
             pytest.skip("quadrature reference unreliable")
-        sres = SOLVER.sigma_E(E, Ep, xi, T, 1.0)
+        sres = SOLVER.sigma_E(E, Ep, xi, T)
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"
 
@@ -327,12 +327,12 @@ class TestVecMethods:
         kernel = make_kernel()
         E = 10.0 * kev
         Ep_arr = VEC_E_PRIME_KEV * kev
-        xi, T, Ne = 0.0, 1.0 * kev_kelvin, 1.0
+        xi, T = 0.0, 1.0 * kev_kelvin
 
-        values, errors = kernel.sigma_E_vec(E, Ep_arr, xi, T, Ne)
+        values, errors = kernel.sigma_E_vec(E, Ep_arr, xi, T)
 
         for i, Ep in enumerate(Ep_arr):
-            scalar = kernel.sigma_E(E, float(Ep), xi, T, Ne)
+            scalar = kernel.sigma_E(E, float(Ep), xi, T)
             assert values[i] == pytest.approx(scalar.value, rel=0, abs=0), f"value mismatch at i={i}"
             assert errors[i] == pytest.approx(scalar.estimated_abs_error, rel=0, abs=0), f"error mismatch at i={i}"
 
@@ -341,11 +341,11 @@ class TestVecMethods:
         kernel = make_kernel()
         E = 10.0 * kev
         Ep_arr = VEC_E_PRIME_KEV * kev
-        xi, T, Ne = 0.0, 1.0 * kev_kelvin, 1.0
+        xi, T = 0.0, 1.0 * kev_kelvin
 
-        values, errors = kernel.dsigma_E_dT_vec(E, Ep_arr, xi, T, Ne)
+        values, errors = kernel.dsigma_E_dT_vec(E, Ep_arr, xi, T)
 
         for i, Ep in enumerate(Ep_arr):
-            scalar = kernel.dsigma_E_dT(E, float(Ep), xi, T, Ne)
+            scalar = kernel.dsigma_E_dT(E, float(Ep), xi, T)
             assert values[i] == pytest.approx(scalar.value, rel=0, abs=0), f"value mismatch at i={i}"
             assert errors[i] == pytest.approx(scalar.estimated_abs_error, rel=0, abs=0), f"error mismatch at i={i}"

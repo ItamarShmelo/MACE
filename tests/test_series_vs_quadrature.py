@@ -54,12 +54,12 @@ class TestPowerSeriesVsQuadrature:
     def test_double(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
 
-        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T)
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
         series = ComptonPowerSeries()
-        sres = series.sigma_E(E, Ep, xi, T, 1.0)
+        sres = series.sigma_E(E, Ep, xi, T)
 
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-4, f"reldiff={rd:.2e}"
@@ -71,12 +71,12 @@ class TestPowerSeriesHPVsQuadrature:
     def test_double_double(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
 
-        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T)
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
         series = ComptonPowerSeries(high_precision=True)
-        sres = series.sigma_E(E, Ep, xi, T, 1.0)
+        sres = series.sigma_E(E, Ep, xi, T)
 
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-4, f"reldiff={rd:.2e}"
@@ -88,12 +88,12 @@ class TestAsymptoticVsQuadrature:
     def test_low_temp(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
 
-        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T)
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
         series = ComptonKernelAsymptoticSeries()
-        sres = series.sigma_E(E, Ep, xi, T, 1.0)
+        sres = series.sigma_E(E, Ep, xi, T)
 
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"
@@ -105,12 +105,12 @@ class TestAsymptoticHPVsQuadrature:
     def test_low_temp(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
 
-        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T)
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
         series = ComptonKernelAsymptoticSeries(high_precision=True)
-        sres = series.sigma_E(E, Ep, xi, T, 1.0)
+        sres = series.sigma_E(E, Ep, xi, T)
 
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"
@@ -127,8 +127,8 @@ class TestAsymptoticHPDDvsDouble:
         series_dbl = ComptonKernelAsymptoticSeries(high_precision=False)
         series_dd = ComptonKernelAsymptoticSeries(high_precision=True)
 
-        res_dbl = series_dbl.sigma_E(E, Ep, xi, T, 1.0)
-        res_dd = series_dd.sigma_E(E, Ep, xi, T, 1.0)
+        res_dbl = series_dbl.sigma_E(E, Ep, xi, T)
+        res_dd = series_dd.sigma_E(E, Ep, xi, T)
 
         rd = _rel_diff(res_dd.value, res_dbl.value)
         assert rd < 1e-3, f"double vs DD reldiff={rd:.2e}"
@@ -140,12 +140,12 @@ class TestSolverVsQuadrature:
     def test_solver(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
 
-        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T)
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
         solver = ComptonKernelSolver()
-        sres = solver.sigma_E(E, Ep, xi, T, 1.0)
+        sres = solver.sigma_E(E, Ep, xi, T)
 
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"
@@ -162,12 +162,12 @@ class TestPowerSeriesDerivativeVsQuadrature:
     def test_double(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
 
-        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T)
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
         series = ComptonPowerSeries()
-        sres = series.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        sres = series.dsigma_E_dT(E, Ep, xi, T)
 
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-4, f"reldiff={rd:.2e}"
@@ -179,12 +179,12 @@ class TestPowerSeriesHPDerivativeVsQuadrature:
     def test_double_double(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
 
-        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T)
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
         series = ComptonPowerSeries(high_precision=True)
-        sres = series.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        sres = series.dsigma_E_dT(E, Ep, xi, T)
 
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-4, f"reldiff={rd:.2e}"
@@ -196,12 +196,12 @@ class TestAsymptoticDerivativeVsQuadrature:
     def test_low_temp(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
 
-        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T)
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
         series = ComptonKernelAsymptoticSeries()
-        sres = series.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        sres = series.dsigma_E_dT(E, Ep, xi, T)
 
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"
@@ -213,12 +213,12 @@ class TestAsymptoticHPDerivativeVsQuadrature:
     def test_low_temp(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
 
-        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T)
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
         series = ComptonKernelAsymptoticSeries(high_precision=True)
-        sres = series.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        sres = series.dsigma_E_dT(E, Ep, xi, T)
 
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"
@@ -230,12 +230,12 @@ class TestSolverDerivativeVsQuadrature:
     def test_solver(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
 
-        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T)
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
         solver = ComptonKernelSolver()
-        sres = solver.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        sres = solver.dsigma_E_dT(E, Ep, xi, T)
 
         rd = _rel_diff(sres.value, qres.value)
         assert rd < 1e-3, f"reldiff={rd:.2e}"
@@ -255,13 +255,13 @@ class TestAsymptoticDivergenceExit:
     def test_sigma_E(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
 
-        qres = QUAD_REF.sigma_E(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.sigma_E(E, Ep, xi, T)
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
         series = ComptonKernelAsymptoticSeries(eps_rel=0.0)
         try:
-            sres = series.sigma_E(E, Ep, xi, T, 1.0)
+            sres = series.sigma_E(E, Ep, xi, T)
         except RuntimeError:
             pytest.skip("series converged without triggering divergence exit")
 
@@ -274,13 +274,13 @@ class TestAsymptoticDivergenceExit:
     def test_dsigma_E_dT(self, E_kev, Ep_kev, xi, T_kev):
         E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
 
-        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        qres = QUAD_REF.dsigma_E_dT(E, Ep, xi, T)
         if qres.estimated_rel_error > QUAD_REL_ERR_SKIP:
             pytest.skip("quadrature reference unreliable")
 
         series = ComptonKernelAsymptoticSeries(eps_rel=0.0)
         try:
-            sres = series.dsigma_E_dT(E, Ep, xi, T, 1.0)
+            sres = series.dsigma_E_dT(E, Ep, xi, T)
         except RuntimeError:
             pytest.skip("series converged without triggering divergence exit")
 
@@ -313,8 +313,8 @@ class TestAsymptoticRoundoffErrorEstimate:
         dbl = ComptonKernelAsymptoticSeries(high_precision=False)
         dd = ComptonKernelAsymptoticSeries(high_precision=True)
 
-        r_dbl = dbl.sigma_E(E, Ep, xi, T, 1.0)
-        r_dd = dd.sigma_E(E, Ep, xi, T, 1.0)
+        r_dbl = dbl.sigma_E(E, Ep, xi, T)
+        r_dd = dd.sigma_E(E, Ep, xi, T)
 
         actual_diff = abs(r_dbl.value - r_dd.value) / (abs(r_dd.value) + 1e-300)
         assert r_dbl.estimated_rel_error >= 0.01 * actual_diff, (
@@ -330,8 +330,8 @@ class TestAsymptoticRoundoffErrorEstimate:
         dbl = ComptonKernelAsymptoticSeries(high_precision=False)
         dd = ComptonKernelAsymptoticSeries(high_precision=True)
 
-        r_dbl = dbl.dsigma_E_dT(E, Ep, xi, T, 1.0)
-        r_dd = dd.dsigma_E_dT(E, Ep, xi, T, 1.0)
+        r_dbl = dbl.dsigma_E_dT(E, Ep, xi, T)
+        r_dd = dd.dsigma_E_dT(E, Ep, xi, T)
 
         actual_diff = abs(r_dbl.value - r_dd.value) / (abs(r_dd.value) + 1e-300)
         assert r_dbl.estimated_rel_error >= 0.01 * actual_diff, (

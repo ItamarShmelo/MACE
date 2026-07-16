@@ -35,13 +35,12 @@ ComptonResult eval_kernel(
     double E,
     double Ep,
     double xi,
-    double T,
-    double Ne)
+    double T)
 {
     if constexpr (Op == ComptonKernelSolver::KernelOp::sigma) {
-        return s.sigma_E(E, Ep, xi, T, Ne);
+        return s.sigma_E(E, Ep, xi, T);
     } else {
-        return s.dsigma_E_dT(E, Ep, xi, T, Ne);
+        return s.dsigma_E_dT(E, Ep, xi, T);
     }
 }
 
@@ -52,8 +51,7 @@ ComptonResult ComptonKernelSolver::dispatch(
     double const E,
     double const E_prime,
     double const xi,
-    double const T,
-    double const Ne) const
+    double const T) const
 {
     double const tau = T * units::k_boltz / units::me_c2;
     auto const p = compute_params<double>(
@@ -70,7 +68,7 @@ ComptonResult ComptonKernelSolver::dispatch(
         // A1: double asymptotic (roundoff estimator flags cancellation)
         try {
             auto const r =
-                eval_kernel<Op>(asymp_series_, E, E_prime, xi, T, Ne);
+                eval_kernel<Op>(asymp_series_, E, E_prime, xi, T);
             if (r.estimated_rel_error < asymp_self_tol_) {
                 return r;
             }
@@ -81,7 +79,7 @@ ComptonResult ComptonKernelSolver::dispatch(
         // A2: DD asymptotic
         try {
             auto const r =
-                eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T, Ne);
+                eval_kernel<Op>(asymp_series_dd_, E, E_prime, xi, T);
             if (r.estimated_rel_error < dd_asymp_self_tol_) {
                 return r;
             }
@@ -94,7 +92,7 @@ ComptonResult ComptonKernelSolver::dispatch(
         // P1: double power series
         try {
             auto const r =
-                eval_kernel<Op>(power_series_, E, E_prime, xi, T, Ne);
+                eval_kernel<Op>(power_series_, E, E_prime, xi, T);
             if (r.estimated_rel_error < power_series_self_tol_ &&
                 (Op == KernelOp::dsigma_dT || r.value >= 0.0)) {
                 return r;
@@ -106,7 +104,7 @@ ComptonResult ComptonKernelSolver::dispatch(
         // P2: DD power series
         try {
             auto const r =
-                eval_kernel<Op>(power_series_dd_, E, E_prime, xi, T, Ne);
+                eval_kernel<Op>(power_series_dd_, E, E_prime, xi, T);
             if (r.estimated_rel_error < dd_power_series_self_tol_ &&
                 (Op == KernelOp::dsigma_dT || r.value >= 0.0)) {
                 return r;
@@ -123,12 +121,11 @@ ComptonResult ComptonKernelSolver::sigma_E(
     double const E,
     double const E_prime,
     double const xi,
-    double const T,
-    double const Ne) const
+    double const T) const
 {
     ComptonResult result{};
     try {
-        result = dispatch<KernelOp::sigma>(E, E_prime, xi, T, Ne);
+        result = dispatch<KernelOp::sigma>(E, E_prime, xi, T);
     } catch (...) {
         if (verbose_) {
             double const gamma = E / units::me_c2;
@@ -177,11 +174,10 @@ ComptonResult ComptonKernelSolver::dsigma_E_dT(
     double const E,
     double const E_prime,
     double const xi,
-    double const T,
-    double const Ne) const
+    double const T) const
 {
     try {
-        return dispatch<KernelOp::dsigma_dT>(E, E_prime, xi, T, Ne);
+        return dispatch<KernelOp::dsigma_dT>(E, E_prime, xi, T);
     } catch (...) {
         if (verbose_) {
             double const gamma = E / units::me_c2;

@@ -63,7 +63,7 @@ class TestEndpointLocalized:
         T = 0.1 * kev_kelvin
 
         mg = _make_mg(bounds, order=48, xi_order=48)
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=8, T=T, Ne=1.0)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=8, T=T)
 
         last_bin = S[0, 0, -1]
         assert np.isfinite(last_bin), "endpoint-localized result is not finite"
@@ -77,10 +77,10 @@ class TestEndpointLocalized:
         n_bins = 8
 
         mg = _make_mg(bounds, order=48, xi_order=48)
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T)
 
         mg_ref = _reference_mg(bounds)
-        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
+        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T)
 
         peak = np.max(np.abs(S_ref))
         mask = np.abs(S_ref) > 1e-4 * peak
@@ -99,10 +99,10 @@ class TestEndpointLocalized:
         n_bins = 8
 
         mg = _make_mg(bounds, order=48, xi_order=48)
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T)
 
         mg_ref = _reference_mg(bounds)
-        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
+        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T)
 
         peak = np.max(np.abs(S_ref))
         mask = np.abs(S_ref) > 1e-4 * peak
@@ -139,10 +139,10 @@ class TestInteriorPeak:
         n_bins = 8
 
         mg = _make_mg(bounds, order=48, xi_order=48)
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T)
 
         mg_ref = _reference_mg(bounds)
-        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
+        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T)
 
         peak = np.max(np.abs(S_ref))
         mask = np.abs(S_ref) > 1e-4 * peak
@@ -160,7 +160,7 @@ class TestInteriorPeak:
         T = 0.1 * kev_kelvin
 
         mg = _make_mg(bounds, order=24)
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=8, T=T, Ne=1.0)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=8, T=T)
         assert np.all(np.isfinite(S)), "non-finite entries in interior-peak"
 
 
@@ -183,10 +183,10 @@ class TestPeakLeft:
         n_bins = 8
 
         mg = _make_mg(bounds, order=48, xi_order=48)
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T)
 
         mg_ref = _reference_mg(bounds)
-        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
+        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T)
 
         peak = np.max(np.abs(S_ref))
         mask = np.abs(S_ref) > 1e-4 * peak
@@ -216,10 +216,10 @@ class TestPeakRight:
         n_bins = 8
 
         mg = _make_mg(bounds, order=48, xi_order=48)
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T)
 
         mg_ref = _reference_mg(bounds)
-        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T, Ne=1.0)
+        S_ref = mg_ref.compute_sigma_matrix(KERNEL, num_angle_bins=n_bins, T=T)
 
         g_in = 0
         for i, (lo, hi) in enumerate(zip(bounds[:-1], bounds[1:], strict=True)):
@@ -260,7 +260,7 @@ class TestExtremeEnergyRatios:
         T = 1.0 * kev_kelvin
 
         mg = _make_mg(bounds, order=24)
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T)
 
         assert np.all(np.isfinite(S)), "non-finite entries at extreme ratio"
         row_sums = S.sum(axis=(1, 2))
@@ -405,9 +405,9 @@ class TestEndpointLocalizedRegression:
     def test_last_bin_convergence(self, T_kev, mg, mg_ref):
         T = T_kev * kev_kelvin
 
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=self._n_bins, T=T, Ne=1.0)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=self._n_bins, T=T)
         S_ref = mg_ref.compute_sigma_matrix(
-            KERNEL, num_angle_bins=self._n_bins, T=T, Ne=1.0
+            KERNEL, num_angle_bins=self._n_bins, T=T
         )
 
         last_bin = S[0, 0, -1]

@@ -141,8 +141,8 @@ class TestAdaptiveConvergence:
             config=_config(8),
         )
 
-        S_loose = mg_loose.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
-        S_tight = mg_tight.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        S_loose = mg_loose.compute_sigma_matrix(KERNEL, T=T)
+        S_tight = mg_tight.compute_sigma_matrix(KERNEL, T=T)
 
         mask = np.abs(S_tight) > 1e-35
         if not np.any(mask):
@@ -227,8 +227,8 @@ class TestPeakAwareConsistency:
             energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_config(8)
         )
 
-        S_default = mg_default.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
-        S_cfg = mg_cfg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        S_default = mg_default.compute_sigma_matrix(KERNEL, T=T)
+        S_cfg = mg_cfg.compute_sigma_matrix(KERNEL, T=T)
 
         mask = np.abs(S_default) > 1e-35
         if np.any(mask):
@@ -244,8 +244,8 @@ class TestPeakAwareConsistency:
             energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_config(8)
         )
 
-        S_integrated = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
-        S_binned = mg.compute_sigma_matrix(KERNEL, num_angle_bins=1, T=T, Ne=1.0)
+        S_integrated = mg.compute_sigma_matrix(KERNEL, T=T)
+        S_binned = mg.compute_sigma_matrix(KERNEL, num_angle_bins=1, T=T)
         S_summed = S_binned.sum(axis=2)
 
         mask = np.abs(S_integrated) > 1e-35
@@ -271,7 +271,7 @@ class TestHardPhysicsRegression:
             energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_config(8)
         )
 
-        S = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        S = mg.compute_sigma_matrix(KERNEL, T=T)
         row_sums = S.sum(axis=1)
         assert np.all(row_sums >= 0), "negative row sums"
         assert np.any(row_sums > 0), "all row sums zero at cold T"
@@ -285,7 +285,7 @@ class TestHardPhysicsRegression:
             energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_config(8)
         )
 
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T)
         assert S.shape == (2, 2, 4)
         row_sums = S.sum(axis=(1, 2))
         assert np.all(row_sums >= 0), "negative row sums"
@@ -324,8 +324,8 @@ class TestGroupCutoff:
         mg_default = self._make_mg(bounds)
         mg_explicit = self._make_mg(bounds, cutoff=1e-8)
 
-        S_default = mg_default.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
-        S_explicit = mg_explicit.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        S_default = mg_default.compute_sigma_matrix(KERNEL, T=T)
+        S_explicit = mg_explicit.compute_sigma_matrix(KERNEL, T=T)
 
         np.testing.assert_array_equal(S_default, S_explicit)
 
@@ -336,8 +336,8 @@ class TestGroupCutoff:
         mg_full = self._make_mg(BOUNDARIES_ERG, cutoff=1e-30)
         mg_cut = self._make_mg(BOUNDARIES_ERG, cutoff=1e-8)
 
-        S_full = mg_full.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
-        S_cut = mg_cut.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        S_full = mg_full.compute_sigma_matrix(KERNEL, T=T)
+        S_cut = mg_cut.compute_sigma_matrix(KERNEL, T=T)
 
         rs_full = S_full.sum(axis=1)
         rs_cut = S_cut.sum(axis=1)
@@ -356,8 +356,8 @@ class TestGroupCutoff:
         mg_full = self._make_mg(BOUNDARIES_ERG, cutoff=1e-30)
         mg_cut = self._make_mg(BOUNDARIES_ERG, cutoff=1e-8)
 
-        S_full = mg_full.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
-        S_cut = mg_cut.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+        S_full = mg_full.compute_sigma_matrix(KERNEL, T=T)
+        S_cut = mg_cut.compute_sigma_matrix(KERNEL, T=T)
 
         nz_full = np.count_nonzero(S_full)
         nz_cut = np.count_nonzero(S_cut)
@@ -371,8 +371,8 @@ class TestGroupCutoff:
         mg_full = self._make_mg(bounds, cutoff=1e-30)
         mg_cut = self._make_mg(bounds, cutoff=1e-8)
 
-        S_full = mg_full.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
-        S_cut = mg_cut.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
+        S_full = mg_full.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T)
+        S_cut = mg_cut.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T)
 
         rs_full = S_full.sum(axis=(1, 2))
         rs_cut = S_cut.sum(axis=(1, 2))
@@ -462,7 +462,7 @@ class TestPanelOrderConvergence:
             mg = cm.ComptonMultigroupKernel(
                 energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=cfg
             )
-            S = mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+            S = mg.compute_sigma_matrix(KERNEL, T=T)
             matrices.append(S)
 
         diffs = []
@@ -496,7 +496,7 @@ class TestPositivity:
             energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_config(24)
         )
 
-        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
+        S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T)
         assert np.all(S >= 0), f"negative entries found at T={T_kev} keV: min={S.min():.2e}"
 
 
@@ -522,8 +522,8 @@ class TestConservationSums:
             energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=cfg_hi
         )
 
-        S_lo = mg_lo.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
-        S_hi = mg_hi.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
+        S_lo = mg_lo.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T)
+        S_hi = mg_hi.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T)
 
         rs_lo = S_lo.sum(axis=(1, 2))
         rs_hi = S_hi.sum(axis=(1, 2))
@@ -596,11 +596,11 @@ class TestFullDerivative:
             config=cfg,
         )
 
-        deriv = mg.compute_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
+        deriv = mg.compute_dsigma_dT_matrix(KERNEL, T=T)
 
         h = T * 1e-5
-        sigma_plus = mg.compute_sigma_matrix(KERNEL, T=T + h, Ne=1.0)
-        sigma_minus = mg.compute_sigma_matrix(KERNEL, T=T - h, Ne=1.0)
+        sigma_plus = mg.compute_sigma_matrix(KERNEL, T=T + h)
+        sigma_minus = mg.compute_sigma_matrix(KERNEL, T=T - h)
         fd = (sigma_plus - sigma_minus) / (2 * h)
 
         # Row-sum comparison: more robust than element-wise for small entries
@@ -646,8 +646,8 @@ class TestFullDerivative:
             config=cfg,
         )
 
-        full = mg.compute_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
-        kernel_only = mg.compute_kernel_derivative_contribution(KERNEL, T=T, Ne=1.0)
+        full = mg.compute_dsigma_dT_matrix(KERNEL, T=T)
+        kernel_only = mg.compute_kernel_derivative_contribution(KERNEL, T=T)
 
         np.testing.assert_allclose(full, kernel_only, rtol=1e-12, atol=0)
 
@@ -668,7 +668,7 @@ class TestFullDerivative:
             config=_config(cutoff_ratio=None),
         )
 
-        full_with = mg_with.compute_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
-        full_without = mg_without.compute_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
+        full_with = mg_with.compute_dsigma_dT_matrix(KERNEL, T=T)
+        full_without = mg_without.compute_dsigma_dT_matrix(KERNEL, T=T)
 
         np.testing.assert_allclose(full_with, full_without, rtol=1e-12, atol=0)

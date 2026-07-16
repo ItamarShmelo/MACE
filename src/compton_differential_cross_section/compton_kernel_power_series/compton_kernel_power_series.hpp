@@ -40,17 +40,16 @@ class ComptonPowerSeries {
         int n_max = 500);
 
     /**
-     * @brief Evaluate Σ_E(E → E', ξ; T, Nₑ) using the power series.
+     * @brief Evaluate Σ_E(E → E', ξ; T) using the power series.
      *
      * @param E        Incident photon energy [erg]
      * @param E_prime  Scattered photon energy [erg]
      * @param xi       cos(scattering angle), strictly in (−1, 1)
      * @param T        Electron temperature [K]
-     * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
      * @return ComptonResult with value and error estimates
      */
     ComptonResult
-    sigma_E(double E, double E_prime, double xi, double T, double Ne) const;
+    sigma_E(double E, double E_prime, double xi, double T) const;
 
     /**
      * @brief Evaluate ∂Σ_E/∂T at a single phase-space point.
@@ -63,11 +62,10 @@ class ComptonPowerSeries {
      * @param E_prime  Scattered photon energy [erg]
      * @param xi       cos(scattering angle), strictly in (−1, 1)
      * @param T        Electron temperature [K]
-     * @param Ne       Electron number density [cm⁻³] (use 1.0 for microscopic)
      * @return ComptonResult with value and error estimates
      */
     ComptonResult
-    dsigma_E_dT(double E, double E_prime, double xi, double T, double Ne) const;
+    dsigma_E_dT(double E, double E_prime, double xi, double T) const;
 
     /**
      * @brief Run both double and DD power series, return the relative error.
@@ -80,8 +78,7 @@ class ComptonPowerSeries {
         double E,
         double E_prime,
         double xi,
-        double T,
-        double Ne) const;
+        double T) const;
 
     /**
      * @brief Run both double and DD power series derivatives, return the
@@ -95,8 +92,7 @@ class ComptonPowerSeries {
         double E,
         double E_prime,
         double xi,
-        double T,
-        double Ne) const;
+        double T) const;
 
   private:
     /**
@@ -127,8 +123,7 @@ class ComptonPowerSeries {
         double gamma_p,
         double xi,
         double tau,
-        double E,
-        double Ne) const;
+        double E) const;
 
     /**
      * @brief Power series temperature derivative of the normalized kernel.
@@ -153,8 +148,7 @@ class ComptonPowerSeries {
         double gamma_p,
         double xi,
         double tau,
-        double E,
-        double Ne) const;
+        double E) const;
 
     bool high_precision_;
     double eps_rel_;

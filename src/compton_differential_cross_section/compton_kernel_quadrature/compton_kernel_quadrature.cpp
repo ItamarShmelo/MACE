@@ -223,10 +223,9 @@ ComptonResult ComptonKernelQuadrature::sigma_E(
     double const E,
     double const E_prime,
     double const xi,
-    double const T,
-    double const Ne) const
+    double const T) const
 {
-    assert_parameters(E, E_prime, xi, T, Ne);
+    assert_parameters(E, E_prime, xi, T);
     double const tau = T * units::k_boltz / units::me_c2;
 
     double const gamma = E / units::me_c2;
@@ -234,7 +233,7 @@ ComptonResult ComptonKernelQuadrature::sigma_E(
 
     KershawParams<double> const p =
         compute_params<double>(gamma, gamma_p, xi, tau);
-    double const sigma0 = sigma0_E(E, tau, p.lambda_plus, Ne);
+    double const sigma0 = sigma0_E(E, tau, p.lambda_plus);
 
     if (form_ == QuadratureForm::PostIntegrationByParts) {
         double const IQ_hi = compute_IQ_post_ibp(p, tau, NL_);
@@ -262,10 +261,9 @@ ComptonResult ComptonKernelQuadrature::dsigma_E_dT(
     double const E,
     double const E_prime,
     double const xi,
-    double const T,
-    double const Ne) const
+    double const T) const
 {
-    assert_parameters(E, E_prime, xi, T, Ne);
+    assert_parameters(E, E_prime, xi, T);
     double const tau = T * units::k_boltz / units::me_c2;
     double const dtau_dT = units::k_boltz / units::me_c2;
 
@@ -274,7 +272,7 @@ ComptonResult ComptonKernelQuadrature::dsigma_E_dT(
 
     KershawParams<double> const p =
         compute_params<double>(gamma, gamma_p, xi, tau);
-    double const sigma0 = sigma0_E(E, tau, p.lambda_plus, Ne);
+    double const sigma0 = sigma0_E(E, tau, p.lambda_plus);
     double const kappa_val = kappa_ratio(tau);
 
     if (form_ == QuadratureForm::PostIntegrationByParts) {

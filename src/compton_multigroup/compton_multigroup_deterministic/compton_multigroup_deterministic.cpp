@@ -258,21 +258,20 @@ double integrate_Ep_ridge(
 double ComptonMultigroupKernel::integrate_xi_bin(
     ComptonKernelSolver const& kernel,
     ComptonResult (
-        ComptonKernelSolver::*eval)(double, double, double, double, double)
+        ComptonKernelSolver::*eval)(double, double, double, double)
         const,
     double const E,
     double const Ep,
     double const xi_lo,
     double const xi_hi,
     double const T,
-    double const Ne,
     KernelMultiplier const& multiplier) const
 {
     double const tau = T * units::k_boltz / units::me_c2;
 
     auto f = [&](double const xi) {
-        return multiplier(E, Ep, xi, Ne) *
-               (kernel.*eval)(E, Ep, xi, T, Ne).value;
+        return multiplier(E, Ep, xi) *
+               (kernel.*eval)(E, Ep, xi, T).value;
     };
 
     double const gamma = E / units::me_c2;
@@ -340,7 +339,7 @@ double ComptonMultigroupKernel::integrate_xi_bin(
 double ComptonMultigroupKernel::integrate_Ep_xi_bin(
     ComptonKernelSolver const& kernel,
     ComptonResult (
-        ComptonKernelSolver::*eval)(double, double, double, double, double)
+        ComptonKernelSolver::*eval)(double, double, double, double)
         const,
     double const E,
     double const Ep_lo,
@@ -348,7 +347,6 @@ double ComptonMultigroupKernel::integrate_Ep_xi_bin(
     double const xi_lo,
     double const xi_hi,
     double const T,
-    double const Ne,
     KernelMultiplier const& multiplier) const
 {
     auto const rb = compute_ridge_bounds(E, xi_lo, xi_hi, T);
@@ -362,7 +360,6 @@ double ComptonMultigroupKernel::integrate_Ep_xi_bin(
             xi_lo,
             xi_hi,
             T,
-            Ne,
             multiplier);
     };
 
@@ -381,14 +378,13 @@ double ComptonMultigroupKernel::integrate_Ep_xi_bin(
 double ComptonMultigroupKernel::integrate_E_Ep_xi_bin(
     ComptonKernelSolver const& kernel,
     ComptonResult (
-        ComptonKernelSolver::*eval)(double, double, double, double, double)
+        ComptonKernelSolver::*eval)(double, double, double, double)
         const,
     int const g,
     int const gp,
     double const xi_lo,
     double const xi_hi,
     double const T,
-    double const Ne,
     KernelMultiplier const& multiplier) const
 {
     double const E_lo = group_boundaries_[g];
@@ -407,7 +403,6 @@ double ComptonMultigroupKernel::integrate_E_Ep_xi_bin(
             xi_lo,
             xi_hi,
             T,
-            Ne,
             multiplier);
         return w * inner;
     };
@@ -448,13 +443,12 @@ double ComptonMultigroupKernel::integrate_E_Ep_xi_bin(
 std::vector<double> ComptonMultigroupKernel::compute_xi_integral_impl(
     ComptonKernelSolver const& kernel,
     ComptonResult (
-        ComptonKernelSolver::*eval)(double, double, double, double, double)
+        ComptonKernelSolver::*eval)(double, double, double, double)
         const,
     double const E,
     double const Ep,
     int const num_xi_bins,
     double const T,
-    double const Ne,
     KernelMultiplier const& multiplier) const
 {
     if (num_xi_bins < 1) {
@@ -482,7 +476,6 @@ std::vector<double> ComptonMultigroupKernel::compute_xi_integral_impl(
             xi_lo,
             xi_hi,
             T,
-            Ne,
             multiplier);
     }
     return result;
@@ -491,14 +484,13 @@ std::vector<double> ComptonMultigroupKernel::compute_xi_integral_impl(
 std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_impl(
     ComptonKernelSolver const& kernel,
     ComptonResult (
-        ComptonKernelSolver::*eval)(double, double, double, double, double)
+        ComptonKernelSolver::*eval)(double, double, double, double)
         const,
     double const E,
     double const Ep_lo,
     double const Ep_hi,
     int const num_xi_bins,
     double const T,
-    double const Ne,
     KernelMultiplier const& multiplier) const
 {
     if (num_xi_bins < 1) {
@@ -533,7 +525,6 @@ std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_impl(
             xi_lo,
             xi_hi,
             T,
-            Ne,
             multiplier);
     }
     return result;
@@ -572,11 +563,10 @@ std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_impl(
 std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     ComptonKernelSolver const& kernel,
     ComptonResult (
-        ComptonKernelSolver::*eval)(double, double, double, double, double)
+        ComptonKernelSolver::*eval)(double, double, double, double)
         const,
     int const num_angle_bins,
     double const T,
-    double const Ne,
     KernelMultiplier const& multiplier,
     std::optional<double> const effective_cutoff) const
 {
@@ -629,7 +619,6 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
                     xi_lo,
                     xi_hi,
                     T,
-                    Ne,
                     multiplier);
 
                 std::size_t const idx =
@@ -681,7 +670,6 @@ std::vector<double> ComptonMultigroupKernel::compute_sigma_matrix(
     ComptonKernelSolver const& kernel,
     int const num_angle_bins,
     double const T,
-    double const Ne,
     KernelMultiplier const& multiplier) const
 {
     return compute_matrix_impl(
@@ -689,7 +677,6 @@ std::vector<double> ComptonMultigroupKernel::compute_sigma_matrix(
         &ComptonKernelSolver::sigma_E,
         num_angle_bins,
         T,
-        Ne,
         multiplier,
         group_cutoff_ratio_);
 }
@@ -698,7 +685,6 @@ std::vector<double> ComptonMultigroupKernel::compute_kernel_derivative_contribut
     ComptonKernelSolver const& kernel,
     int const num_angle_bins,
     double const T,
-    double const Ne,
     KernelMultiplier const& multiplier) const
 {
     return compute_matrix_impl(
@@ -706,7 +692,6 @@ std::vector<double> ComptonMultigroupKernel::compute_kernel_derivative_contribut
         &ComptonKernelSolver::dsigma_E_dT,
         num_angle_bins,
         T,
-        Ne,
         multiplier,
         group_cutoff_ratio_);
 }
@@ -732,10 +717,9 @@ class WeightDerivMultiplier : public KernelMultiplier {
     double operator()(
         double const E,
         double const Ep,
-        double const xi,
-        double const Ne) const override
+        double const xi) const override
     {
-        return inner_(E, Ep, xi, Ne) * wf_.d_log_weight_dT(E, T_);
+        return inner_(E, Ep, xi) * wf_.d_log_weight_dT(E, T_);
     }
 };
 
@@ -747,7 +731,6 @@ std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
     ComptonKernelSolver const& kernel,
     int const num_angle_bins,
     double const T,
-    double const Ne,
     KernelMultiplier const& multiplier) const
 {
     std::optional<double> const no_cutoff = std::nullopt;
@@ -758,7 +741,6 @@ std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
         &ComptonKernelSolver::dsigma_E_dT,
         num_angle_bins,
         T,
-        Ne,
         multiplier,
         no_cutoff);
 
@@ -769,7 +751,6 @@ std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
         &ComptonKernelSolver::sigma_E,
         num_angle_bins,
         T,
-        Ne,
         wd_mult,
         no_cutoff);
 
@@ -779,7 +760,6 @@ std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
         &ComptonKernelSolver::sigma_E,
         num_angle_bins,
         T,
-        Ne,
         multiplier,
         no_cutoff);
 

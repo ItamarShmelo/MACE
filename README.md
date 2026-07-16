@@ -1,9 +1,12 @@
 # Compton Cross Section Calculator
 
 C++ implementation (with Python bindings) of the thermal Compton scattering
-kernel $\Sigma_E(E \to E', \xi;\, T, N_e)$ following Kershaw, Prasad, and
+kernel $\Sigma_E(E \to E', \xi;\, T)$ following Kershaw, Prasad, and
 Beason (1986). The kernel describes photon energy redistribution
 off a relativistic Maxwell-Juttner electron distribution.
+
+All outputs are **microscopic** (per free electron). To obtain macroscopic
+cross sections, multiply externally by the electron number density $N_e$.
 
 Three evaluation methods are provided:
 
@@ -140,12 +143,12 @@ from compton_matrix._units import kev, kev_kelvin
 
 # Quadrature (256-point Gauss-Laguerre, post-IBP form)
 quad = cds.ComptonKernelQuadrature(256, cds.QuadratureForm.PostIBP)
-r = quad.sigma_E(1*kev, 2*kev, 0.0, kev_kelvin, 1.0)
+r = quad.sigma_E(1*kev, 2*kev, 0.0, kev_kelvin)
 print(f"quadrature: {r.value:.6e}  (rel_err ~ {r.estimated_rel_error:.1e})")
 
 # Solver (adaptive dispatch: asymptotic / power series / DD fallback)
 solver = cds.ComptonKernelSolver()
-r = solver.sigma_E(1*kev, 2*kev, 0.0, 1*kev_kelvin, 1.0)
+r = solver.sigma_E(1*kev, 2*kev, 0.0, 1*kev_kelvin)
 print(f"solver:     {r.value:.6e}  (rel_err ~ {r.estimated_rel_error:.1e})")
 ```
 
@@ -174,8 +177,8 @@ the `weight_function` constructor argument.
 **API summary.**
 
 - **Constructor**: `ComptonMultigroupKernel(energy_group_boundaries, weight_function, config=MGIntegrationConfig())` -- boundaries are G+1 strictly increasing values in [erg], all > 0. `weight_function` is a `WeightFunction` subclass (e.g. `PlanckWeightFunction`, `UniformWeightFunction`, `WienWeightFunction`). `config` controls quadrature orders, adaptive refinement depth, and convergence tolerance.
-- **`compute_sigma_matrix(kernel, num_angle_bins, T, Ne)`** -- returns a `(G, G, N_angles)` NumPy array.
-- **`compute_sigma_matrix(kernel, T, Ne)`** -- angle-integrated, returns a `(G, G)` NumPy array.
+- **`compute_sigma_matrix(kernel, num_angle_bins, T)`** -- returns a `(G, G, N_angles)` NumPy array.
+- **`compute_sigma_matrix(kernel, T)`** -- angle-integrated, returns a `(G, G)` NumPy array.
 - **`compute_kernel_derivative_contribution`** -- same signatures, using the temperature-derivative kernel.
 
 The `kernel` argument is a `ComptonKernelSolver` instance.
@@ -199,10 +202,10 @@ mg = cm.ComptonMultigroupKernel(
         e_panel_order=8))
 
 # Angle-integrated G x G matrix
-S = mg.compute_sigma_matrix(kernel, T=10*kev_kelvin, Ne=1.0)
+S = mg.compute_sigma_matrix(kernel, T=10*kev_kelvin)
 
 # Multiangle G x G x N_angles tensor
-S_angle = mg.compute_sigma_matrix(kernel, num_angle_bins=8, T=10*kev_kelvin, Ne=1.0)
+S_angle = mg.compute_sigma_matrix(kernel, num_angle_bins=8, T=10*kev_kelvin)
 ```
 
 ### Monte Carlo multigroup kernel
@@ -218,8 +221,8 @@ deterministic quadrature of the point-wise kernel. It does not require a
 ## Equations
 
 This section gives the final equations used by the evaluators. The code returns
-the energy-space kernel
-$\Sigma_E(E\to E',\xi;T,N_e)$, where $E=h\nu$ and
+the microscopic energy-space kernel
+$\Sigma_E(E\to E',\xi;T)$, where $E=h\nu$ and
 $E'=h\nu'$. It is related to the frequency-space kernel in the paper by
 $\Sigma_E = \Sigma_\nu/h$.
 
@@ -229,7 +232,6 @@ $\Sigma_E = \Sigma_\nu/h$.
 | $\xi=\cos\theta$ | `xi` | Scattering-angle cosine, with $-1<\xi<1$ |
 | $T$ | `T` | Electron temperature [K] |
 | $\tau=k_B T/(m_e c^2)$ | `tau` | Dimensionless electron temperature |
-| $N_e$ | `Ne` | Electron number density [$\mathrm{cm}^{-3}$] |
 
 The dimensionless photon energies are
 
@@ -312,12 +314,12 @@ $$
 
 ### Common prefactor
 
-The energy-space kernel is written as $\Sigma_E=\Sigma_0\mathcal{M}$.
+The microscopic energy-space kernel is written as $\Sigma_E=\Sigma_0\mathcal{M}$.
 The mathematically direct prefactor is
 
 $$
 \Sigma_0
-= \frac{N_e r_e^2 m_e c^2}{4E^2\tau}
+= \frac{r_e^2 m_e c^2}{4E^2\tau}
   \frac{\exp(-\lambda_+/\tau)}{K_2(1/\tau)}.
 $$
 
@@ -338,7 +340,7 @@ Equivalently, the prefactor evaluated in the code is
 
 $$
 \Sigma_0
-= \frac{N_e r_e^2 m_e c^2}{4E^2\tau}
+= \frac{r_e^2 m_e c^2}{4E^2\tau}
   \frac{\exp[-(\lambda_+-1)/\tau]}{\widetilde K_2(1/\tau)},
 \qquad
 r_e^2=\frac{3\sigma_T}{8\pi}.

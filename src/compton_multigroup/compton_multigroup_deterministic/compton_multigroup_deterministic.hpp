@@ -8,7 +8,7 @@
  * PHYSICS
  * ─────────────────────────────────────────────────────────────────────────
  *
- * Given the point-wise differential scattering kernel Σ_E(E→E', ξ; T, Nₑ),
+ * Given the point-wise differential scattering kernel Σ_E(E→E', ξ; T),
  * this module computes the multigroup-multiangle cross section:
  *
  *     σ(g→g', [ξᵢ,ξᵢ₊₁]; T) =
@@ -35,8 +35,8 @@
  * ─────────────────────────────────────────────────────────────────────────
  *
  * - Energy group boundaries are in [erg].
- * - Temperature T is in [K], electron density Nₑ in [cm⁻³].
- * - The returned matrix entries have units [cm²] (Nₑ=1) or [1/cm].
+ * - Temperature T is in [K].
+ * - The returned matrix entries have units [cm²] (microscopic, per free electron).
  * - Angle-integrated overloads (no num_angle_bins) integrate ξ over [−1,1].
  *
  * The dsigma_dT variants plug the derivative kernel ∂Σ_E/∂T into the same
@@ -161,7 +161,7 @@ struct MGIntegrationConfig {
 /**
  * @brief Abstract base for kernel multipliers.
  *
- * A kernel multiplier f(E, E', ξ, Ne) is an extra factor that multiplies
+ * A kernel multiplier f(E, E', ξ) is an extra factor that multiplies
  * the differential scattering kernel pointwise inside the multigroup integral.
  * The result is *not* normalised by the integral of f itself, so it behaves
  * like an observable averaged against the scattering distribution.
@@ -175,7 +175,7 @@ class KernelMultiplier {
     KernelMultiplier(KernelMultiplier&&) = default;
     KernelMultiplier& operator=(KernelMultiplier&&) = default;
     virtual double
-    operator()(double E, double Ep, double xi, double Ne) const = 0;
+    operator()(double E, double Ep, double xi) const = 0;
 };
 
 /**
@@ -186,8 +186,7 @@ class ConstantMultiplier : public KernelMultiplier {
     double operator()(
         double /*E*/,
         double /*E_prime*/,
-        double /*xi*/,
-        double /*Ne*/) const override
+        double /*xi*/) const override
     {
         return 1.0;
     }
@@ -239,7 +238,6 @@ class ComptonMultigroupKernel {
      * @param kernel          Point-wise kernel evaluator.
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
      * @param T               Electron temperature [K].
-     * @param Ne              Electron density [cm⁻³].
      * @param multiplier      Pointwise kernel multiplier applied before
      * integration.
      * @return Flat vector of size G×G×N_angles, row-major [g][g'][angle].
@@ -248,7 +246,6 @@ class ComptonMultigroupKernel {
         ComptonKernelSolver const& kernel,
         int num_angle_bins,
         double T,
-        double Ne,
         KernelMultiplier const& multiplier) const;
 
     /**
@@ -257,7 +254,6 @@ class ComptonMultigroupKernel {
      * @param kernel          Point-wise kernel evaluator.
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
      * @param T               Electron temperature [K].
-     * @param Ne              Electron density [cm⁻³].
      * @param multiplier      Pointwise kernel multiplier applied before
      * integration.
      * @return Flat vector of size G×G×N_angles, row-major [g][g'][angle].
@@ -266,7 +262,6 @@ class ComptonMultigroupKernel {
         ComptonKernelSolver const& kernel,
         int num_angle_bins,
         double T,
-        double Ne,
         KernelMultiplier const& multiplier) const;
 
     /**
@@ -284,7 +279,6 @@ class ComptonMultigroupKernel {
      * @param kernel          Point-wise kernel evaluator.
      * @param num_angle_bins  Number of equal-width bins on [-1, 1].
      * @param T               Electron temperature [K].
-     * @param Ne              Electron density [cm^-3].
      * @param multiplier      Pointwise kernel multiplier.
      * @return Flat vector of size G*G*N_angles, row-major [g][g'][angle].
      */
@@ -292,7 +286,6 @@ class ComptonMultigroupKernel {
         ComptonKernelSolver const& kernel,
         int num_angle_bins,
         double T,
-        double Ne,
         KernelMultiplier const& multiplier) const;
 
   private:
@@ -313,7 +306,6 @@ class ComptonMultigroupKernel {
      * @param eval           Pointer-to-member: sigma_E or dsigma_E_dT.
      * @param num_angle_bins Number of equal-width ξ bins on [−1, 1].
      * @param T              Electron temperature [K].
-     * @param Ne             Electron density [cm⁻³].
      * @param multiplier     Optional pointwise factor applied inside the
      * integrand.
      * @return Flat row-major vector of size G×G×num_angle_bins,
@@ -323,11 +315,10 @@ class ComptonMultigroupKernel {
     std::vector<double> compute_matrix_impl(
         ComptonKernelSolver const& kernel,
         ComptonResult (
-            ComptonKernelSolver::*eval)(double, double, double, double, double)
+            ComptonKernelSolver::*eval)(double, double, double, double)
             const,
         int num_angle_bins,
         double T,
-        double Ne,
         KernelMultiplier const& multiplier,
         std::optional<double> effective_cutoff) const;
 
@@ -342,14 +333,13 @@ class ComptonMultigroupKernel {
     double integrate_xi_bin(
         ComptonKernelSolver const& kernel,
         ComptonResult (
-            ComptonKernelSolver::*eval)(double, double, double, double, double)
+            ComptonKernelSolver::*eval)(double, double, double, double)
             const,
         double E,
         double Ep,
         double xi_lo,
         double xi_hi,
         double T,
-        double Ne,
         KernelMultiplier const& multiplier) const;
 
     /**
@@ -363,7 +353,7 @@ class ComptonMultigroupKernel {
     double integrate_Ep_xi_bin(
         ComptonKernelSolver const& kernel,
         ComptonResult (
-            ComptonKernelSolver::*eval)(double, double, double, double, double)
+            ComptonKernelSolver::*eval)(double, double, double, double)
             const,
         double E,
         double Ep_lo,
@@ -371,7 +361,6 @@ class ComptonMultigroupKernel {
         double xi_lo,
         double xi_hi,
         double T,
-        double Ne,
         KernelMultiplier const& multiplier) const;
 
     /**
@@ -386,14 +375,13 @@ class ComptonMultigroupKernel {
     double integrate_E_Ep_xi_bin(
         ComptonKernelSolver const& kernel,
         ComptonResult (
-            ComptonKernelSolver::*eval)(double, double, double, double, double)
+            ComptonKernelSolver::*eval)(double, double, double, double)
             const,
         int g,
         int gp,
         double xi_lo,
         double xi_hi,
         double T,
-        double Ne,
         KernelMultiplier const& multiplier) const;
 
   public:
@@ -401,27 +389,25 @@ class ComptonMultigroupKernel {
     std::vector<double> compute_xi_integral_impl(
         ComptonKernelSolver const& kernel,
         ComptonResult (
-            ComptonKernelSolver::*eval)(double, double, double, double, double)
+            ComptonKernelSolver::*eval)(double, double, double, double)
             const,
         double E,
         double Ep,
         int num_xi_bins,
         double T,
-        double Ne,
         KernelMultiplier const& multiplier) const;
 
     /** @brief Integrate the kernel over E' and ξ bins for fixed E. */
     std::vector<double> compute_Ep_xi_integral_impl(
         ComptonKernelSolver const& kernel,
         ComptonResult (
-            ComptonKernelSolver::*eval)(double, double, double, double, double)
+            ComptonKernelSolver::*eval)(double, double, double, double)
             const,
         double E,
         double Ep_lo,
         double Ep_hi,
         int num_xi_bins,
         double T,
-        double Ne,
         KernelMultiplier const& multiplier) const;
 
   private:

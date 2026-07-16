@@ -73,7 +73,7 @@ py::array_t<double> flat_to_numpy_2d(int const G, Fn const& fn)
 /**
  * @brief Vectorize a scalar kernel method over an array of E' values.
  *
- * Calls (self.*fn)(E, E'[i], xi, T, Ne) for each element, collecting
+ * Calls (self.*fn)(E, E'[i], xi, T) for each element, collecting
  * ComptonResult::value and ComptonResult::estimated_abs_error into two
  * numpy arrays returned as a tuple.
  *
@@ -88,7 +88,6 @@ py::tuple vectorize_sigma(
         E_prime_arr,
     double xi,
     double T,
-    double Ne,
     MemberFunction fn)
 {
     auto in = E_prime_arr.unchecked<1>();
@@ -100,7 +99,7 @@ py::tuple vectorize_sigma(
     auto out_errors = errors.mutable_unchecked<1>();
 
     for (py::ssize_t i = 0; i < n; ++i) {
-        ComptonResult const r = (self.*fn)(E, in(i), xi, T, Ne);
+        ComptonResult const r = (self.*fn)(E, in(i), xi, T);
         out_values(i) = r.value;
         out_errors(i) = r.estimated_abs_error;
     }

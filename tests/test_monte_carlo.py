@@ -52,8 +52,8 @@ class TestWeightFunctionInvariance:
         mc_wien = _make_mc(bounds, weight_function=cm.WienWeightFunction(cap_x=25.0))
         mc_planck = _make_mc(bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0))
 
-        S_wien = mc_wien.compute_sigma_matrix(T=T, Ne=1.0)
-        S_planck = mc_planck.compute_sigma_matrix(T=T, Ne=1.0)
+        S_wien = mc_wien.compute_sigma_matrix(T=T)
+        S_planck = mc_planck.compute_sigma_matrix(T=T)
 
         assert S_wien.shape == S_planck.shape
         assert not np.allclose(S_wien, S_planck, rtol=0.01, atol=0), (
@@ -67,7 +67,7 @@ class TestWeightFunctionInvariance:
 
         for wf in [cm.WienWeightFunction(cap_x=25.0), cm.PlanckWeightFunction(cap_x=25.0), cm.UniformWeightFunction()]:
             mc_obj = _make_mc(bounds, weight_function=wf)
-            S = mc_obj.compute_sigma_matrix(T=T, Ne=1.0)
+            S = mc_obj.compute_sigma_matrix(T=T)
             assert np.all(S >= 0), f"negative entries with {type(wf).__name__}"
 
     def test_row_sums_positive(self):
@@ -77,7 +77,7 @@ class TestWeightFunctionInvariance:
 
         for wf in [cm.WienWeightFunction(cap_x=25.0), cm.PlanckWeightFunction(cap_x=25.0), cm.UniformWeightFunction()]:
             mc_obj = _make_mc(bounds, weight_function=wf)
-            S = mc_obj.compute_sigma_matrix(T=T, Ne=1.0)
+            S = mc_obj.compute_sigma_matrix(T=T)
             rs = S.sum(axis=1)
             assert np.all(rs > 0), f"non-positive row sums with {type(wf).__name__}"
 
@@ -96,8 +96,8 @@ class TestKernelMultiplier:
         mc_default = _make_mc(BOUNDARIES_ERG, seed=99)
         mc_explicit = _make_mc(BOUNDARIES_ERG, seed=99)
 
-        S_default = mc_default.compute_sigma_matrix(T=T, Ne=1.0)
-        S_explicit = mc_explicit.compute_sigma_matrix(T=T, Ne=1.0, multiplier=cm.ConstantMultiplier())
+        S_default = mc_default.compute_sigma_matrix(T=T)
+        S_explicit = mc_explicit.compute_sigma_matrix(T=T, multiplier=cm.ConstantMultiplier())
 
         np.testing.assert_allclose(S_default, S_explicit, rtol=1e-14, atol=0)
 
@@ -107,8 +107,8 @@ class TestKernelMultiplier:
         mc_default = _make_mc(BOUNDARIES_ERG, seed=99)
         mc_explicit = _make_mc(BOUNDARIES_ERG, seed=99)
 
-        S_default = mc_default.compute_sigma_matrix(num_angle_bins=4, T=T, Ne=1.0)
-        S_explicit = mc_explicit.compute_sigma_matrix(num_angle_bins=4, T=T, Ne=1.0, multiplier=cm.ConstantMultiplier())
+        S_default = mc_default.compute_sigma_matrix(num_angle_bins=4, T=T)
+        S_explicit = mc_explicit.compute_sigma_matrix(num_angle_bins=4, T=T, multiplier=cm.ConstantMultiplier())
 
         np.testing.assert_allclose(S_default, S_explicit, rtol=1e-14, atol=0)
 
@@ -121,7 +121,7 @@ class TestKernelMultiplier:
         """Smoke test: multiplier interface compiles and runs without T param."""
         T = 10.0 * kev_kelvin
         mc_obj = _make_mc(BOUNDARIES_ERG, seed=42)
-        S = mc_obj.compute_sigma_matrix(T=T, Ne=1.0, multiplier=cm.ConstantMultiplier())
+        S = mc_obj.compute_sigma_matrix(T=T, multiplier=cm.ConstantMultiplier())
         assert S.shape[0] > 0
 
 
@@ -140,8 +140,8 @@ class TestSeedReproducibility:
         mc1 = _make_mc(bounds, seed=123)
         mc2 = _make_mc(bounds, seed=123)
 
-        S1 = mc1.compute_sigma_matrix(T=T, Ne=1.0)
-        S2 = mc2.compute_sigma_matrix(T=T, Ne=1.0)
+        S1 = mc1.compute_sigma_matrix(T=T)
+        S2 = mc2.compute_sigma_matrix(T=T)
 
         np.testing.assert_allclose(S1, S2, rtol=1e-14, atol=0)
 
@@ -152,8 +152,8 @@ class TestSeedReproducibility:
         mc1 = _make_mc(bounds, seed=123)
         mc2 = _make_mc(bounds, seed=456)
 
-        S1 = mc1.compute_sigma_matrix(T=T, Ne=1.0)
-        S2 = mc2.compute_sigma_matrix(T=T, Ne=1.0)
+        S1 = mc1.compute_sigma_matrix(T=T)
+        S2 = mc2.compute_sigma_matrix(T=T)
 
         assert not np.array_equal(S1, S2), "different seeds should produce different results"
 
@@ -178,12 +178,12 @@ class TestBasicSanity:
 
     def test_output_shape_2d(self):
         mc_obj = _make_mc(BOUNDARIES_ERG, num_samples=1000)
-        S = mc_obj.compute_sigma_matrix(T=10.0 * kev_kelvin, Ne=1.0)
+        S = mc_obj.compute_sigma_matrix(T=10.0 * kev_kelvin)
         assert S.shape == (G, G)
 
     def test_output_shape_3d(self):
         mc_obj = _make_mc(BOUNDARIES_ERG, num_samples=1000)
-        S = mc_obj.compute_sigma_matrix(num_angle_bins=4, T=10.0 * kev_kelvin, Ne=1.0)
+        S = mc_obj.compute_sigma_matrix(num_angle_bins=4, T=10.0 * kev_kelvin)
         assert S.shape == (G, G, 4)
 
     def test_angle_sum_matches_integrated(self):
@@ -191,10 +191,10 @@ class TestBasicSanity:
         T = 10.0 * kev_kelvin
         mc_obj = _make_mc(BOUNDARIES_ERG)
 
-        S_int = mc_obj.compute_sigma_matrix(T=T, Ne=1.0)
+        S_int = mc_obj.compute_sigma_matrix(T=T)
 
         mc_obj2 = _make_mc(BOUNDARIES_ERG, seed=SEED)
-        S_ang = mc_obj2.compute_sigma_matrix(num_angle_bins=1, T=T, Ne=1.0)
+        S_ang = mc_obj2.compute_sigma_matrix(num_angle_bins=1, T=T)
         S_summed = S_ang.sum(axis=2)
 
         np.testing.assert_allclose(S_int, S_summed, rtol=1e-14, atol=0)
@@ -208,7 +208,7 @@ class TestBasicSanity:
     def test_invalid_temperature(self):
         mc_obj = _make_mc(BOUNDARIES_ERG, num_samples=100)
         with pytest.raises(ValueError, match="[Tt]emperature"):
-            mc_obj.compute_sigma_matrix(T=-1.0, Ne=1.0)
+            mc_obj.compute_sigma_matrix(T=-1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -227,8 +227,8 @@ class TestDerivativeGolden:
         mc1 = _make_mc(bounds, seed=42, num_samples=100_000)
         mc2 = _make_mc(bounds, seed=42, num_samples=100_000)
 
-        dS1 = mc1.compute_kernel_derivative_contribution(T=T, Ne=1.0)
-        dS2 = mc2.compute_kernel_derivative_contribution(T=T, Ne=1.0)
+        dS1 = mc1.compute_kernel_derivative_contribution(T=T)
+        dS2 = mc2.compute_kernel_derivative_contribution(T=T)
 
         np.testing.assert_allclose(dS1, dS2, rtol=1e-14, atol=0)
 
@@ -242,7 +242,7 @@ class TestDerivativeGolden:
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
 
         mc_obj = _make_mc(bounds, seed=42, num_samples=100_000)
-        dS = mc_obj.compute_kernel_derivative_contribution(T=T, Ne=1.0)
+        dS = mc_obj.compute_kernel_derivative_contribution(T=T)
 
         expected = np.array(
             [
@@ -261,12 +261,12 @@ class TestDerivativeGolden:
 
     def test_derivative_output_shape_2d(self):
         mc_obj = _make_mc(BOUNDARIES_ERG, num_samples=1000)
-        dS = mc_obj.compute_kernel_derivative_contribution(T=10.0 * kev_kelvin, Ne=1.0)
+        dS = mc_obj.compute_kernel_derivative_contribution(T=10.0 * kev_kelvin)
         assert dS.shape == (G, G)
 
     def test_derivative_output_shape_3d(self):
         mc_obj = _make_mc(BOUNDARIES_ERG, num_samples=1000)
-        dS = mc_obj.compute_kernel_derivative_contribution(num_angle_bins=4, T=10.0 * kev_kelvin, Ne=1.0)
+        dS = mc_obj.compute_kernel_derivative_contribution(num_angle_bins=4, T=10.0 * kev_kelvin)
         assert dS.shape == (G, G, 4)
 
 
@@ -295,10 +295,10 @@ class TestFullDerivativeMCvsDet:
             config=cm.MGIntegrationConfig(cutoff_ratio=None),
         )
         kernel = ComptonKernelSolver()
-        det_deriv = det_mg.compute_dsigma_dT_matrix(kernel, T=T, Ne=1.0)
+        det_deriv = det_mg.compute_dsigma_dT_matrix(kernel, T=T)
 
         mc_mg = _make_mc(bounds, weight_function=wf, num_samples=5_000_000, seed=42)
-        mc_deriv = mc_mg.compute_dsigma_dT_matrix(T=T, Ne=1.0)
+        mc_deriv = mc_mg.compute_dsigma_dT_matrix(T=T)
 
         # Row-sum comparison (more robust than element-wise for MC)
         det_row = det_deriv.sum(axis=1)
@@ -322,7 +322,7 @@ class TestFullDerivativeMCvsDet:
         mc1 = _make_mc(bounds, weight_function=wf, num_samples=100_000, seed=42)
         mc2 = _make_mc(bounds, weight_function=wf, num_samples=100_000, seed=42)
 
-        full = mc1.compute_dsigma_dT_matrix(T=T, Ne=1.0)
-        kernel_only = mc2.compute_kernel_derivative_contribution(T=T, Ne=1.0)
+        full = mc1.compute_dsigma_dT_matrix(T=T)
+        kernel_only = mc2.compute_kernel_derivative_contribution(T=T)
 
         np.testing.assert_allclose(full, kernel_only, rtol=1e-12, atol=0)

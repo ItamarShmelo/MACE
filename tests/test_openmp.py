@@ -38,7 +38,7 @@ WORKER_DETERMINISTIC = textwrap.dedent("""\
             e_panel_order=8))
 
     T = 10.0 * kev_kelvin
-    S = mg.compute_sigma_matrix(kernel=kernel, num_angle_bins=2, T=T, Ne=1.0)
+    S = mg.compute_sigma_matrix(kernel=kernel, num_angle_bins=2, T=T)
     np.save(sys.argv[1], S)
 """)
 
@@ -55,7 +55,7 @@ WORKER_MONTE_CARLO = textwrap.dedent("""\
         config=cm.MCIntegrationConfig(num_samples=2_000_000, seed=42))
 
     T = 10.0 * kev_kelvin
-    S = mc.compute_sigma_matrix(num_angle_bins=2, T=T, Ne=1.0)
+    S = mc.compute_sigma_matrix(num_angle_bins=2, T=T)
     np.save(sys.argv[1], S)
 """)
 

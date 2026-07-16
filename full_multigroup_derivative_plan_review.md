@@ -38,7 +38,7 @@ Add a regression comparing `compute_dsigma_dT_matrix` from kernels configured wi
 Every proposed full-derivative API still accepts an arbitrary `KernelMultiplier`, and the plan says the weight-derivative multiplier composes with any user multiplier. However, for
 
 \[
-N(T)=\int w(E,T)\,\Sigma_E(T)\,m(E,E',\xi,T,N_e)\,dE\,dE'\,d\xi,
+N(T)=\int w(E,T)\,\Sigma_E(T)\,m(E,E',\xi)\,dE\,dE'\,d\xi,
 \]
 
 the numerator derivative has a third contribution omitted by the plan:
@@ -51,7 +51,7 @@ the numerator derivative has a third contribution omitted by the plan:
 \]
 
 This concern is now resolved: the `KernelMultiplier` interface no longer accepts
-a temperature parameter (`operator()(E, Ep, xi, Ne)`), so temperature-dependent
+a temperature parameter (`operator()(E, Ep, xi)`), so temperature-dependent
 multipliers cannot be expressed.  The derivative APIs are correct by
 construction under this contract.
 

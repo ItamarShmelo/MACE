@@ -104,7 +104,6 @@ template <typename MultiplierFn>
 std::vector<double> ComptonMonteCarloKernel::mc_integrate(
     int const num_angle_bins,
     double const T,
-    double const Ne,
     MultiplierFn const& multiplier_fn) const
 {
     if (num_angle_bins < 1) {
@@ -241,7 +240,7 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
                                      w_E0 * beta;
 
                 double const mult =
-                    multiplier_fn(E0, E, xi_scat_lab, T, Ne, lam);
+                    multiplier_fn(E0, E, xi_scat_lab, T, lam);
 
                 std::size_t const idx =
                     static_cast<std::size_t>(g0) * G * num_angle_bins +
@@ -281,30 +280,26 @@ std::vector<double> ComptonMonteCarloKernel::mc_integrate(
 std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
     int const num_angle_bins,
     double const T,
-    double const Ne,
     KernelMultiplier const& multiplier) const
 {
     return mc_integrate(
         num_angle_bins,
         T,
-        Ne,
-        [&](double E0, double E, double xi, double /*Tv*/, double Nev, double) {
-            return multiplier(E0, E, xi, Nev);
+        [&](double E0, double E, double xi, double /*Tv*/, double) {
+            return multiplier(E0, E, xi);
         });
 }
 
 std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
     double const T,
-    double const Ne,
     KernelMultiplier const& multiplier) const
 {
-    return compute_sigma_matrix(1, T, Ne, multiplier);
+    return compute_sigma_matrix(1, T, multiplier);
 }
 
 std::vector<double> ComptonMonteCarloKernel::compute_kernel_derivative_contribution(
     int const num_angle_bins,
     double const T,
-    double const Ne,
     KernelMultiplier const& multiplier) const
 {
     double const tau = units::k_boltz * T / units::me_c2;
@@ -315,25 +310,22 @@ std::vector<double> ComptonMonteCarloKernel::compute_kernel_derivative_contribut
     return mc_integrate(
         num_angle_bins,
         T,
-        Ne,
         [&, kappa_val, tau2, dtau_dT](
             double E0,
             double E,
             double xi,
             double /*Tv*/,
-            double Nev,
             double lam) {
-            return multiplier(E0, E, xi, Nev) *
+            return multiplier(E0, E, xi) *
                    ((lam - kappa_val) / tau2 - 3.0 / tau) * dtau_dT;
         });
 }
 
 std::vector<double> ComptonMonteCarloKernel::compute_kernel_derivative_contribution(
     double const T,
-    double const Ne,
     KernelMultiplier const& multiplier) const
 {
-    return compute_kernel_derivative_contribution(1, T, Ne, multiplier);
+    return compute_kernel_derivative_contribution(1, T, multiplier);
 }
 
 // ── Full temperature derivative ─────────────────────────────────────────
@@ -341,7 +333,6 @@ std::vector<double> ComptonMonteCarloKernel::compute_kernel_derivative_contribut
 std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
     int const num_angle_bins,
     double const T,
-    double const Ne,
     KernelMultiplier const& multiplier) const
 {
     double const tau = units::k_boltz * T / units::me_c2;
@@ -353,15 +344,13 @@ std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
     auto result = mc_integrate(
         num_angle_bins,
         T,
-        Ne,
         [&, kappa_val, tau2, dtau_dT](
             double E0,
             double E,
             double xi,
             double /*Tv*/,
-            double Nev,
             double lam) {
-            return multiplier(E0, E, xi, Nev) *
+            return multiplier(E0, E, xi) *
                    ((lam - kappa_val) / tau2 - 3.0 / tau) * dtau_dT;
         });
 
@@ -369,14 +358,12 @@ std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
     auto const weight_deriv = mc_integrate(
         num_angle_bins,
         T,
-        Ne,
         [&](double E0,
             double E,
             double xi,
             double Tv,
-            double Nev,
             double /*lam*/) {
-            return multiplier(E0, E, xi, Nev) *
+            return multiplier(E0, E, xi) *
                    weight_func_->d_log_weight_dT(E0, Tv);
         });
 
@@ -384,14 +371,12 @@ std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
     auto const sigma = mc_integrate(
         num_angle_bins,
         T,
-        Ne,
         [&](double E0,
             double E,
             double xi,
             double /*Tv*/,
-            double Nev,
             double /*lam*/) {
-            return multiplier(E0, E, xi, Nev);
+            return multiplier(E0, E, xi);
         });
 
     // Combine: full = (kernel_deriv + weight_deriv) - sigma * dD/dT / D
@@ -422,10 +407,9 @@ std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
 
 std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
     double const T,
-    double const Ne,
     KernelMultiplier const& multiplier) const
 {
-    return compute_dsigma_dT_matrix(1, T, Ne, multiplier);
+    return compute_dsigma_dT_matrix(1, T, multiplier);
 }
 
 } // namespace compton

@@ -50,7 +50,7 @@ def _hot_sigma():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_low_order_config()
     )
-    return mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
+    return mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T)
 
 
 def _hot_dsigma():
@@ -59,7 +59,7 @@ def _hot_dsigma():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_low_order_config()
     )
-    return mg.compute_kernel_derivative_contribution(KERNEL, num_angle_bins=4, T=T, Ne=1.0)
+    return mg.compute_kernel_derivative_contribution(KERNEL, num_angle_bins=4, T=T)
 
 
 def _cold_sigma():
@@ -68,7 +68,7 @@ def _cold_sigma():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_low_order_config()
     )
-    return mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T, Ne=1.0)
+    return mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T)
 
 
 def _single_bin_sigma():
@@ -77,7 +77,7 @@ def _single_bin_sigma():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_low_order_config()
     )
-    return mg.compute_sigma_matrix(KERNEL, T=T, Ne=1.0)
+    return mg.compute_sigma_matrix(KERNEL, T=T)
 
 
 def _wien_sigma():
@@ -86,7 +86,7 @@ def _wien_sigma():
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=bounds, weight_function=cm.WienWeightFunction(cap_x=25.0), config=_low_order_config()
     )
-    return mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T, Ne=1.0)
+    return mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T)
 
 
 SCENARIOS = {
@@ -150,7 +150,7 @@ class TestNewPublicAPI:
         Ep = 4.0 * kev
         T = 10.0 * kev_kelvin
         n_bins = 4
-        result = mg.compute_xi_integral_sigma(KERNEL, E=E, Ep=Ep, num_xi_bins=n_bins, T=T, Ne=1.0)
+        result = mg.compute_xi_integral_sigma(KERNEL, E=E, Ep=Ep, num_xi_bins=n_bins, T=T)
         assert result.shape == (n_bins,)
         assert np.all(np.isfinite(result))
         assert np.any(result != 0.0)
@@ -160,7 +160,7 @@ class TestNewPublicAPI:
         Ep = 4.0 * kev
         T = 10.0 * kev_kelvin
         n_bins = 4
-        result = mg.compute_xi_integral_dsigma_dT(KERNEL, E=E, Ep=Ep, num_xi_bins=n_bins, T=T, Ne=1.0)
+        result = mg.compute_xi_integral_dsigma_dT(KERNEL, E=E, Ep=Ep, num_xi_bins=n_bins, T=T)
         assert result.shape == (n_bins,)
         assert np.all(np.isfinite(result))
 
@@ -169,7 +169,7 @@ class TestNewPublicAPI:
         T = 10.0 * kev_kelvin
         n_bins = 4
         result = mg.compute_Ep_xi_integral_sigma(
-            KERNEL, E=E, Ep_lo=1.0 * kev, Ep_hi=10.0 * kev, num_xi_bins=n_bins, T=T, Ne=1.0
+            KERNEL, E=E, Ep_lo=1.0 * kev, Ep_hi=10.0 * kev, num_xi_bins=n_bins, T=T
         )
         assert result.shape == (n_bins,)
         assert np.all(np.isfinite(result))
@@ -180,7 +180,7 @@ class TestNewPublicAPI:
         T = 10.0 * kev_kelvin
         n_bins = 4
         result = mg.compute_Ep_xi_integral_dsigma_dT(
-            KERNEL, E=E, Ep_lo=1.0 * kev, Ep_hi=10.0 * kev, num_xi_bins=n_bins, T=T, Ne=1.0
+            KERNEL, E=E, Ep_lo=1.0 * kev, Ep_hi=10.0 * kev, num_xi_bins=n_bins, T=T
         )
         assert result.shape == (n_bins,)
         assert np.all(np.isfinite(result))
@@ -191,8 +191,8 @@ class TestNewPublicAPI:
         Ep = 4.0 * kev
         T = 10.0 * kev_kelvin
 
-        result_1 = mg.compute_xi_integral_sigma(KERNEL, E=E, Ep=Ep, num_xi_bins=1, T=T, Ne=1.0)
-        result_4 = mg.compute_xi_integral_sigma(KERNEL, E=E, Ep=Ep, num_xi_bins=4, T=T, Ne=1.0)
+        result_1 = mg.compute_xi_integral_sigma(KERNEL, E=E, Ep=Ep, num_xi_bins=1, T=T)
+        result_4 = mg.compute_xi_integral_sigma(KERNEL, E=E, Ep=Ep, num_xi_bins=4, T=T)
 
         total_1 = result_1.sum()
         total_4 = result_4.sum()

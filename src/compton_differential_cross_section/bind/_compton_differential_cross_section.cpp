@@ -36,16 +36,14 @@ PYBIND11_MODULE(
             "E"_a,
             "E_prime"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a)
+            "T"_a)
         .def(
             "sigma_E_precision_check",
             &ComptonPowerSeries::sigma_E_precision_check,
             "E"_a,
             "E_prime"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a)
+            "T"_a)
         .def(
             "sigma_E_vec",
             [](ComptonPowerSeries const& self,
@@ -55,30 +53,26 @@ PYBIND11_MODULE(
                    py::array::c_style | py::array::forcecast> const&
                    E_prime_arr,
                double xi,
-               double T,
-               double Ne) {
+               double T) {
                 return compton::bind::vectorize_sigma(
                     self,
                     E,
                     E_prime_arr,
                     xi,
                     T,
-                    Ne,
                     &ComptonPowerSeries::sigma_E);
             },
             "E"_a,
             "E_prime_arr"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a)
+            "T"_a)
         .def(
             "dsigma_E_dT",
             &ComptonPowerSeries::dsigma_E_dT,
             "E"_a,
             "E_prime"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a)
+            "T"_a)
         .def(
             "dsigma_E_dT_vec",
             [](ComptonPowerSeries const& self,
@@ -88,30 +82,26 @@ PYBIND11_MODULE(
                    py::array::c_style | py::array::forcecast> const&
                    E_prime_arr,
                double xi,
-               double T,
-               double Ne) {
+               double T) {
                 return compton::bind::vectorize_sigma(
                     self,
                     E,
                     E_prime_arr,
                     xi,
                     T,
-                    Ne,
                     &ComptonPowerSeries::dsigma_E_dT);
             },
             "E"_a,
             "E_prime_arr"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a)
+            "T"_a)
         .def(
             "dsigma_E_dT_precision_check",
             &ComptonPowerSeries::dsigma_E_dT_precision_check,
             "E"_a,
             "E_prime"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a);
+            "T"_a);
 
     m.def(
         "ehat_cf",
@@ -137,16 +127,14 @@ PYBIND11_MODULE(
             "E"_a,
             "E_prime"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a)
+            "T"_a)
         .def(
             "sigma_E_precision_check",
             &ComptonKernelAsymptoticSeries::sigma_E_precision_check,
             "E"_a,
             "E_prime"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a)
+            "T"_a)
         .def(
             "sigma_E_vec",
             [](ComptonKernelAsymptoticSeries const& self,
@@ -156,30 +144,26 @@ PYBIND11_MODULE(
                    py::array::c_style | py::array::forcecast> const&
                    E_prime_arr,
                double xi,
-               double T,
-               double Ne) {
+               double T) {
                 return compton::bind::vectorize_sigma(
                     self,
                     E,
                     E_prime_arr,
                     xi,
                     T,
-                    Ne,
                     &ComptonKernelAsymptoticSeries::sigma_E);
             },
             "E"_a,
             "E_prime_arr"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a)
+            "T"_a)
         .def(
             "dsigma_E_dT",
             &ComptonKernelAsymptoticSeries::dsigma_E_dT,
             "E"_a,
             "E_prime"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a)
+            "T"_a)
         .def(
             "dsigma_E_dT_vec",
             [](ComptonKernelAsymptoticSeries const& self,
@@ -189,30 +173,26 @@ PYBIND11_MODULE(
                    py::array::c_style | py::array::forcecast> const&
                    E_prime_arr,
                double xi,
-               double T,
-               double Ne) {
+               double T) {
                 return compton::bind::vectorize_sigma(
                     self,
                     E,
                     E_prime_arr,
                     xi,
                     T,
-                    Ne,
                     &ComptonKernelAsymptoticSeries::dsigma_E_dT);
             },
             "E"_a,
             "E_prime_arr"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a)
+            "T"_a)
         .def(
             "dsigma_E_dT_precision_check",
             &ComptonKernelAsymptoticSeries::dsigma_E_dT_precision_check,
             "E"_a,
             "E_prime"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a);
+            "T"_a);
 
     // --- Quadrature ---
     py::enum_<QuadratureForm>(m, "QuadratureForm")
@@ -230,8 +210,7 @@ PYBIND11_MODULE(
             "E"_a,
             "E_prime"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a)
+            "T"_a)
         .def(
             "sigma_E_vec",
             [](ComptonKernelQuadrature const& self,
@@ -241,30 +220,26 @@ PYBIND11_MODULE(
                    py::array::c_style | py::array::forcecast> const&
                    E_prime_arr,
                double xi,
-               double T,
-               double Ne) {
+               double T) {
                 return compton::bind::vectorize_sigma(
                     self,
                     E,
                     E_prime_arr,
                     xi,
                     T,
-                    Ne,
                     &ComptonKernelQuadrature::sigma_E);
             },
             "E"_a,
             "E_prime_arr"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a)
+            "T"_a)
         .def(
             "dsigma_E_dT",
             &ComptonKernelQuadrature::dsigma_E_dT,
             "E"_a,
             "E_prime"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a)
+            "T"_a)
         .def(
             "dsigma_E_dT_vec",
             [](ComptonKernelQuadrature const& self,
@@ -274,22 +249,19 @@ PYBIND11_MODULE(
                    py::array::c_style | py::array::forcecast> const&
                    E_prime_arr,
                double xi,
-               double T,
-               double Ne) {
+               double T) {
                 return compton::bind::vectorize_sigma(
                     self,
                     E,
                     E_prime_arr,
                     xi,
                     T,
-                    Ne,
                     &ComptonKernelQuadrature::dsigma_E_dT);
             },
             "E"_a,
             "E_prime_arr"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a);
+            "T"_a);
 
     m.def(
         "scaled_K2",
@@ -353,16 +325,14 @@ PYBIND11_MODULE(
             "E"_a,
             "E_prime"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a)
+            "T"_a)
         .def(
             "dsigma_E_dT",
             &ComptonKernelSolver::dsigma_E_dT,
             "E"_a,
             "E_prime"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a)
+            "T"_a)
         .def(
             "sigma_E_vec",
             [](ComptonKernelSolver const& self,
@@ -372,22 +342,19 @@ PYBIND11_MODULE(
                    py::array::c_style | py::array::forcecast> const&
                    E_prime_arr,
                double xi,
-               double T,
-               double Ne) {
+               double T) {
                 return compton::bind::vectorize_sigma(
                     self,
                     E,
                     E_prime_arr,
                     xi,
                     T,
-                    Ne,
                     &ComptonKernelSolver::sigma_E);
             },
             "E"_a,
             "E_prime_arr"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a)
+            "T"_a)
         .def(
             "dsigma_E_dT_vec",
             [](ComptonKernelSolver const& self,
@@ -397,20 +364,17 @@ PYBIND11_MODULE(
                    py::array::c_style | py::array::forcecast> const&
                    E_prime_arr,
                double xi,
-               double T,
-               double Ne) {
+               double T) {
                 return compton::bind::vectorize_sigma(
                     self,
                     E,
                     E_prime_arr,
                     xi,
                     T,
-                    Ne,
                     &ComptonKernelSolver::dsigma_E_dT);
             },
             "E"_a,
             "E_prime_arr"_a,
             "xi"_a,
-            "T"_a,
-            "Ne"_a);
+            "T"_a);
 }

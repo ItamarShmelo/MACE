@@ -36,7 +36,7 @@ class EnergyTransferMultiplier : public KernelMultiplier {
     }
 
     double
-    operator()(double E, double Ep, double /*xi*/, double /*Ne*/)
+    operator()(double E, double Ep, double /*xi*/)
         const override
     {
         auto it_g = std::upper_bound(boundaries_.begin(), boundaries_.end(), E);
@@ -60,7 +60,7 @@ class EnergyTransferMultiplier : public KernelMultiplier {
 class EpMultiplier : public KernelMultiplier {
   public:
     double
-    operator()(double /*E*/, double Ep, double /*xi*/, double /*Ne*/)
+    operator()(double /*E*/, double Ep, double /*xi*/)
         const override
     {
         return Ep;
@@ -70,7 +70,7 @@ class EpMultiplier : public KernelMultiplier {
 class EpOverEMultiplier : public KernelMultiplier {
   public:
     double
-    operator()(double E, double Ep, double /*xi*/, double /*Ne*/)
+    operator()(double E, double Ep, double /*xi*/)
         const override
     {
         return Ep / E;
@@ -80,7 +80,7 @@ class EpOverEMultiplier : public KernelMultiplier {
 class EpOverETimesXiMultiplier : public KernelMultiplier {
   public:
     double
-    operator()(double E, double Ep, double xi, double /*Ne*/)
+    operator()(double E, double Ep, double xi)
         const override
     {
         return (Ep / E) * xi;
@@ -90,7 +90,7 @@ class EpOverETimesXiMultiplier : public KernelMultiplier {
 class EMinusEpMultiplier : public KernelMultiplier {
   public:
     double
-    operator()(double E, double Ep, double /*xi*/, double /*Ne*/)
+    operator()(double E, double Ep, double /*xi*/)
         const override
     {
         return E - Ep;
@@ -106,7 +106,7 @@ class EnergyMomentMultiplier : public KernelMultiplier {
     }
 
     double
-    operator()(double E, double Ep, double /*xi*/, double /*Ne*/)
+    operator()(double E, double Ep, double /*xi*/)
         const override
     {
         double const x = (Ep - E) / E;
@@ -126,7 +126,7 @@ class LegendreMultiplier0123 : public KernelMultiplier {
     }
 
     double
-    operator()(double /*E*/, double /*Ep*/, double xi, double /*Ne*/)
+    operator()(double /*E*/, double /*Ep*/, double xi)
         const override
     {
         switch (n_) {

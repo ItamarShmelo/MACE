@@ -60,10 +60,10 @@ class ComptonKernelSolver {
         bool verbose = false);
 
     ComptonResult
-    sigma_E(double E, double E_prime, double xi, double T, double Ne) const;
+    sigma_E(double E, double E_prime, double xi, double T) const;
 
     ComptonResult
-    dsigma_E_dT(double E, double E_prime, double xi, double T, double Ne) const;
+    dsigma_E_dT(double E, double E_prime, double xi, double T) const;
 
   private:
     double asymp_tau_alpha_threshold_;
@@ -80,7 +80,7 @@ class ComptonKernelSolver {
 
     template <KernelOp Op>
     ComptonResult
-    dispatch(double E, double E_prime, double xi, double T, double Ne) const;
+    dispatch(double E, double E_prime, double xi, double T) const;
 };
 
 } // namespace compton
