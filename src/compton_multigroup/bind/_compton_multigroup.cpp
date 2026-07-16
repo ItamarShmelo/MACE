@@ -191,6 +191,50 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             "multiplier"_a = ConstantMultiplier())
 
         .def(
+            "compute_full_dsigma_dT_matrix",
+            [](ComptonMultigroupKernel const& self,
+               ComptonKernelSolver const& kernel,
+               int num_angle_bins,
+               double T,
+               double Ne,
+               KernelMultiplier const& multiplier) {
+                return flat_to_numpy_3d(self.num_groups(), num_angle_bins, [&] {
+                    return self.compute_full_dsigma_dT_matrix(
+                        kernel,
+                        num_angle_bins,
+                        T,
+                        Ne,
+                        multiplier);
+                });
+            },
+            "kernel"_a,
+            "num_angle_bins"_a,
+            "T"_a,
+            "Ne"_a,
+            "multiplier"_a = ConstantMultiplier())
+
+        .def(
+            "compute_full_dsigma_dT_matrix",
+            [](ComptonMultigroupKernel const& self,
+               ComptonKernelSolver const& kernel,
+               double T,
+               double Ne,
+               KernelMultiplier const& multiplier) {
+                return flat_to_numpy_2d(self.num_groups(), [&] {
+                    return self.compute_full_dsigma_dT_matrix(
+                        kernel,
+                        1,
+                        T,
+                        Ne,
+                        multiplier);
+                });
+            },
+            "kernel"_a,
+            "T"_a,
+            "Ne"_a,
+            "multiplier"_a = ConstantMultiplier())
+
+        .def(
             "compute_xi_integral_sigma",
             [](ComptonMultigroupKernel const& self,
                ComptonKernelSolver const& kernel,
@@ -352,7 +396,20 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             "E_left"_a,
             "E_right"_a,
             "T"_a)
-        .def("peak_energy", &PlanckWeightFunction::peak_energy, "T"_a);
+        .def("peak_energy", &PlanckWeightFunction::peak_energy, "T"_a)
+        .def("d_weight_dT", &PlanckWeightFunction::d_weight_dT, "E"_a, "T"_a)
+        .def(
+            "d_log_weight_dT",
+            &PlanckWeightFunction::d_log_weight_dT,
+            "E"_a,
+            "T"_a)
+        .def(
+            "d_denominator_dT",
+            &PlanckWeightFunction::d_denominator_dT,
+            "E_left"_a,
+            "E_right"_a,
+            "T"_a)
+        .def("cap_x", &PlanckWeightFunction::cap_x);
 
     py::class_<
         UniformWeightFunction,
@@ -366,7 +423,19 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             "E_left"_a,
             "E_right"_a,
             "T"_a)
-        .def("peak_energy", &UniformWeightFunction::peak_energy, "T"_a);
+        .def("peak_energy", &UniformWeightFunction::peak_energy, "T"_a)
+        .def("d_weight_dT", &UniformWeightFunction::d_weight_dT, "E"_a, "T"_a)
+        .def(
+            "d_log_weight_dT",
+            &UniformWeightFunction::d_log_weight_dT,
+            "E"_a,
+            "T"_a)
+        .def(
+            "d_denominator_dT",
+            &UniformWeightFunction::d_denominator_dT,
+            "E_left"_a,
+            "E_right"_a,
+            "T"_a);
 
     py::class_<
         WienWeightFunction,
@@ -380,7 +449,20 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             "E_left"_a,
             "E_right"_a,
             "T"_a)
-        .def("peak_energy", &WienWeightFunction::peak_energy, "T"_a);
+        .def("peak_energy", &WienWeightFunction::peak_energy, "T"_a)
+        .def("d_weight_dT", &WienWeightFunction::d_weight_dT, "E"_a, "T"_a)
+        .def(
+            "d_log_weight_dT",
+            &WienWeightFunction::d_log_weight_dT,
+            "E"_a,
+            "T"_a)
+        .def(
+            "d_denominator_dT",
+            &WienWeightFunction::d_denominator_dT,
+            "E_left"_a,
+            "E_right"_a,
+            "T"_a)
+        .def("cap_x", &WienWeightFunction::cap_x);
 
     m.def(
         "gauss_legendre_rule",
@@ -650,6 +732,40 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
                KernelMultiplier const& multiplier) {
                 return flat_to_numpy_2d(self.num_groups(), [&] {
                     return self.compute_dsigma_dT_matrix(T, Ne, multiplier);
+                });
+            },
+            "T"_a,
+            "Ne"_a,
+            "multiplier"_a = ConstantMultiplier())
+
+        .def(
+            "compute_full_dsigma_dT_matrix",
+            [](ComptonMonteCarloKernel const& self,
+               int num_angle_bins,
+               double T,
+               double Ne,
+               KernelMultiplier const& multiplier) {
+                return flat_to_numpy_3d(self.num_groups(), num_angle_bins, [&] {
+                    return self.compute_full_dsigma_dT_matrix(
+                        num_angle_bins,
+                        T,
+                        Ne,
+                        multiplier);
+                });
+            },
+            "num_angle_bins"_a,
+            "T"_a,
+            "Ne"_a,
+            "multiplier"_a = ConstantMultiplier())
+
+        .def(
+            "compute_full_dsigma_dT_matrix",
+            [](ComptonMonteCarloKernel const& self,
+               double T,
+               double Ne,
+               KernelMultiplier const& multiplier) {
+                return flat_to_numpy_2d(self.num_groups(), [&] {
+                    return self.compute_full_dsigma_dT_matrix(T, Ne, multiplier);
                 });
             },
             "T"_a,

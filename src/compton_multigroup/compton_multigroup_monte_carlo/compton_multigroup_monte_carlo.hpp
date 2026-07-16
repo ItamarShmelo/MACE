@@ -147,7 +147,9 @@ class ComptonMonteCarloKernel {
      * derivative weight (λ − κ)/τ² − 3/τ before accumulation, and the
      * result is multiplied by dτ/dT.  This is NOT the full d/dT of
      * compute_sigma_matrix (which would need quotient-rule terms); it
-     * matches ComptonMultigroupKernel::compute_dsigma_dT_matrix.
+     * matches ComptonMultigroupKernel::compute_dsigma_dT_matrix.  Use
+     * compute_full_dsigma_dT_matrix for the complete derivative including
+     * weight-function and denominator temperature dependence.
      *
      * @param num_angle_bins  Number of equal-width bins on [−1, 1].
      * @param T               Electron temperature [K].
@@ -170,6 +172,27 @@ class ComptonMonteCarloKernel {
      * G×G.
      */
     std::vector<double> compute_dsigma_dT_matrix(
+        double T,
+        double Ne,
+        KernelMultiplier const& multiplier) const;
+
+    /**
+     * @brief Compute the full d/dT of the multigroup cross section via MC.
+     *
+     * Applies the quotient rule to account for weight-function and
+     * denominator temperature dependence.  Three independent mc_integrate
+     * calls are composed; the denominator correction uses the analytic
+     * dD/dT / D ratio.
+     *
+     * The user-provided multiplier is NOT differentiated with respect to T.
+     */
+    std::vector<double> compute_full_dsigma_dT_matrix(
+        int num_angle_bins,
+        double T,
+        double Ne,
+        KernelMultiplier const& multiplier) const;
+
+    std::vector<double> compute_full_dsigma_dT_matrix(
         double T,
         double Ne,
         KernelMultiplier const& multiplier) const;

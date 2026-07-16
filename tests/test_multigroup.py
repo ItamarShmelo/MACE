@@ -570,3 +570,105 @@ class TestNewConfigFields:
     def test_e_panel_order_validation(self):
         with pytest.raises(ValueError, match="e_panel_order"):
             cm.MGIntegrationConfig(e_panel_order=0)
+
+
+# ---------------------------------------------------------------------------
+# Full temperature derivative
+# ---------------------------------------------------------------------------
+
+
+class TestFullDerivative:
+    """Validate compute_full_dsigma_dT_matrix against central FD."""
+
+    @pytest.mark.parametrize("T_kev", [1.0, 10.0, 100.0])
+    @pytest.mark.parametrize("wf_factory", [
+        lambda: cm.PlanckWeightFunction(cap_x=25.0),
+        lambda: cm.WienWeightFunction(cap_x=25.0),
+    ], ids=["Planck", "Wien"])
+    def test_fd(self, T_kev, wf_factory):
+        T = T_kev * kev_kelvin
+        bounds = [0.1 * kev, 1.0 * kev, 10.0 * kev, 50.0 * kev]
+        wf = wf_factory()
+        cfg = _config(cutoff_ratio=None)
+        mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=bounds,
+            weight_function=wf,
+            config=cfg,
+        )
+
+        deriv = mg.compute_full_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
+
+        h = T * 1e-5
+        sigma_plus = mg.compute_sigma_matrix(KERNEL, T=T + h, Ne=1.0)
+        sigma_minus = mg.compute_sigma_matrix(KERNEL, T=T - h, Ne=1.0)
+        fd = (sigma_plus - sigma_minus) / (2 * h)
+
+        # Row-sum comparison: more robust than element-wise for small entries
+        row_deriv = deriv.sum(axis=1)
+        row_fd = fd.sum(axis=1)
+        floor = 1e-35
+        mask = np.maximum(np.abs(row_fd), np.abs(row_deriv)) > floor
+        if not np.any(mask):
+            return
+
+        denom = np.maximum(
+            np.abs(row_fd[mask]),
+            np.maximum(np.abs(row_deriv[mask]), floor),
+        )
+        rel_err = np.abs(row_deriv[mask] - row_fd[mask]) / denom
+        assert np.all(rel_err < 5e-3), (
+            f"T={T_kev} keV: max row-sum rel error = {rel_err.max():.2e}"
+        )
+
+        # Element-wise comparison on well-populated entries
+        peak = np.abs(deriv).max()
+        if peak > 0:
+            sig_mask = np.maximum(np.abs(fd), np.abs(deriv)) > 1e-3 * peak
+            if np.any(sig_mask):
+                elem_denom = np.maximum(
+                    np.abs(fd[sig_mask]),
+                    np.maximum(np.abs(deriv[sig_mask]), floor),
+                )
+                elem_err = np.abs(deriv[sig_mask] - fd[sig_mask]) / elem_denom
+                assert np.all(elem_err < 5e-3), (
+                    f"T={T_kev} keV: max element rel error = {elem_err.max():.2e}"
+                )
+
+    def test_uniform_matches_kernel_only(self):
+        """For Uniform weight, full derivative == kernel-only derivative."""
+        T = 10.0 * kev_kelvin
+        bounds = [0.1 * kev, 1.0 * kev, 10.0 * kev, 50.0 * kev]
+        wf = cm.UniformWeightFunction()
+        cfg = _config(cutoff_ratio=None)
+        mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=bounds,
+            weight_function=wf,
+            config=cfg,
+        )
+
+        full = mg.compute_full_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
+        kernel_only = mg.compute_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
+
+        np.testing.assert_allclose(full, kernel_only, rtol=1e-12, atol=0)
+
+    def test_cutoff_override_regression(self):
+        """Full derivative is identical regardless of configured cutoff_ratio."""
+        T = 10.0 * kev_kelvin
+        bounds = [0.1 * kev, 1.0 * kev, 10.0 * kev, 50.0 * kev]
+        wf = cm.PlanckWeightFunction(cap_x=25.0)
+
+        mg_with = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=bounds,
+            weight_function=wf,
+            config=_config(cutoff_ratio=1e-6),
+        )
+        mg_without = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=bounds,
+            weight_function=wf,
+            config=_config(cutoff_ratio=None),
+        )
+
+        full_with = mg_with.compute_full_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
+        full_without = mg_without.compute_full_dsigma_dT_matrix(KERNEL, T=T, Ne=1.0)
+
+        np.testing.assert_allclose(full_with, full_without, rtol=1e-12, atol=0)

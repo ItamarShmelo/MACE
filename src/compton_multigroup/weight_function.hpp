@@ -27,6 +27,18 @@ class WeightFunction {
     virtual double
     compute_denominator(double E_left, double E_right, double T) const = 0;
 
+    /// Partial derivative dw/dT of the point-wise weight.
+    virtual double d_weight_dT(double E, double T) const = 0;
+
+    /// Logarithmic derivative d(ln w)/dT, computed directly from the analytic
+    /// formula without dividing by w. 
+    virtual double d_log_weight_dT(double E, double T) const = 0;
+
+    /// Temperature derivative of the group-integrated denominator,
+    /// computed analytically via the Leibniz rule.
+    virtual double
+    d_denominator_dT(double E_left, double E_right, double T) const = 0;
+
     /// Energy [erg] at which w(E,T) attains its maximum, or nullopt if the
     /// weight has no interior peak (e.g. uniform).  Used by the multigroup
     /// integrator to place a panel boundary at the weight peak.
@@ -56,7 +68,13 @@ class PlanckWeightFunction : public WeightFunction {
     double
     compute_denominator(double E_left, double E_right, double T) const override;
 
+    double d_weight_dT(double E, double T) const override;
+    double d_log_weight_dT(double E, double T) const override;
+    double d_denominator_dT(double E_left, double E_right, double T) const override;
+
     std::optional<double> peak_energy(double T) const override;
+
+    double cap_x() const { return cap_x_; }
 
   private:
     double cap_x_;
@@ -74,6 +92,10 @@ class UniformWeightFunction : public WeightFunction {
 
     double
     compute_denominator(double E_left, double E_right, double T) const override;
+
+    double d_weight_dT(double E, double T) const override;
+    double d_log_weight_dT(double E, double T) const override;
+    double d_denominator_dT(double E_left, double E_right, double T) const override;
 
     std::optional<double> peak_energy(double T) const override;
 };
@@ -97,7 +119,13 @@ class WienWeightFunction : public WeightFunction {
     double
     compute_denominator(double E_left, double E_right, double T) const override;
 
+    double d_weight_dT(double E, double T) const override;
+    double d_log_weight_dT(double E, double T) const override;
+    double d_denominator_dT(double E_left, double E_right, double T) const override;
+
     std::optional<double> peak_energy(double T) const override;
+
+    double cap_x() const { return cap_x_; }
 
   private:
     double cap_x_;

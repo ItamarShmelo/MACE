@@ -256,3 +256,61 @@ class TestDerivativeGolden:
         mc_obj = _make_mc(BOUNDARIES_ERG, num_samples=1000)
         dS = mc_obj.compute_dsigma_dT_matrix(num_angle_bins=4, T=10.0 * kev_kelvin, Ne=1.0)
         assert dS.shape == (G, G, 4)
+
+
+# ---------------------------------------------------------------------------
+# 6. Full derivative: MC vs deterministic cross-validation
+# ---------------------------------------------------------------------------
+
+
+class TestFullDerivativeMCvsDet:
+    """Cross-validate MC compute_full_dsigma_dT_matrix against deterministic."""
+
+    @pytest.mark.slow
+    @pytest.mark.parametrize("T_kev", [10.0])
+    def test_mc_vs_det(self, T_kev):
+        from compton_matrix._compton_differential_cross_section import (
+            ComptonKernelSolver,
+        )
+
+        T = T_kev * kev_kelvin
+        bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
+        wf = cm.WienWeightFunction(cap_x=25.0)
+
+        det_mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=bounds,
+            weight_function=wf,
+            config=cm.MGIntegrationConfig(cutoff_ratio=None),
+        )
+        kernel = ComptonKernelSolver()
+        det_deriv = det_mg.compute_full_dsigma_dT_matrix(kernel, T=T, Ne=1.0)
+
+        mc_mg = _make_mc(bounds, weight_function=wf, num_samples=5_000_000, seed=42)
+        mc_deriv = mc_mg.compute_full_dsigma_dT_matrix(T=T, Ne=1.0)
+
+        # Row-sum comparison (more robust than element-wise for MC)
+        det_row = det_deriv.sum(axis=1)
+        mc_row = mc_deriv.sum(axis=1)
+        floor = 1e-40
+        denom = np.maximum(np.abs(det_row), np.maximum(np.abs(mc_row), floor))
+        rel_err = np.abs(mc_row - det_row) / denom
+
+        mask = np.maximum(np.abs(det_row), np.abs(mc_row)) > floor
+        if np.any(mask):
+            assert np.all(rel_err[mask] < 0.15), (
+                f"Row-sum rel err: {rel_err[mask]}"
+            )
+
+    def test_mc_uniform_sanity(self):
+        """MC full derivative matches MC kernel-only derivative for Uniform."""
+        T = 10.0 * kev_kelvin
+        bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
+        wf = cm.UniformWeightFunction()
+
+        mc1 = _make_mc(bounds, weight_function=wf, num_samples=100_000, seed=42)
+        mc2 = _make_mc(bounds, weight_function=wf, num_samples=100_000, seed=42)
+
+        full = mc1.compute_full_dsigma_dT_matrix(T=T, Ne=1.0)
+        kernel_only = mc2.compute_dsigma_dT_matrix(T=T, Ne=1.0)
+
+        np.testing.assert_allclose(full, kernel_only, rtol=1e-12, atol=0)

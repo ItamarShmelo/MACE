@@ -577,7 +577,8 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     int const num_angle_bins,
     double const T,
     double const Ne,
-    KernelMultiplier const& multiplier) const
+    KernelMultiplier const& multiplier,
+    std::optional<double> const effective_cutoff) const
 {
     if (num_angle_bins < 1) {
         throw std::invalid_argument("num_angle_bins must be >= 1");
@@ -646,8 +647,8 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
 
         double const peak_sum = do_group(gp_peak);
 
-        if (group_cutoff_ratio_.has_value()) {
-            double const cutoff = group_cutoff_ratio_.value() * peak_sum;
+        if (effective_cutoff.has_value()) {
+            double const cutoff = effective_cutoff.value() * peak_sum;
 
             // Expand rightward (higher E' groups) until below cutoff.
             for (int gp = gp_peak + 1; gp < G; ++gp) {
@@ -689,7 +690,8 @@ std::vector<double> ComptonMultigroupKernel::compute_sigma_matrix(
         num_angle_bins,
         T,
         Ne,
-        multiplier);
+        multiplier,
+        group_cutoff_ratio_);
 }
 
 std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
@@ -705,7 +707,105 @@ std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
         num_angle_bins,
         T,
         Ne,
-        multiplier);
+        multiplier,
+        group_cutoff_ratio_);
+}
+
+// ── WeightDerivMultiplier ───────────────────────────────────────────────
+
+namespace {
+
+class WeightDerivMultiplier : public KernelMultiplier {
+    WeightFunction const& wf_;
+    KernelMultiplier const& inner_;
+
+  public:
+    WeightDerivMultiplier(
+        WeightFunction const& wf,
+        KernelMultiplier const& inner)
+        : wf_(wf), inner_(inner)
+    {
+    }
+
+    double operator()(
+        double const E,
+        double const Ep,
+        double const xi,
+        double const T,
+        double const Ne) const override
+    {
+        return inner_(E, Ep, xi, T, Ne) * wf_.d_log_weight_dT(E, T);
+    }
+};
+
+} // anonymous namespace
+
+// ── Full temperature derivative ─────────────────────────────────────────
+
+std::vector<double> ComptonMultigroupKernel::compute_full_dsigma_dT_matrix(
+    ComptonKernelSolver const& kernel,
+    int const num_angle_bins,
+    double const T,
+    double const Ne,
+    KernelMultiplier const& multiplier) const
+{
+    std::optional<double> const no_cutoff = std::nullopt;
+
+    // Term 1: kernel derivative (2pi * N_kd / D)
+    auto result = compute_matrix_impl(
+        kernel,
+        &ComptonKernelSolver::dsigma_E_dT,
+        num_angle_bins,
+        T,
+        Ne,
+        multiplier,
+        no_cutoff);
+
+    // Term 2: weight derivative via dlnw/dT multiplier (2pi * N_wd / D)
+    WeightDerivMultiplier wd_mult(*weight_func_, multiplier);
+    auto const weight_deriv = compute_matrix_impl(
+        kernel,
+        &ComptonKernelSolver::sigma_E,
+        num_angle_bins,
+        T,
+        Ne,
+        wd_mult,
+        no_cutoff);
+
+    // Term 3: sigma for denominator correction
+    auto const sigma = compute_matrix_impl(
+        kernel,
+        &ComptonKernelSolver::sigma_E,
+        num_angle_bins,
+        T,
+        Ne,
+        multiplier,
+        no_cutoff);
+
+    // Combine: full = (term1 + term2) - sigma * dD/dT / D
+    int const G = num_groups();
+    for (int g = 0; g < G; ++g) {
+        double const D = weight_func_->compute_denominator(
+            group_boundaries_[g],
+            group_boundaries_[g + 1],
+            T);
+        double const dD_dT = weight_func_->d_denominator_dT(
+            group_boundaries_[g],
+            group_boundaries_[g + 1],
+            T);
+        double const dD_over_D = dD_dT / D;
+
+        for (int gp = 0; gp < G; ++gp) {
+            for (int a = 0; a < num_angle_bins; ++a) {
+                auto const idx =
+                    static_cast<std::size_t>(g) * G * num_angle_bins +
+                    static_cast<std::size_t>(gp) * num_angle_bins +
+                    static_cast<std::size_t>(a);
+                result[idx] += weight_deriv[idx] - sigma[idx] * dD_over_D;
+            }
+        }
+    }
+    return result;
 }
 
 } // namespace compton

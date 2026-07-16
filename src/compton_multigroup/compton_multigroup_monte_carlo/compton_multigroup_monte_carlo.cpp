@@ -336,4 +336,96 @@ std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
     return compute_dsigma_dT_matrix(1, T, Ne, multiplier);
 }
 
+// ── Full temperature derivative ─────────────────────────────────────────
+
+std::vector<double> ComptonMonteCarloKernel::compute_full_dsigma_dT_matrix(
+    int const num_angle_bins,
+    double const T,
+    double const Ne,
+    KernelMultiplier const& multiplier) const
+{
+    double const tau = units::k_boltz * T / units::me_c2;
+    double const tau2 = tau * tau;
+    double const kappa_val = kappa_ratio(tau);
+    double const dtau_dT = units::k_boltz / units::me_c2;
+
+    // Term 1: kernel derivative
+    auto result = mc_integrate(
+        num_angle_bins,
+        T,
+        Ne,
+        [&, kappa_val, tau2, dtau_dT](
+            double E0,
+            double E,
+            double xi,
+            double Tv,
+            double Nev,
+            double lam) {
+            return multiplier(E0, E, xi, Tv, Nev) *
+                   ((lam - kappa_val) / tau2 - 3.0 / tau) * dtau_dT;
+        });
+
+    // Term 2: weight derivative via dlnw/dT
+    auto const weight_deriv = mc_integrate(
+        num_angle_bins,
+        T,
+        Ne,
+        [&](double E0,
+            double E,
+            double xi,
+            double Tv,
+            double Nev,
+            double /*lam*/) {
+            return multiplier(E0, E, xi, Tv, Nev) *
+                   weight_func_->d_log_weight_dT(E0, Tv);
+        });
+
+    // Term 3: sigma for denominator correction
+    auto const sigma = mc_integrate(
+        num_angle_bins,
+        T,
+        Ne,
+        [&](double E0,
+            double E,
+            double xi,
+            double Tv,
+            double Nev,
+            double /*lam*/) {
+            return multiplier(E0, E, xi, Tv, Nev);
+        });
+
+    // Combine: full = (kernel_deriv + weight_deriv) - sigma * dD/dT / D
+    int const G = num_groups();
+    for (int g0 = 0; g0 < G; ++g0) {
+        double const D = weight_func_->compute_denominator(
+            group_boundaries_[g0],
+            group_boundaries_[g0 + 1],
+            T);
+        double const dD_dT = weight_func_->d_denominator_dT(
+            group_boundaries_[g0],
+            group_boundaries_[g0 + 1],
+            T);
+        double const dD_over_D = dD_dT / D;
+
+        for (int gp = 0; gp < G; ++gp) {
+            for (int a = 0; a < num_angle_bins; ++a) {
+                auto const idx =
+                    static_cast<std::size_t>(g0) * G * num_angle_bins +
+                    static_cast<std::size_t>(gp) * num_angle_bins +
+                    static_cast<std::size_t>(a);
+                result[idx] += weight_deriv[idx] - sigma[idx] * dD_over_D;
+            }
+        }
+    }
+    return result;
+}
+
+std::vector<double> ComptonMonteCarloKernel::compute_full_dsigma_dT_matrix(
+    double const T,
+    double const Ne,
+    KernelMultiplier const& multiplier) const
+{
+    return compute_full_dsigma_dT_matrix(1, T, Ne, multiplier);
+}
+
 } // namespace compton

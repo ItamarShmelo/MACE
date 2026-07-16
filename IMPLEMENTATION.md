@@ -856,3 +856,61 @@ the ratio (which would need quotient-rule terms for the denominator).
   noisy-ratio problem.  The same normalization (`beta_avg`, `weight_avg`) is
   applied, matching the multigroup convention (kernel-only derivative, no
   quotient-rule terms).
+
+### Full Multigroup Temperature Derivative
+
+The methods above (`compute_dsigma_dT_matrix`) only differentiate the kernel
+$\Sigma_E$ with respect to $T$.  The full derivative of the multigroup cross
+section also includes the temperature dependence of the weight function $w(E,T)$
+and the denominator $D(g) = \int_{\Delta E_g} w(E,T)\,dE$:
+
+$$\frac{d\sigma}{dT}\bigg|_{g \to g'} = \frac{1}{D}\frac{dN_{\text{kd}}}{dT} + \frac{1}{D}\frac{dN_{\text{wd}}}{dT} - \frac{\sigma}{D}\frac{dD}{dT}$$
+
+where
+
+- $dN_{\text{kd}}/dT$ = numerator integral with the kernel derivative
+  $\partial\Sigma_E/\partial T$ (same as `compute_dsigma_dT_matrix`),
+- $dN_{\text{wd}}/dT$ = numerator integral with $\frac{\partial \ln w}{\partial T} \cdot \Sigma_E$
+  (weight-function derivative contribution),
+- $dD/dT$ = analytic derivative of the denominator.
+
+**Multiplier trick.**  The weight-derivative term is computed without modifying
+the integration routines.  A lightweight `WeightDerivMultiplier` wraps the
+user-provided `KernelMultiplier` and multiplies each integrand evaluation by
+$d(\ln w)/dT$ at the incoming energy.  This is passed to the same
+`compute_matrix_impl` (deterministic) or `mc_integrate` (MC) used for the
+kernel-only path.  The `d(\ln w)/dT` form avoids dividing by $w$ when $w$ is
+tiny (above the cap energy, both $w$ and $dw/dT$ are zero, and $d(\ln w)/dT$
+returns zero without computing a ratio).
+
+**Cutoff disabled.**  The outward-from-peak group cutoff is disabled for the
+full derivative (all $G^2$ pairs are evaluated).  The cutoff exploits the
+assumption that the integrand is dominated by near-elastic scattering, which
+may not hold for the weight-derivative term where $d(\ln w)/dT$ varies
+across groups.
+
+**Cost.**  `compute_full_dsigma_dT_matrix` makes 3× the integration calls of
+`compute_sigma_matrix`: once for the kernel derivative, once for the
+weight-derivative multiplier, and once for the original $\sigma$ (needed for
+the denominator correction term).  Future optimization could fuse the weight
+and kernel-derivative integrands into one pass.
+
+**Deterministic implementation.**  Three `compute_matrix_impl` calls with
+`effective_cutoff = std::nullopt`, combined element-wise via the quotient rule.
+The denominator and its derivative are computed analytically by the weight
+function.
+
+**MC implementation.**  Three independent `mc_integrate` calls, each consuming
+a separate RNG base seed, combined with the analytic $dD/dT \,/\, D$ ratio.
+The MC estimator is consistent (converges as $N \to \infty$).
+
+**Multiplier contract.**  The user-provided `KernelMultiplier` is treated as
+temperature-independent.  If it actually depends on $T$ (e.g.
+`InducedEmissionRatioMultiplier`), the returned derivative accounts only for
+the weight and kernel temperature dependence.
+
+**Cap kink.**  The Planck and Wien weight functions have a cap at $x = $ `cap_x`,
+above which $w$ is held constant.  At the cap boundary, `d_weight_dT` returns 0
+(capped-side convention), introducing a kink in the temperature derivative.
+The Leibniz-rule derivation of `d_denominator_dT` is valid because $w$ itself
+is continuous at the cap.
