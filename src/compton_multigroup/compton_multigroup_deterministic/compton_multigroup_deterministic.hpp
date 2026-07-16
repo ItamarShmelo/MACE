@@ -41,7 +41,9 @@
  *
  * The dsigma_dT variants plug the derivative kernel ∂Σ_E/∂T into the same
  * weighted-integral formula.  They are NOT the full ∂σ/∂T of the multigroup
- * cross section (which would need quotient-rule terms).
+ * cross section (which would need quotient-rule terms).  Use
+ * compute_full_dsigma_dT_matrix for the complete derivative including
+ * weight-function and denominator temperature dependence.
  *
  * ─────────────────────────────────────────────────────────────────────────
  * REFERENCE
@@ -268,6 +270,32 @@ class ComptonMultigroupKernel {
         double Ne,
         KernelMultiplier const& multiplier) const;
 
+    /**
+     * @brief Compute the full d/dT of the multigroup cross section.
+     *
+     * Unlike compute_dsigma_dT_matrix (which only differentiates the kernel),
+     * this method applies the quotient rule to account for the temperature
+     * dependence of the weight function and its denominator:
+     *
+     *     d sigma / dT = (2pi/D)(dN_kd/dT + dN_wd/dT) - sigma * (dD/dT) / D
+     *
+     * The user-provided multiplier is NOT differentiated with respect to T.
+     * Group cutoff is disabled (all G^2 pairs evaluated).
+     *
+     * @param kernel          Point-wise kernel evaluator.
+     * @param num_angle_bins  Number of equal-width bins on [-1, 1].
+     * @param T               Electron temperature [K].
+     * @param Ne              Electron density [cm^-3].
+     * @param multiplier      Pointwise kernel multiplier.
+     * @return Flat vector of size G*G*N_angles, row-major [g][g'][angle].
+     */
+    std::vector<double> compute_full_dsigma_dT_matrix(
+        ComptonKernelSolver const& kernel,
+        int num_angle_bins,
+        double T,
+        double Ne,
+        KernelMultiplier const& multiplier) const;
+
   private:
     /**
      * @brief Core driver: assemble the full G×G×num_angle_bins scattering
@@ -301,7 +329,8 @@ class ComptonMultigroupKernel {
         int num_angle_bins,
         double T,
         double Ne,
-        KernelMultiplier const& multiplier) const;
+        KernelMultiplier const& multiplier,
+        std::optional<double> effective_cutoff) const;
 
     /**
      * @brief Integrate the kernel over a single ξ bin for fixed (E, E').

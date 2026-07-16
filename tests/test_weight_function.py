@@ -271,3 +271,138 @@ class TestPeakEnergy:
         T2 = 2.0 * T
         E_peak2 = wf.peak_energy(T2)
         assert E_peak2 == pytest.approx(2.0 * E_peak, rel=1e-14)
+
+
+# ---------------------------------------------------------------------------
+# 6. d_weight_dT
+# ---------------------------------------------------------------------------
+
+
+class TestDWeightDT:
+    """Verify d_weight_dT against central finite differences."""
+
+    @pytest.mark.parametrize("wf_cls,cap_x", [
+        (cm.PlanckWeightFunction, CAP_X),
+        (cm.WienWeightFunction, WIEN_CAP_X),
+    ])
+    @pytest.mark.parametrize("x", [0.5, 1.0, 3.0, 5.0, 10.0, 20.0])
+    @pytest.mark.parametrize("T_kev", [1.0, 10.0, 100.0])
+    def test_below_cap_fd(self, wf_cls, cap_x, x, T_kev):
+        """Compare d_weight_dT against central FD well below the cap."""
+        T = T_kev * kev_kelvin
+        E = x * k_boltz * T
+        wf = wf_cls(cap_x=cap_x)
+
+        h = T * 1e-6
+        fd = (wf.weight(E, T + h) - wf.weight(E, T - h)) / (2 * h)
+        analytic = wf.d_weight_dT(E, T)
+
+        assert analytic == pytest.approx(fd, rel=1e-5)
+
+    @pytest.mark.parametrize("wf_cls,cap_x", [
+        (cm.PlanckWeightFunction, CAP_X),
+        (cm.WienWeightFunction, WIEN_CAP_X),
+    ])
+    @pytest.mark.parametrize("x", [26.0, 30.0, 50.0])
+    def test_above_cap_zero(self, wf_cls, cap_x, x):
+        T = 10.0 * kev_kelvin
+        E = x * k_boltz * T
+        wf = wf_cls(cap_x=cap_x)
+        assert wf.d_weight_dT(E, T) == pytest.approx(0.0, abs=1e-30)
+
+    def test_uniform_zero(self):
+        wf = cm.UniformWeightFunction()
+        T = 10.0 * kev_kelvin
+        E = 5.0 * k_boltz * T
+        assert wf.d_weight_dT(E, T) == pytest.approx(0.0, abs=1e-30)
+
+    @pytest.mark.parametrize("wf_cls,cap_x", [
+        (cm.PlanckWeightFunction, CAP_X),
+        (cm.WienWeightFunction, WIEN_CAP_X),
+    ])
+    @pytest.mark.parametrize("x", [0.5, 1.0, 3.0, 5.0, 10.0, 20.0])
+    def test_d_log_weight_dT_cross_check(self, wf_cls, cap_x, x):
+        """Verify d_log_weight_dT(E,T) * w(E,T) == d_weight_dT(E,T)."""
+        T = 10.0 * kev_kelvin
+        E = x * k_boltz * T
+        wf = wf_cls(cap_x=cap_x)
+
+        w = wf.weight(E, T)
+        dlnw = wf.d_log_weight_dT(E, T)
+        dw = wf.d_weight_dT(E, T)
+
+        assert dlnw * w == pytest.approx(dw, rel=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# 7. d_denominator_dT
+# ---------------------------------------------------------------------------
+
+
+class TestDDenominatorDT:
+    """Verify d_denominator_dT against FD and integral of d_weight_dT."""
+
+    @pytest.mark.parametrize("wf_cls,cap_x", [
+        (cm.PlanckWeightFunction, CAP_X),
+        (cm.WienWeightFunction, WIEN_CAP_X),
+    ])
+    @pytest.mark.parametrize("T_kev", [1.0, 10.0, 100.0])
+    @pytest.mark.parametrize("x_range,label", [
+        ((0.1, 5.0), "below"),
+        ((26.0, 30.0), "above"),
+        ((20.0, 30.0), "straddling"),
+    ])
+    def test_fd(self, wf_cls, cap_x, T_kev, x_range, label):
+        """Compare d_denominator_dT against central FD."""
+        T = T_kev * kev_kelvin
+        kT = k_boltz * T
+        x_lo, x_hi = x_range
+        E_lo, E_hi = x_lo * kT, x_hi * kT
+        wf = wf_cls(cap_x=cap_x)
+
+        h = T * 1e-6
+        D_plus = wf.compute_denominator(E_lo, E_hi, T + h)
+        D_minus = wf.compute_denominator(E_lo, E_hi, T - h)
+        fd = (D_plus - D_minus) / (2 * h)
+
+        analytic = wf.d_denominator_dT(E_lo, E_hi, T)
+
+        if label == "above":
+            assert analytic == pytest.approx(0.0, abs=1e-30)
+            assert fd == pytest.approx(0.0, abs=max(abs(D_plus) * 1e-6, 1e-30))
+        else:
+            assert analytic == pytest.approx(fd, rel=1e-5)
+
+    @pytest.mark.parametrize("wf_cls,cap_x", [
+        (cm.PlanckWeightFunction, CAP_X),
+        (cm.WienWeightFunction, WIEN_CAP_X),
+    ])
+    @pytest.mark.parametrize("T_kev", [1.0, 10.0, 100.0])
+    @pytest.mark.parametrize("x_range", [
+        (0.1, 5.0),
+        (20.0, 30.0),
+    ])
+    def test_integral_cross_check(self, wf_cls, cap_x, T_kev, x_range):
+        """Cross-check d_denominator_dT against integral of d_weight_dT."""
+        T = T_kev * kev_kelvin
+        kT = k_boltz * T
+        x_lo, x_hi = x_range
+        E_lo, E_hi = x_lo * kT, x_hi * kT
+        wf = wf_cls(cap_x=cap_x)
+
+        E_cap = cap_x * kT
+        points = [E_cap] if E_lo < E_cap < E_hi else []
+        integral, _ = scipy_quad(
+            lambda E: wf.d_weight_dT(E, T), E_lo, E_hi, points=points
+        )
+
+        analytic = wf.d_denominator_dT(E_lo, E_hi, T)
+
+        assert analytic == pytest.approx(integral, rel=1e-8)
+
+    def test_uniform_zero(self):
+        wf = cm.UniformWeightFunction()
+        T = 10.0 * kev_kelvin
+        kT = k_boltz * T
+        E_lo, E_hi = 0.1 * kT, 5.0 * kT
+        assert wf.d_denominator_dT(E_lo, E_hi, T) == pytest.approx(0.0, abs=1e-30)
