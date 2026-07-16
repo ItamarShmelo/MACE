@@ -904,10 +904,9 @@ function.
 a separate RNG base seed, combined with the analytic $dD/dT \,/\, D$ ratio.
 The MC estimator is consistent (converges as $N \to \infty$).
 
-**Multiplier contract.**  The user-provided `KernelMultiplier` is treated as
-temperature-independent.  If it actually depends on $T$ (e.g.
-`InducedEmissionRatioMultiplier`), the returned derivative accounts only for
-the weight and kernel temperature dependence.
+**Multiplier contract.**  The `KernelMultiplier` interface is purely kinematic:
+`operator()(E, Ep, xi, Ne)`.  It must not depend on temperature; temperature
+dependence is handled entirely by the kernel and weight function.
 
 **Cap kink.**  The Planck and Wien weight functions have a cap at $x = $ `cap_x`,
 above which $w$ is held constant.  At the cap boundary, `d_weight_dT` returns 0

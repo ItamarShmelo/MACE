@@ -50,15 +50,10 @@ the numerator derivative has a third contribution omitted by the plan:
 +\int w\Sigma_E\frac{\partial m}{\partial T}.
 \]
 
-This is not merely hypothetical. The repository already ships `InducedEmissionRatioMultiplier`, whose value depends explicitly on `T`; see [_compton_kernel_multipliers.cpp](/home/itamarg/workspace_current/compton_cross_section/src/kernel_multipliers/bind/_compton_kernel_multipliers.cpp:102). Both the deterministic and MC implementations in the plan would disagree with a central finite difference of `compute_sigma_matrix(..., multiplier=InducedEmissionRatioMultiplier())`.
-
-Choose and document one contract before implementation:
-
-1. Restrict `compute_dsigma_dT_matrix` to the physical cross section with no custom multiplier.
-2. State that the multiplier is held fixed and must be temperature-independent; reject or exclude the known temperature-dependent multiplier from this API.
-3. Add a multiplier-derivative contract and integrate the `dm/dT` term. If supported, add a finite-difference test using `InducedEmissionRatioMultiplier`.
-
-Without one of these changes, the method name and public signature over-promise correctness.
+This concern is now resolved: the `KernelMultiplier` interface no longer accepts
+a temperature parameter (`operator()(E, Ep, xi, Ne)`), so temperature-dependent
+multipliers cannot be expressed.  The derivative APIs are correct by
+construction under this contract.
 
 ### P1 — The proposed MC three-stream estimator is unnecessarily noisy and is not unbiased “in expectation”
 
@@ -100,7 +95,7 @@ Likewise, the claim that `weight(E,T) == 0` “never occurs for positive group b
 The proposed tests are directionally good, especially cutoff-free deterministic FD and the independent integral check for `dD/dT`. Add or adjust these cases:
 
 - **Cutoff override:** run the full method on a kernel with a non-null configured cutoff; otherwise the P0 sentinel bug passes unnoticed.
-- **Multiplier contract:** if temperature-dependent multipliers remain supported, compare against FD with `InducedEmissionRatioMultiplier`.
+- **Multiplier contract:** multipliers are now temperature-independent by interface design; no FD check for `dm/dT` is needed.
 - **Zero derivatives:** Planck/Wien entirely above the cap and Uniform have exact zero derivatives. A `1e-6` relative assertion is undefined at zero; use an absolute tolerance scaled to approximately `eps * D / h` for the FD residual, plus an exact/absolute check of the analytic result.
 - **Cap split:** when checking `dD/dT = integral(d_weight_dT)`, give SciPy the moving cap energy as a split point (or integrate the two sides separately), because the pointwise derivative jumps there.
 - **MC path:** MC-vs-deterministic uses the same analytic weight and denominator derivatives, so it is not a complete independent check. Add at least a same-seed Uniform test showing MC full derivative reduces to MC kernel-only derivative, or a common-random-number finite-difference check on a stable aggregate such as row sums.

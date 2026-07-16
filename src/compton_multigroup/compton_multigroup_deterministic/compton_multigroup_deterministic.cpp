@@ -271,7 +271,7 @@ double ComptonMultigroupKernel::integrate_xi_bin(
     double const tau = T * units::k_boltz / units::me_c2;
 
     auto f = [&](double const xi) {
-        return multiplier(E, Ep, xi, T, Ne) *
+        return multiplier(E, Ep, xi, Ne) *
                (kernel.*eval)(E, Ep, xi, T, Ne).value;
     };
 
@@ -718,12 +718,14 @@ namespace {
 class WeightDerivMultiplier : public KernelMultiplier {
     WeightFunction const& wf_;
     KernelMultiplier const& inner_;
+    double T_;
 
   public:
     WeightDerivMultiplier(
         WeightFunction const& wf,
-        KernelMultiplier const& inner)
-        : wf_(wf), inner_(inner)
+        KernelMultiplier const& inner,
+        double T)
+        : wf_(wf), inner_(inner), T_(T)
     {
     }
 
@@ -731,10 +733,9 @@ class WeightDerivMultiplier : public KernelMultiplier {
         double const E,
         double const Ep,
         double const xi,
-        double const T,
         double const Ne) const override
     {
-        return inner_(E, Ep, xi, T, Ne) * wf_.d_log_weight_dT(E, T);
+        return inner_(E, Ep, xi, Ne) * wf_.d_log_weight_dT(E, T_);
     }
 };
 
@@ -762,7 +763,7 @@ std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
         no_cutoff);
 
     // Term 2: weight derivative via dlnw/dT multiplier (2pi * N_wd / D)
-    WeightDerivMultiplier wd_mult(*weight_func_, multiplier);
+    WeightDerivMultiplier wd_mult(*weight_func_, multiplier, T);
     auto const weight_deriv = compute_matrix_impl(
         kernel,
         &ComptonKernelSolver::sigma_E,

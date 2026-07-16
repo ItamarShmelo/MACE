@@ -288,8 +288,8 @@ std::vector<double> ComptonMonteCarloKernel::compute_sigma_matrix(
         num_angle_bins,
         T,
         Ne,
-        [&](double E0, double E, double xi, double Tv, double Nev, double) {
-            return multiplier(E0, E, xi, Tv, Nev);
+        [&](double E0, double E, double xi, double /*Tv*/, double Nev, double) {
+            return multiplier(E0, E, xi, Nev);
         });
 }
 
@@ -320,10 +320,10 @@ std::vector<double> ComptonMonteCarloKernel::compute_kernel_derivative_contribut
             double E0,
             double E,
             double xi,
-            double Tv,
+            double /*Tv*/,
             double Nev,
             double lam) {
-            return multiplier(E0, E, xi, Tv, Nev) *
+            return multiplier(E0, E, xi, Nev) *
                    ((lam - kappa_val) / tau2 - 3.0 / tau) * dtau_dT;
         });
 }
@@ -358,10 +358,10 @@ std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
             double E0,
             double E,
             double xi,
-            double Tv,
+            double /*Tv*/,
             double Nev,
             double lam) {
-            return multiplier(E0, E, xi, Tv, Nev) *
+            return multiplier(E0, E, xi, Nev) *
                    ((lam - kappa_val) / tau2 - 3.0 / tau) * dtau_dT;
         });
 
@@ -376,7 +376,7 @@ std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
             double Tv,
             double Nev,
             double /*lam*/) {
-            return multiplier(E0, E, xi, Tv, Nev) *
+            return multiplier(E0, E, xi, Nev) *
                    weight_func_->d_log_weight_dT(E0, Tv);
         });
 
@@ -388,10 +388,10 @@ std::vector<double> ComptonMonteCarloKernel::compute_dsigma_dT_matrix(
         [&](double E0,
             double E,
             double xi,
-            double Tv,
+            double /*Tv*/,
             double Nev,
             double /*lam*/) {
-            return multiplier(E0, E, xi, Tv, Nev);
+            return multiplier(E0, E, xi, Nev);
         });
 
     // Combine: full = (kernel_deriv + weight_deriv) - sigma * dD/dT / D

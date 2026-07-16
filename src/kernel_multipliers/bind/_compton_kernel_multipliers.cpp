@@ -3,8 +3,6 @@
 
 #include "compton_multigroup/compton_multigroup_deterministic/compton_multigroup_deterministic.hpp"
 
-#include "utilities/units.hpp"
-
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -38,7 +36,7 @@ class EnergyTransferMultiplier : public KernelMultiplier {
     }
 
     double
-    operator()(double E, double Ep, double /*xi*/, double /*T*/, double /*Ne*/)
+    operator()(double E, double Ep, double /*xi*/, double /*Ne*/)
         const override
     {
         auto it_g = std::upper_bound(boundaries_.begin(), boundaries_.end(), E);
@@ -62,7 +60,7 @@ class EnergyTransferMultiplier : public KernelMultiplier {
 class EpMultiplier : public KernelMultiplier {
   public:
     double
-    operator()(double /*E*/, double Ep, double /*xi*/, double /*T*/, double /*Ne*/)
+    operator()(double /*E*/, double Ep, double /*xi*/, double /*Ne*/)
         const override
     {
         return Ep;
@@ -72,7 +70,7 @@ class EpMultiplier : public KernelMultiplier {
 class EpOverEMultiplier : public KernelMultiplier {
   public:
     double
-    operator()(double E, double Ep, double /*xi*/, double /*T*/, double /*Ne*/)
+    operator()(double E, double Ep, double /*xi*/, double /*Ne*/)
         const override
     {
         return Ep / E;
@@ -82,7 +80,7 @@ class EpOverEMultiplier : public KernelMultiplier {
 class EpOverETimesXiMultiplier : public KernelMultiplier {
   public:
     double
-    operator()(double E, double Ep, double xi, double /*T*/, double /*Ne*/)
+    operator()(double E, double Ep, double xi, double /*Ne*/)
         const override
     {
         return (Ep / E) * xi;
@@ -92,21 +90,10 @@ class EpOverETimesXiMultiplier : public KernelMultiplier {
 class EMinusEpMultiplier : public KernelMultiplier {
   public:
     double
-    operator()(double E, double Ep, double /*xi*/, double /*T*/, double /*Ne*/)
+    operator()(double E, double Ep, double /*xi*/, double /*Ne*/)
         const override
     {
         return E - Ep;
-    }
-};
-
-class InducedEmissionRatioMultiplier : public KernelMultiplier {
-  public:
-    double
-    operator()(double E, double Ep, double /*xi*/, double T, double /*Ne*/)
-        const override
-    {
-        double const kT = units::k_boltz * T;
-        return std::expm1(-E / kT) / std::expm1(-Ep / kT);
     }
 };
 
@@ -119,7 +106,7 @@ class EnergyMomentMultiplier : public KernelMultiplier {
     }
 
     double
-    operator()(double E, double Ep, double /*xi*/, double /*T*/, double /*Ne*/)
+    operator()(double E, double Ep, double /*xi*/, double /*Ne*/)
         const override
     {
         double const x = (Ep - E) / E;
@@ -139,7 +126,7 @@ class LegendreMultiplier0123 : public KernelMultiplier {
     }
 
     double
-    operator()(double /*E*/, double /*Ep*/, double xi, double /*T*/, double /*Ne*/)
+    operator()(double /*E*/, double /*Ep*/, double xi, double /*Ne*/)
         const override
     {
         switch (n_) {
@@ -187,11 +174,6 @@ PYBIND11_MODULE(_compton_kernel_multipliers, m) // NOLINT(misc-include-cleaner)
     py::class_<EMinusEpMultiplier, KernelMultiplier>(
         m,
         "EMinusEpMultiplier")
-        .def(py::init<>());
-
-    py::class_<InducedEmissionRatioMultiplier, KernelMultiplier>(
-        m,
-        "InducedEmissionRatioMultiplier")
         .def(py::init<>());
 
     py::class_<EnergyMomentMultiplier, KernelMultiplier>(

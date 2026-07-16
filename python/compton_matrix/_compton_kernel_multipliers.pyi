@@ -5,7 +5,7 @@ from __future__ import annotations
 import collections.abc
 import compton_matrix._compton_multigroup
 import typing
-__all__: list[str] = ['EMinusEpMultiplier', 'EnergyMomentMultiplier', 'EnergyTransferMultiplier', 'EpMultiplier', 'EpOverEMultiplier', 'InducedEmissionRatioMultiplier', 'LegendreMultiplier0123']
+__all__: list[str] = ['EMinusEpMultiplier', 'EnergyMomentMultiplier', 'EnergyTransferMultiplier', 'EpMultiplier', 'EpOverEMultiplier', 'LegendreMultiplier0123']
 class EMinusEpMultiplier(compton_matrix._compton_multigroup.KernelMultiplier):
     def __init__(self) -> None:
         ...
@@ -19,9 +19,6 @@ class EpMultiplier(compton_matrix._compton_multigroup.KernelMultiplier):
     def __init__(self) -> None:
         ...
 class EpOverEMultiplier(compton_matrix._compton_multigroup.KernelMultiplier):
-    def __init__(self) -> None:
-        ...
-class InducedEmissionRatioMultiplier(compton_matrix._compton_multigroup.KernelMultiplier):
     def __init__(self) -> None:
         ...
 class LegendreMultiplier0123(compton_matrix._compton_multigroup.KernelMultiplier):

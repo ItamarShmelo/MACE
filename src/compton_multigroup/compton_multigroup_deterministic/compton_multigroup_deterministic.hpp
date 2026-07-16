@@ -161,7 +161,7 @@ struct MGIntegrationConfig {
 /**
  * @brief Abstract base for kernel multipliers.
  *
- * A kernel multiplier f(E, E', ξ, T, Ne) is an extra factor that multiplies
+ * A kernel multiplier f(E, E', ξ, Ne) is an extra factor that multiplies
  * the differential scattering kernel pointwise inside the multigroup integral.
  * The result is *not* normalised by the integral of f itself, so it behaves
  * like an observable averaged against the scattering distribution.
@@ -175,7 +175,7 @@ class KernelMultiplier {
     KernelMultiplier(KernelMultiplier&&) = default;
     KernelMultiplier& operator=(KernelMultiplier&&) = default;
     virtual double
-    operator()(double E, double Ep, double xi, double T, double Ne) const = 0;
+    operator()(double E, double Ep, double xi, double Ne) const = 0;
 };
 
 /**
@@ -187,7 +187,6 @@ class ConstantMultiplier : public KernelMultiplier {
         double /*E*/,
         double /*E_prime*/,
         double /*xi*/,
-        double /*T*/,
         double /*Ne*/) const override
     {
         return 1.0;

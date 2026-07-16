@@ -112,6 +112,18 @@ class TestKernelMultiplier:
 
         np.testing.assert_allclose(S_default, S_explicit, rtol=1e-14, atol=0)
 
+    def test_induced_emission_ratio_multiplier_removed(self):
+        """InducedEmissionRatioMultiplier no longer exists (T removed from interface)."""
+        import compton_matrix._compton_kernel_multipliers as km
+        assert not hasattr(km, "InducedEmissionRatioMultiplier")
+
+    def test_multiplier_works_without_T(self):
+        """Smoke test: multiplier interface compiles and runs without T param."""
+        T = 10.0 * kev_kelvin
+        mc_obj = _make_mc(BOUNDARIES_ERG, seed=42)
+        S = mc_obj.compute_sigma_matrix(T=T, Ne=1.0, multiplier=cm.ConstantMultiplier())
+        assert S.shape[0] > 0
+
 
 # ---------------------------------------------------------------------------
 # 3. Seed reproducibility
