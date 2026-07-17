@@ -696,8 +696,6 @@ std::vector<double> ComptonMultigroupKernel::compute_kernel_derivative_contribut
         group_cutoff_ratio_);
 }
 
-// ── WeightDerivMultiplier ───────────────────────────────────────────────
-
 namespace {
 
 class WeightDerivMultiplier : public KernelMultiplier {
@@ -725,8 +723,6 @@ class WeightDerivMultiplier : public KernelMultiplier {
 
 } // anonymous namespace
 
-// ── Full temperature derivative ─────────────────────────────────────────
-
 std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
     ComptonKernelSolver const& kernel,
     int const num_angle_bins,
@@ -735,7 +731,7 @@ std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
 {
     std::optional<double> const no_cutoff = std::nullopt;
 
-    // Term 1: kernel derivative (2pi * N_kd / D)
+    // Term 1: kernel derivative 
     auto result = compute_matrix_impl(
         kernel,
         &ComptonKernelSolver::dsigma_E_dT,
@@ -744,7 +740,7 @@ std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
         multiplier,
         no_cutoff);
 
-    // Term 2: weight derivative via dlnw/dT multiplier (2pi * N_wd / D)
+    // Term 2: weight derivative via dlnw/dT multiplier 
     WeightDerivMultiplier wd_mult(*weight_func_, multiplier, T);
     auto const weight_deriv = compute_matrix_impl(
         kernel,
@@ -763,7 +759,7 @@ std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
         multiplier,
         no_cutoff);
 
-    // Combine: full = (term1 + term2) - sigma * dD/dT / D
+    // Combine: full = (term1 + term2) - sigma * dWg/dT / Wg
     int const G = num_groups();
     for (int g = 0; g < G; ++g) {
         double const D = weight_func_->compute_denominator(
