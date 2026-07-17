@@ -172,9 +172,7 @@ class ComptonMonteCarloKernel {
      * Applies the quotient rule to account for weight-function and
      * denominator temperature dependence.  Three independent mc_integrate
      * calls are composed; the denominator correction uses the analytic
-     * dD/dT / D ratio.
-     *
-     * The user-provided multiplier is NOT differentiated with respect to T.
+     * dWg/dT / Wg ratio.
      */
     std::vector<double> compute_dsigma_dT_matrix(
         int num_angle_bins,
