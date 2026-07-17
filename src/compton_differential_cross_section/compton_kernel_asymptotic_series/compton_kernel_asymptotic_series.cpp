@@ -135,9 +135,7 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
             double const abs_error = std::abs(sigma0) * norm_abs_error;
             double const rel_error =
                 abs_error / (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
-            return ComptonResult{value, abs_error, rel_error};
-        }
-
+            return ComptonResult{value, abs_error, rel_error, n + 1};
         if (n >= n_min_ && combined_mag > prev_combined_mag) {
             ++increase_count;
             if (increase_count >= 2) {
@@ -327,7 +325,7 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
                 double const rel_error =
                     abs_error /
                     (std::abs(value) + constants::REL_ERROR_TINY_SCALE);
-                return ComptonResult{value, abs_error, rel_error};
+                return ComptonResult{value, abs_error, rel_error, n + 1};
             }
         } else {
             increase_count = 0;
