@@ -353,16 +353,22 @@ group-to-group cross section.
 
 ### Weight Functions and Denominators
 
-Three weight functions are supported:
+Five weight function classes are supported:
 
 | Weight | $w(E,T)$ | Peak energy | Analytic denominator |
 |--------|-----------|-------------|---------------------|
-| **Planck** | $x^3/(e^x - 1)$, capped at $x = $ `cap_x` | $2.821439 \cdot k_B T$ | Clark (1987) polylogarithm series |
-| **Wien** | $x^3 e^{-x}$, capped at `cap_x` | $3.0 \cdot k_B T$ | Taylor / closed-form (see below) |
+| **Planck** (shifted) | $x^3/(e^x-1)$ below `cap_x`; $x^3 e^{-(x-x_\text{lo})}$ above | $2.821439 \cdot k_B T$ | Clark polylogarithm + shifted Wien $I_n$ |
+| **Wien** (shifted) | $x^3 e^{-(x - x_\text{lo})}$ | $3.0 \cdot k_B T$ | Binomial expansion with $I_n(\delta)$ |
+| **CappedPlanck** | $x^3/(e^x - 1)$, capped at $x = $ `cap_x` | $2.821439 \cdot k_B T$ | Clark (1987) polylogarithm series |
+| **CappedWien** | $x^3 e^{-x}$, capped at `cap_x` | $3.0 \cdot k_B T$ | Taylor / closed-form (see below) |
 | **Uniform** | 1 | none (`std::nullopt`) | $E_\text{right} - E_\text{left}$ |
 
-The Planck cap avoids evaluating $x^3/(e^x - 1)$ in the exponential tail where
-it underflows; above `cap_x` the weight is held constant at its value at the cap.
+The **capped** variants clamp the weight to a constant $w_0$ for $x \ge$ `cap_x`,
+avoiding underflow in the exponential tail.  The **shifted** variants instead
+multiply the weight by $e^{x_\text{lo}}$ within each energy group $[E_g, E_{g+1})$,
+where $x_\text{lo} = E_g / (k_B T)$, preventing underflow while preserving the
+true spectral shape.  The shift factor cancels in the numerator/denominator ratio,
+yielding exact multigroup cross-sections even at extreme $x$ values.
 
 Each weight function provides a `peak_energy(T)` method that returns the energy
 at which $w(E,T)$ attains its maximum (or `std::nullopt` for the uniform weight).
@@ -374,7 +380,14 @@ is computed analytically via `WeightFunction::compute_denominator()`, which uses
 Clark (1987) polylogarithm series for the Planck weight and closed-form
 expressions for Wien and uniform weights.
 
-#### Wien Denominator — Taylor Series for Small x
+**Shifted-class contract.**  The shifted Wien and Planck weight functions require
+that `compute_denominator(E_left, E_right, T)` be called with `E_left`, `E_right`
+equal to consecutive group boundaries.  The denominator formula uses
+$x_\text{lo} = E_\text{left} / (k_B T)$ as the exponent shift, which matches
+the shift used by `weight(E, T)` only at exact group boundaries.  All kernel
+call sites satisfy this contract.
+
+#### Capped Wien Denominator — Taylor Series for Small x
 
 The Wien denominator antiderivative $G(x) = \int_0^x t^3 e^{-t}\,dt$ equals
 $6 - e^{-x}(x^3 + 3x^2 + 6x + 6)$.  For small $x$ this expression suffers
@@ -390,6 +403,33 @@ via Horner's method (7 terms).  At the threshold $x = 0.1$ this gives relative
 error below $10^{-9}$; for smaller $x$ convergence is even faster.  Above the
 threshold the closed form is used, where cancellation is mild (< 1 digit lost at
 $x = 0.2$).
+
+#### Shifted Wien Denominator — Incomplete Gamma Integrals
+
+The shifted Wien denominator within a group $[E_g, E_{g+1})$ is computed via
+the substitution $u = x - x_\text{lo}$ where $x_\text{lo} = E_g / (k_B T)$,
+giving:
+
+$$D = k_B T \sum_{k=0}^{3} \binom{3}{k}\, x_\text{lo}^{3-k}\, I_k(\delta), \qquad \delta = x_\text{hi} - x_\text{lo}$$
+
+where $I_n(\delta) = \int_0^\delta u^n e^{-u}\,du$ are lower incomplete gamma
+functions.  Each $I_n$ has a closed form (e.g. $I_3(\delta) = 6 - e^{-\delta}(\delta^3 + 3\delta^2 + 6\delta + 6)$,
+identical to the antiderivative $G$) and a Taylor branch for $\delta \le 0.1$
+using 7-term Horner evaluation to avoid catastrophic cancellation.
+
+The Taylor branches give relative accuracy $\sim 10^{-12}$; the closed forms
+suffer from cancellation near the switchover ($\sim 10^{-11}$ relative error).
+Both are within the application tolerance of $10^{-10}$ used in denominator tests.
+
+The temperature derivative of the shifted Wien denominator is:
+
+$$\frac{dD}{dT} = \frac{D(1 - x_\text{lo}) + E_\text{left}\,w_\text{lo} - E_\text{right}\,w_\text{hi}}{T}$$
+
+where $w_\text{lo} = x_\text{lo}^3$ (shifted weight at the lower boundary,
+$e^{-(x_\text{lo} - x_\text{lo})} = 1$) and $w_\text{hi} = x_\text{hi}^3 e^{-(x_\text{hi} - x_\text{lo})}$.
+The $(1 - x_\text{lo})$ factor comes from the parametric derivative of
+$e^{-(x - x_\text{lo})}$ with respect to $x_\text{lo}$, combined with the
+Leibniz-rule contributions from the moving integration limits.
 
 
 ### Ridge-Based E' Integration
@@ -908,8 +948,18 @@ The MC estimator is consistent (converges as $N \to \infty$).
 `operator()(E, Ep, xi)`.  It must not depend on temperature; temperature
 dependence is handled entirely by the kernel and weight function.
 
-**Cap kink.**  The Planck and Wien weight functions have a cap at $x = $ `cap_x`,
-above which $w$ is held constant.  At the cap boundary, `d_weight_dT` returns 0
-(capped-side convention), introducing a kink in the temperature derivative.
-The Leibniz-rule derivation of `d_denominator_dT` is valid because $w$ itself
-is continuous at the cap.
+**Cap kink (capped classes).**  The capped Planck and Wien weight functions
+have a cap at $x = $ `cap_x`, above which $w$ is held constant.  At the cap
+boundary, `d_weight_dT` returns 0 (capped-side convention), introducing a kink
+in the temperature derivative.  The Leibniz-rule derivation of `d_denominator_dT`
+is valid because $w$ itself is continuous at the cap.
+
+**Boundary discontinuities (shifted classes).**  The shifted Planck and Wien
+weight functions do not have a cap kink.  Instead, the weight is discontinuous
+at each internal group boundary, jumping upward by a factor of
+$e^{x_g - x_{g-1}}$.  These discontinuities do not affect the kernel
+integration because the kernel already integrates group-by-group, and the
+quadrature points are strictly interior to each group.  The `peak_energy`
+method returns the stationary point of the underlying smooth spectral shape
+($3 k_B T$ for Wien, $2.821 k_B T$ for Planck), used solely as a quadrature
+panel-splitting hint within each group.

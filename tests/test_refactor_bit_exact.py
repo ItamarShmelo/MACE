@@ -48,7 +48,7 @@ def _hot_sigma():
     bounds = [0.1 * kev, 0.5 * kev, 1.0 * kev, 5.0 * kev, 10.0 * kev, 50.0 * kev]
     T = 10.0 * kev_kelvin
     mg = cm.ComptonMultigroupKernel(
-        energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_low_order_config()
+        energy_group_boundaries=bounds, weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0), config=_low_order_config()
     )
     return mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T)
 
@@ -57,7 +57,7 @@ def _hot_dsigma():
     bounds = [0.1 * kev, 0.5 * kev, 1.0 * kev, 5.0 * kev, 10.0 * kev, 50.0 * kev]
     T = 10.0 * kev_kelvin
     mg = cm.ComptonMultigroupKernel(
-        energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_low_order_config()
+        energy_group_boundaries=bounds, weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0), config=_low_order_config()
     )
     return mg.compute_kernel_derivative_contribution(KERNEL, num_angle_bins=4, T=T)
 
@@ -66,7 +66,7 @@ def _cold_sigma():
     bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev, 50.0 * kev]
     T = 0.5 * kev_kelvin
     mg = cm.ComptonMultigroupKernel(
-        energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_low_order_config()
+        energy_group_boundaries=bounds, weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0), config=_low_order_config()
     )
     return mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T)
 
@@ -75,7 +75,7 @@ def _single_bin_sigma():
     bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
     T = 10.0 * kev_kelvin
     mg = cm.ComptonMultigroupKernel(
-        energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_low_order_config()
+        energy_group_boundaries=bounds, weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0), config=_low_order_config()
     )
     return mg.compute_sigma_matrix(KERNEL, T=T)
 
@@ -84,7 +84,7 @@ def _wien_sigma():
     bounds = [0.5 * kev, 1.0 * kev, 5.0 * kev, 10.0 * kev, 50.0 * kev]
     T = 10.0 * kev_kelvin
     mg = cm.ComptonMultigroupKernel(
-        energy_group_boundaries=bounds, weight_function=cm.WienWeightFunction(cap_x=25.0), config=_low_order_config()
+        energy_group_boundaries=bounds, weight_function=cm.CappedWienWeightFunction(cap_x=25.0), config=_low_order_config()
     )
     return mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T)
 

@@ -261,8 +261,8 @@ class TestConservationComparison:
         config_no_tails = _config(32, ep_k_cut=5.0, ep_k_in=2.0)
         config_tails = _config(32, ep_k_cut=5.0, ep_k_in=2.0)
 
-        mg_no = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config_no_tails)
-        mg_yes = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config_tails)
+        mg_no = cm.ComptonMultigroupKernel(bounds, cm.CappedPlanckWeightFunction(cap_x=25.0), config_no_tails)
+        mg_yes = cm.ComptonMultigroupKernel(bounds, cm.CappedPlanckWeightFunction(cap_x=25.0), config_tails)
 
         m_no = mg_no.compute_sigma_matrix(KERNEL, num_angle_bins=8, T=T)
         m_yes = mg_yes.compute_sigma_matrix(KERNEL, num_angle_bins=8, T=T)
@@ -283,8 +283,8 @@ class TestConservationComparison:
         config_no = _config(24, cutoff_ratio=1e-14, ep_k_cut=5.0)
         config_yes = _config(24, cutoff_ratio=1e-14, ep_k_cut=5.0)
 
-        mg_no = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config_no)
-        mg_yes = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config_yes)
+        mg_no = cm.ComptonMultigroupKernel(bounds, cm.CappedPlanckWeightFunction(cap_x=25.0), config_no)
+        mg_yes = cm.ComptonMultigroupKernel(bounds, cm.CappedPlanckWeightFunction(cap_x=25.0), config_yes)
 
         m_no = mg_no.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T)
         m_yes = mg_yes.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T)
@@ -304,7 +304,7 @@ class TestOverlapCollapse:
         bounds = [1.0 * kev, 5.0 * kev, 50.0 * kev]
         T = 10.0 * kev_kelvin
         config = _config(16, ep_k_cut=5.0, ep_k_in=2.0)
-        mg = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
+        mg = cm.ComptonMultigroupKernel(bounds, cm.CappedPlanckWeightFunction(cap_x=25.0), config)
         m = mg.compute_sigma_matrix(KERNEL, num_angle_bins=32, T=T)
         assert np.all(np.isfinite(m))
         assert np.any(m != 0.0)
@@ -318,7 +318,7 @@ class TestFullyOutsideGroup:
         bounds = [0.01 * kev, 0.05 * kev, 0.1 * kev, 500 * kev, 1000 * kev]
         T = 1.0 * kev_kelvin
         config = _config(16, ep_k_cut=5.0)
-        mg = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
+        mg = cm.ComptonMultigroupKernel(bounds, cm.CappedPlanckWeightFunction(cap_x=25.0), config)
         m = mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T)
         assert m[0, 3, 0] == 0.0, "far above-ridge group should be exactly 0"
 
@@ -326,7 +326,7 @@ class TestFullyOutsideGroup:
         bounds = [0.01 * kev, 0.05 * kev, 0.1 * kev, 500 * kev, 1000 * kev]
         T = 1.0 * kev_kelvin
         config = _config(16, ep_k_cut=5.0)
-        mg = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
+        mg = cm.ComptonMultigroupKernel(bounds, cm.CappedPlanckWeightFunction(cap_x=25.0), config)
         m = mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T)
         assert np.all(np.isfinite(m))
 
@@ -338,7 +338,7 @@ class TestZeroSigmaBehavior:
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
         T = 0.001 * kev_kelvin  # near-cold
         config = _config(16, ep_k_cut=5.0)
-        mg = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
+        mg = cm.ComptonMultigroupKernel(bounds, cm.CappedPlanckWeightFunction(cap_x=25.0), config)
         m = mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T)
         assert np.all(np.isfinite(m))
         assert np.any(m != 0.0)
@@ -351,7 +351,7 @@ class TestClippedRetainedInterval:
         bounds = [1.0 * kev, 2.0 * kev, 100.0 * kev]
         T = 50.0 * kev_kelvin  # wide thermal width
         config = _config(16, ep_k_cut=6.0)
-        mg = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
+        mg = cm.ComptonMultigroupKernel(bounds, cm.CappedPlanckWeightFunction(cap_x=25.0), config)
         m = mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T)
         assert np.all(np.isfinite(m))
 
@@ -367,8 +367,8 @@ class TestDiagnosticTailEndToEnd:
         config_off = _config(16, ep_k_cut=5.0)
         config_on = _config(16, ep_k_cut=5.0)
 
-        mg_off = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config_off)
-        mg_on = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config_on)
+        mg_off = cm.ComptonMultigroupKernel(bounds, cm.CappedPlanckWeightFunction(cap_x=25.0), config_off)
+        mg_on = cm.ComptonMultigroupKernel(bounds, cm.CappedPlanckWeightFunction(cap_x=25.0), config_on)
 
         m_off = mg_off.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T)
         m_on = mg_on.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T)
@@ -388,7 +388,7 @@ class TestKcutConvergence:
         matrices = {}
         for k in [4.0, 5.0, 6.0]:
             config = _config(24, ep_k_cut=k)
-            mg = cm.ComptonMultigroupKernel(bounds, cm.PlanckWeightFunction(cap_x=25.0), config)
+            mg = cm.ComptonMultigroupKernel(bounds, cm.CappedPlanckWeightFunction(cap_x=25.0), config)
             matrices[k] = mg.compute_sigma_matrix(KERNEL, num_angle_bins=2, T=T)
 
         diff_45 = np.max(np.abs(matrices[5.0] - matrices[4.0]))

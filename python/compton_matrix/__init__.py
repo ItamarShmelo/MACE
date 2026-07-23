@@ -15,6 +15,8 @@ from compton_matrix._compton_differential_cross_section import (
     QuadratureForm,
 )
 from compton_matrix._compton_multigroup import (
+    CappedPlanckWeightFunction,
+    CappedWienWeightFunction,
     ComptonMonteCarloKernel,
     ComptonMultigroupKernel,
     MCIntegrationConfig,
@@ -33,6 +35,8 @@ from compton_matrix._units import (
 )
 
 __all__ = [
+    "CappedPlanckWeightFunction",
+    "CappedWienWeightFunction",
     "ComptonKernelAsymptoticSeries",
     "ComptonKernelQuadrature",
     "ComptonKernelSolver",

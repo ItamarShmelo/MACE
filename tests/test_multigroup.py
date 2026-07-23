@@ -52,7 +52,7 @@ class TestDenominator:
         E_lo = 0.1 * kT
         E_hi = 5.0 * kT
         mg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=[E_lo, E_hi], weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_config(8)
+            energy_group_boundaries=[E_lo, E_hi], weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0), config=_config(8)
         )
 
         x_lo, x_hi = 0.1, 5.0
@@ -74,7 +74,7 @@ class TestDenominator:
         E_lo = 26.0 * kT
         E_hi = 30.0 * kT
         mg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=[E_lo, E_hi], weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_config(8)
+            energy_group_boundaries=[E_lo, E_hi], weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0), config=_config(8)
         )
 
         cap_x = 25.0
@@ -132,12 +132,12 @@ class TestAdaptiveConvergence:
 
         mg_loose = cm.ComptonMultigroupKernel(
             energy_group_boundaries=narrow_bounds,
-            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0),
             config=_config(8),
         )
         mg_tight = cm.ComptonMultigroupKernel(
             energy_group_boundaries=narrow_bounds,
-            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0),
             config=_config(8),
         )
 
@@ -220,11 +220,11 @@ class TestPeakAwareConsistency:
         cfg = _config(8)
 
         mg_default = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=cfg
+            energy_group_boundaries=bounds, weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0), config=cfg
         )
 
         mg_cfg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_config(8)
+            energy_group_boundaries=bounds, weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0), config=_config(8)
         )
 
         S_default = mg_default.compute_sigma_matrix(KERNEL, T=T)
@@ -241,7 +241,7 @@ class TestPeakAwareConsistency:
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
 
         mg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_config(8)
+            energy_group_boundaries=bounds, weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0), config=_config(8)
         )
 
         S_integrated = mg.compute_sigma_matrix(KERNEL, T=T)
@@ -268,7 +268,7 @@ class TestHardPhysicsRegression:
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
 
         mg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_config(8)
+            energy_group_boundaries=bounds, weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0), config=_config(8)
         )
 
         S = mg.compute_sigma_matrix(KERNEL, T=T)
@@ -282,7 +282,7 @@ class TestHardPhysicsRegression:
         bounds = [10.0 * kev, 50.0 * kev, 100.0 * kev]
 
         mg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_config(8)
+            energy_group_boundaries=bounds, weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0), config=_config(8)
         )
 
         S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T)
@@ -302,7 +302,7 @@ class TestGroupCutoff:
     def _make_mg(self, bounds, *, order=8, tol=1e-3, cutoff=1e-8):
         return cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
-            weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+            weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0),
             config=_config(order, cutoff_ratio=cutoff),
         )
 
@@ -415,7 +415,7 @@ class TestAnalyticDenominatorComparison:
         x_lo, x_hi = x_range
         E_lo, E_hi = x_lo * kT, x_hi * kT
 
-        wf = cm.PlanckWeightFunction(cap_x=25.0)
+        wf = cm.CappedPlanckWeightFunction(cap_x=25.0)
         analytic = wf.compute_denominator(E_lo, E_hi, T)
 
         ref_scipy = _numerical_denom_via_gl(wf, E_lo, E_hi, T)
@@ -427,7 +427,7 @@ class TestAnalyticDenominatorComparison:
         kT = k_boltz * T
         E_lo, E_hi = 0.5 * kT, 10.0 * kT
 
-        wf = cm.WienWeightFunction(cap_x=25.0)
+        wf = cm.CappedWienWeightFunction(cap_x=25.0)
         analytic = wf.compute_denominator(E_lo, E_hi, T)
         ref_scipy = _numerical_denom_via_gl(wf, E_lo, E_hi, T)
         assert analytic == pytest.approx(ref_scipy, rel=1e-8)
@@ -460,7 +460,7 @@ class TestPanelOrderConvergence:
         for order in orders:
             cfg = _config(24, e_panel_order=order)
             mg = cm.ComptonMultigroupKernel(
-                energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=cfg
+                energy_group_boundaries=bounds, weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0), config=cfg
             )
             S = mg.compute_sigma_matrix(KERNEL, T=T)
             matrices.append(S)
@@ -493,7 +493,7 @@ class TestPositivity:
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev, 50.0 * kev]
 
         mg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=_config(24)
+            energy_group_boundaries=bounds, weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0), config=_config(24)
         )
 
         S = mg.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T)
@@ -516,10 +516,10 @@ class TestConservationSums:
         cfg_hi = _config(24, e_panel_order=24)
 
         mg_lo = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=cfg_lo
+            energy_group_boundaries=bounds, weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0), config=cfg_lo
         )
         mg_hi = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0), config=cfg_hi
+            energy_group_boundaries=bounds, weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0), config=cfg_hi
         )
 
         S_lo = mg_lo.compute_sigma_matrix(KERNEL, num_angle_bins=4, T=T)
@@ -582,8 +582,8 @@ class TestFullDerivative:
 
     @pytest.mark.parametrize("T_kev", [1.0, 10.0, 100.0])
     @pytest.mark.parametrize("wf_factory", [
-        lambda: cm.PlanckWeightFunction(cap_x=25.0),
-        lambda: cm.WienWeightFunction(cap_x=25.0),
+        lambda: cm.CappedPlanckWeightFunction(cap_x=25.0),
+        lambda: cm.CappedWienWeightFunction(cap_x=25.0),
     ], ids=["Planck", "Wien"])
     def test_fd(self, T_kev, wf_factory):
         T = T_kev * kev_kelvin
@@ -655,7 +655,7 @@ class TestFullDerivative:
         """Full derivative is identical regardless of configured cutoff_ratio."""
         T = 10.0 * kev_kelvin
         bounds = [0.1 * kev, 1.0 * kev, 10.0 * kev, 50.0 * kev]
-        wf = cm.PlanckWeightFunction(cap_x=25.0)
+        wf = cm.CappedPlanckWeightFunction(cap_x=25.0)
 
         mg_with = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
@@ -672,3 +672,118 @@ class TestFullDerivative:
         full_without = mg_without.compute_dsigma_dT_matrix(KERNEL, T=T)
 
         np.testing.assert_allclose(full_with, full_without, rtol=1e-12, atol=0)
+
+
+# ---------------------------------------------------------------------------
+# Shifted weight functions -- analytic denominator comparison
+# ---------------------------------------------------------------------------
+
+SHIFTED_BOUNDS_3G = [0.1 * kev, 1.0 * kev, 10.0 * kev, 50.0 * kev]
+
+
+class TestShiftedAnalyticDenominator:
+    """Compare shifted compute_denominator against scipy(weight)."""
+
+    @pytest.mark.parametrize("T_kev", [1.0, 10.0, 100.0])
+    def test_wien_denom(self, T_kev):
+        T = T_kev * kev_kelvin
+        wf = cm.WienWeightFunction(group_boundaries=SHIFTED_BOUNDS_3G)
+        for i in range(len(SHIFTED_BOUNDS_3G) - 1):
+            E_lo = SHIFTED_BOUNDS_3G[i]
+            E_hi = SHIFTED_BOUNDS_3G[i + 1]
+            computed = wf.compute_denominator(E_lo, E_hi, T)
+            ref, _ = scipy_quad(lambda E: wf.weight(E, T), E_lo, E_hi)
+            assert computed == pytest.approx(ref, rel=1e-8), (
+                f"Wien group {i}, T={T_kev} keV"
+            )
+
+    @pytest.mark.parametrize("T_kev", [1.0, 10.0, 100.0])
+    def test_planck_denom(self, T_kev):
+        T = T_kev * kev_kelvin
+        wf = cm.PlanckWeightFunction(
+            cap_x=25.0, group_boundaries=SHIFTED_BOUNDS_3G
+        )
+        for i in range(len(SHIFTED_BOUNDS_3G) - 1):
+            E_lo = SHIFTED_BOUNDS_3G[i]
+            E_hi = SHIFTED_BOUNDS_3G[i + 1]
+            computed = wf.compute_denominator(E_lo, E_hi, T)
+            ref, _ = scipy_quad(lambda E: wf.weight(E, T), E_lo, E_hi)
+            assert computed == pytest.approx(ref, rel=1e-8), (
+                f"Planck group {i}, T={T_kev} keV"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Shifted weight functions -- kernel matrix integration tests
+# ---------------------------------------------------------------------------
+
+
+class TestShiftedWeightKernelMatrix:
+    """Verify shifted weight functions produce valid kernel matrices
+    and that dsigma/dT matches central FD."""
+
+    BOUNDS = SHIFTED_BOUNDS_3G
+
+    @pytest.mark.parametrize("T_kev", [1.0, 10.0, 100.0])
+    @pytest.mark.parametrize(
+        "wf_factory",
+        [
+            lambda b: cm.WienWeightFunction(group_boundaries=b),
+            lambda b: cm.PlanckWeightFunction(cap_x=25.0, group_boundaries=b),
+        ],
+        ids=["Wien", "Planck"],
+    )
+    def test_sigma_finite_and_positive_diagonal(self, T_kev, wf_factory):
+        T = T_kev * kev_kelvin
+        wf = wf_factory(self.BOUNDS)
+        cfg = _config(cutoff_ratio=None)
+        mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=self.BOUNDS,
+            weight_function=wf,
+            config=cfg,
+        )
+        sigma = mg.compute_sigma_matrix(KERNEL, T=T)
+        assert np.all(np.isfinite(sigma))
+        assert np.all(np.diag(sigma) > 0)
+
+    @pytest.mark.parametrize("T_kev", [1.0, 10.0, 100.0])
+    @pytest.mark.parametrize(
+        "wf_factory",
+        [
+            lambda b: cm.WienWeightFunction(group_boundaries=b),
+            lambda b: cm.PlanckWeightFunction(cap_x=25.0, group_boundaries=b),
+        ],
+        ids=["Wien", "Planck"],
+    )
+    def test_dsigma_dT_vs_fd(self, T_kev, wf_factory):
+        """Compare compute_dsigma_dT_matrix against central FD."""
+        T = T_kev * kev_kelvin
+        wf = wf_factory(self.BOUNDS)
+        cfg = _config(cutoff_ratio=None)
+        mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=self.BOUNDS,
+            weight_function=wf,
+            config=cfg,
+        )
+
+        deriv = mg.compute_dsigma_dT_matrix(KERNEL, T=T)
+        h = T * 1e-5
+        fd = (
+            mg.compute_sigma_matrix(KERNEL, T=T + h)
+            - mg.compute_sigma_matrix(KERNEL, T=T - h)
+        ) / (2 * h)
+
+        row_d = deriv.sum(axis=1)
+        row_fd = fd.sum(axis=1)
+        floor = 1e-35
+        mask = np.maximum(np.abs(row_fd), np.abs(row_d)) > floor
+        if not np.any(mask):
+            return
+        denom = np.maximum(
+            np.abs(row_fd[mask]),
+            np.maximum(np.abs(row_d[mask]), floor),
+        )
+        rel_err = np.abs(row_d[mask] - row_fd[mask]) / denom
+        assert np.all(rel_err < 5e-3), (
+            f"T={T_kev} keV: max row-sum rel error = {rel_err.max():.2e}"
+        )

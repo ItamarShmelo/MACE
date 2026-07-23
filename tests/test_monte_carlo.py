@@ -29,7 +29,7 @@ SEED = 42
 
 def _make_mc(bounds, *, weight_function=None, num_samples=NUM_SAMPLES, seed=SEED):
     if weight_function is None:
-        weight_function = cm.WienWeightFunction(cap_x=25.0)
+        weight_function = cm.CappedWienWeightFunction(cap_x=25.0)
     return mc.ComptonMonteCarloKernel(
         energy_group_boundaries=bounds,
         weight_function=weight_function,
@@ -49,8 +49,8 @@ class TestWeightFunctionInvariance:
         T = 10.0 * kev_kelvin
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
 
-        mc_wien = _make_mc(bounds, weight_function=cm.WienWeightFunction(cap_x=25.0))
-        mc_planck = _make_mc(bounds, weight_function=cm.PlanckWeightFunction(cap_x=25.0))
+        mc_wien = _make_mc(bounds, weight_function=cm.CappedWienWeightFunction(cap_x=25.0))
+        mc_planck = _make_mc(bounds, weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0))
 
         S_wien = mc_wien.compute_sigma_matrix(T=T)
         S_planck = mc_planck.compute_sigma_matrix(T=T)
@@ -65,7 +65,7 @@ class TestWeightFunctionInvariance:
         T = 10.0 * kev_kelvin
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
 
-        for wf in [cm.WienWeightFunction(cap_x=25.0), cm.PlanckWeightFunction(cap_x=25.0), cm.UniformWeightFunction()]:
+        for wf in [cm.CappedWienWeightFunction(cap_x=25.0), cm.CappedPlanckWeightFunction(cap_x=25.0), cm.UniformWeightFunction()]:
             mc_obj = _make_mc(bounds, weight_function=wf)
             S = mc_obj.compute_sigma_matrix(T=T)
             assert np.all(S >= 0), f"negative entries with {type(wf).__name__}"
@@ -75,7 +75,7 @@ class TestWeightFunctionInvariance:
         T = 10.0 * kev_kelvin
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
 
-        for wf in [cm.WienWeightFunction(cap_x=25.0), cm.PlanckWeightFunction(cap_x=25.0), cm.UniformWeightFunction()]:
+        for wf in [cm.CappedWienWeightFunction(cap_x=25.0), cm.CappedPlanckWeightFunction(cap_x=25.0), cm.UniformWeightFunction()]:
             mc_obj = _make_mc(bounds, weight_function=wf)
             S = mc_obj.compute_sigma_matrix(T=T)
             rs = S.sum(axis=1)
@@ -202,7 +202,7 @@ class TestBasicSanity:
     def test_invalid_boundaries(self):
         with pytest.raises(ValueError, match="boundaries"):
             mc.ComptonMonteCarloKernel(
-                energy_group_boundaries=[5.0 * kev, 1.0 * kev], weight_function=cm.WienWeightFunction(cap_x=25.0)
+                energy_group_boundaries=[5.0 * kev, 1.0 * kev], weight_function=cm.CappedWienWeightFunction(cap_x=25.0)
             )
 
     def test_invalid_temperature(self):
@@ -287,7 +287,7 @@ class TestFullDerivativeMCvsDet:
 
         T = T_kev * kev_kelvin
         bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
-        wf = cm.WienWeightFunction(cap_x=25.0)
+        wf = cm.CappedWienWeightFunction(cap_x=25.0)
 
         det_mg = cm.ComptonMultigroupKernel(
             energy_group_boundaries=bounds,
@@ -326,3 +326,106 @@ class TestFullDerivativeMCvsDet:
         kernel_only = mc2.compute_kernel_derivative_contribution(T=T)
 
         np.testing.assert_allclose(full, kernel_only, rtol=1e-12, atol=0)
+
+
+# ---------------------------------------------------------------------------
+# 7. Shifted weight functions: MC vs deterministic
+# ---------------------------------------------------------------------------
+
+
+class TestShiftedWeightMC:
+    """MC kernel with shifted weight functions vs deterministic."""
+
+    BOUNDS = [1.0 * kev, 5.0 * kev, 10.0 * kev]
+
+    @pytest.mark.parametrize("T_kev", [10.0])
+    @pytest.mark.parametrize(
+        "wf_factory",
+        [
+            lambda b: cm.WienWeightFunction(group_boundaries=b),
+            lambda b: cm.PlanckWeightFunction(cap_x=25.0, group_boundaries=b),
+        ],
+        ids=["Wien", "Planck"],
+    )
+    def test_mc_sigma_vs_det(self, T_kev, wf_factory):
+        """MC sigma matrix matches deterministic within statistical noise."""
+        from compton_matrix._compton_differential_cross_section import (
+            ComptonKernelSolver,
+        )
+
+        T = T_kev * kev_kelvin
+        wf = wf_factory(self.BOUNDS)
+
+        det_mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=self.BOUNDS,
+            weight_function=wf,
+            config=cm.MGIntegrationConfig(cutoff_ratio=None),
+        )
+        kernel = ComptonKernelSolver()
+        det_sigma = det_mg.compute_sigma_matrix(kernel, T=T)
+
+        mc_mg = _make_mc(
+            self.BOUNDS,
+            weight_function=wf,
+            num_samples=1_000_000,
+            seed=42,
+        )
+        mc_sigma = mc_mg.compute_sigma_matrix(T=T)
+
+        peak = np.abs(det_sigma).max()
+        sig_mask = np.abs(det_sigma) > 1e-3 * peak
+        if np.any(sig_mask):
+            rel_err = (
+                np.abs(mc_sigma[sig_mask] - det_sigma[sig_mask])
+                / np.abs(det_sigma[sig_mask])
+            )
+            assert np.all(rel_err < 0.05), (
+                f"MC vs det max rel err = {rel_err.max():.2e}"
+            )
+
+    @pytest.mark.parametrize("T_kev", [10.0])
+    @pytest.mark.parametrize(
+        "wf_factory",
+        [
+            lambda b: cm.WienWeightFunction(group_boundaries=b),
+            lambda b: cm.PlanckWeightFunction(cap_x=25.0, group_boundaries=b),
+        ],
+        ids=["Wien", "Planck"],
+    )
+    def test_mc_dsigma_dT_vs_det(self, T_kev, wf_factory):
+        """MC dsigma/dT matrix matches deterministic (row-sum)."""
+        from compton_matrix._compton_differential_cross_section import (
+            ComptonKernelSolver,
+        )
+
+        T = T_kev * kev_kelvin
+        wf = wf_factory(self.BOUNDS)
+
+        det_mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=self.BOUNDS,
+            weight_function=wf,
+            config=cm.MGIntegrationConfig(cutoff_ratio=None),
+        )
+        kernel = ComptonKernelSolver()
+        det_deriv = det_mg.compute_dsigma_dT_matrix(kernel, T=T)
+
+        mc_mg = _make_mc(
+            self.BOUNDS,
+            weight_function=wf,
+            num_samples=1_000_000,
+            seed=42,
+        )
+        mc_deriv = mc_mg.compute_dsigma_dT_matrix(T=T)
+
+        det_row = det_deriv.sum(axis=1)
+        mc_row = mc_deriv.sum(axis=1)
+        floor = 1e-40
+        denom = np.maximum(
+            np.abs(det_row), np.maximum(np.abs(mc_row), floor)
+        )
+        rel_err = np.abs(mc_row - det_row) / denom
+        mask = np.maximum(np.abs(det_row), np.abs(mc_row)) > floor
+        if np.any(mask):
+            assert np.all(rel_err[mask] < 0.30), (
+                f"Row-sum rel err: {rel_err[mask]}"
+            )

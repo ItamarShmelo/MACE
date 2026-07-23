@@ -7,7 +7,7 @@ import compton_matrix._compton_differential_cross_section
 import numpy
 import numpy.typing
 import typing
-__all__: list[str] = ['ComptonMonteCarloKernel', 'ComptonMultigroupKernel', 'ConstantMultiplier', 'KernelMultiplier', 'MCIntegrationConfig', 'MGIntegrationConfig', 'PlanckWeightFunction', 'RidgeBounds', 'UniformWeightFunction', 'WeightFunction', 'WienWeightFunction', 'adaptive_legendre_integrate', 'adaptive_log_legendre_integrate', 'adaptive_rlog_legendre_integrate', 'cold_recoil_hi', 'cold_recoil_lo', 'compute_ridge_bounds', 'gauss_legendre_rule', 'ridge_thermal_width']
+__all__: list[str] = ['CappedPlanckWeightFunction', 'CappedWienWeightFunction', 'ComptonMonteCarloKernel', 'ComptonMultigroupKernel', 'ConstantMultiplier', 'KernelMultiplier', 'MCIntegrationConfig', 'MGIntegrationConfig', 'PlanckWeightFunction', 'RidgeBounds', 'UniformWeightFunction', 'WeightFunction', 'WienWeightFunction', 'adaptive_legendre_integrate', 'adaptive_log_legendre_integrate', 'adaptive_rlog_legendre_integrate', 'cold_recoil_hi', 'cold_recoil_lo', 'compute_ridge_bounds', 'gauss_legendre_rule', 'ridge_thermal_width']
 class ComptonMonteCarloKernel:
     def __init__(self, energy_group_boundaries: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex], weight_function: WeightFunction, config: MCIntegrationConfig = ...) -> None:
         ...
@@ -181,7 +181,7 @@ class MGIntegrationConfig:
     @xi_tail_order.setter
     def xi_tail_order(self, arg0: typing.SupportsInt | typing.SupportsIndex | None) -> None:
         ...
-class PlanckWeightFunction(WeightFunction):
+class CappedPlanckWeightFunction(WeightFunction):
     def __init__(self, *, cap_x: typing.SupportsFloat | typing.SupportsIndex) -> None:
         ...
     def cap_x(self) -> float:
@@ -226,9 +226,47 @@ class UniformWeightFunction(WeightFunction):
         ...
     def weight(self, E: typing.SupportsFloat | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex) -> float:
         ...
+class PlanckWeightFunction(WeightFunction):
+    def __init__(self, *, cap_x: typing.SupportsFloat | typing.SupportsIndex, group_boundaries: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex]) -> None:
+        """
+        Note: group_boundaries must match the energy_group_boundaries
+        passed to the kernel constructor.
+        """
+    def cap_x(self) -> float:
+        ...
+    def compute_denominator(self, E_left: typing.SupportsFloat | typing.SupportsIndex, E_right: typing.SupportsFloat | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex) -> float:
+        ...
+    def d_denominator_dT(self, E_left: typing.SupportsFloat | typing.SupportsIndex, E_right: typing.SupportsFloat | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex) -> float:
+        ...
+    def d_log_weight_dT(self, E: typing.SupportsFloat | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex) -> float:
+        ...
+    def d_weight_dT(self, E: typing.SupportsFloat | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex) -> float:
+        ...
+    def peak_energy(self, T: typing.SupportsFloat | typing.SupportsIndex) -> float | None:
+        ...
+    def weight(self, E: typing.SupportsFloat | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex) -> float:
+        ...
 class WeightFunction:
     pass
 class WienWeightFunction(WeightFunction):
+    def __init__(self, *, group_boundaries: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex]) -> None:
+        """
+        Note: group_boundaries must match the energy_group_boundaries
+        passed to the kernel constructor.
+        """
+    def compute_denominator(self, E_left: typing.SupportsFloat | typing.SupportsIndex, E_right: typing.SupportsFloat | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex) -> float:
+        ...
+    def d_denominator_dT(self, E_left: typing.SupportsFloat | typing.SupportsIndex, E_right: typing.SupportsFloat | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex) -> float:
+        ...
+    def d_log_weight_dT(self, E: typing.SupportsFloat | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex) -> float:
+        ...
+    def d_weight_dT(self, E: typing.SupportsFloat | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex) -> float:
+        ...
+    def peak_energy(self, T: typing.SupportsFloat | typing.SupportsIndex) -> float | None:
+        ...
+    def weight(self, E: typing.SupportsFloat | typing.SupportsIndex, T: typing.SupportsFloat | typing.SupportsIndex) -> float:
+        ...
+class CappedWienWeightFunction(WeightFunction):
     def __init__(self, *, cap_x: typing.SupportsFloat | typing.SupportsIndex) -> None:
         ...
     def cap_x(self) -> float:

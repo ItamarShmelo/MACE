@@ -357,31 +357,31 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
         "WeightFunction");
 
     py::class_<
-        PlanckWeightFunction,
+        CappedPlanckWeightFunction,
         WeightFunction,
-        std::shared_ptr<PlanckWeightFunction>>(m, "PlanckWeightFunction")
+        std::shared_ptr<CappedPlanckWeightFunction>>(m, "CappedPlanckWeightFunction")
         .def(py::init<double>(), py::kw_only(), "cap_x"_a)
-        .def("weight", &PlanckWeightFunction::weight, "E"_a, "T"_a)
+        .def("weight", &CappedPlanckWeightFunction::weight, "E"_a, "T"_a)
         .def(
             "compute_denominator",
-            &PlanckWeightFunction::compute_denominator,
+            &CappedPlanckWeightFunction::compute_denominator,
             "E_left"_a,
             "E_right"_a,
             "T"_a)
-        .def("peak_energy", &PlanckWeightFunction::peak_energy, "T"_a)
-        .def("d_weight_dT", &PlanckWeightFunction::d_weight_dT, "E"_a, "T"_a)
+        .def("peak_energy", &CappedPlanckWeightFunction::peak_energy, "T"_a)
+        .def("d_weight_dT", &CappedPlanckWeightFunction::d_weight_dT, "E"_a, "T"_a)
         .def(
             "d_log_weight_dT",
-            &PlanckWeightFunction::d_log_weight_dT,
+            &CappedPlanckWeightFunction::d_log_weight_dT,
             "E"_a,
             "T"_a)
         .def(
             "d_denominator_dT",
-            &PlanckWeightFunction::d_denominator_dT,
+            &CappedPlanckWeightFunction::d_denominator_dT,
             "E_left"_a,
             "E_right"_a,
             "T"_a)
-        .def("cap_x", &PlanckWeightFunction::cap_x);
+        .def("cap_x", &CappedPlanckWeightFunction::cap_x);
 
     py::class_<
         UniformWeightFunction,
@@ -410,10 +410,40 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             "T"_a);
 
     py::class_<
+        CappedWienWeightFunction,
+        WeightFunction,
+        std::shared_ptr<CappedWienWeightFunction>>(m, "CappedWienWeightFunction")
+        .def(py::init<double>(), py::kw_only(), "cap_x"_a)
+        .def("weight", &CappedWienWeightFunction::weight, "E"_a, "T"_a)
+        .def(
+            "compute_denominator",
+            &CappedWienWeightFunction::compute_denominator,
+            "E_left"_a,
+            "E_right"_a,
+            "T"_a)
+        .def("peak_energy", &CappedWienWeightFunction::peak_energy, "T"_a)
+        .def("d_weight_dT", &CappedWienWeightFunction::d_weight_dT, "E"_a, "T"_a)
+        .def(
+            "d_log_weight_dT",
+            &CappedWienWeightFunction::d_log_weight_dT,
+            "E"_a,
+            "T"_a)
+        .def(
+            "d_denominator_dT",
+            &CappedWienWeightFunction::d_denominator_dT,
+            "E_left"_a,
+            "E_right"_a,
+            "T"_a)
+        .def("cap_x", &CappedWienWeightFunction::cap_x);
+
+    py::class_<
         WienWeightFunction,
         WeightFunction,
         std::shared_ptr<WienWeightFunction>>(m, "WienWeightFunction")
-        .def(py::init<double>(), py::kw_only(), "cap_x"_a)
+        .def(
+            py::init<std::vector<double>>(),
+            py::kw_only(),
+            "group_boundaries"_a)
         .def("weight", &WienWeightFunction::weight, "E"_a, "T"_a)
         .def(
             "compute_denominator",
@@ -433,8 +463,38 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
             &WienWeightFunction::d_denominator_dT,
             "E_left"_a,
             "E_right"_a,
+            "T"_a);
+
+    py::class_<
+        PlanckWeightFunction,
+        WeightFunction,
+        std::shared_ptr<PlanckWeightFunction>>(m, "PlanckWeightFunction")
+        .def(
+            py::init<double, std::vector<double>>(),
+            py::kw_only(),
+            "cap_x"_a,
+            "group_boundaries"_a)
+        .def("weight", &PlanckWeightFunction::weight, "E"_a, "T"_a)
+        .def(
+            "compute_denominator",
+            &PlanckWeightFunction::compute_denominator,
+            "E_left"_a,
+            "E_right"_a,
             "T"_a)
-        .def("cap_x", &WienWeightFunction::cap_x);
+        .def("peak_energy", &PlanckWeightFunction::peak_energy, "T"_a)
+        .def("d_weight_dT", &PlanckWeightFunction::d_weight_dT, "E"_a, "T"_a)
+        .def(
+            "d_log_weight_dT",
+            &PlanckWeightFunction::d_log_weight_dT,
+            "E"_a,
+            "T"_a)
+        .def(
+            "d_denominator_dT",
+            &PlanckWeightFunction::d_denominator_dT,
+            "E_left"_a,
+            "E_right"_a,
+            "T"_a)
+        .def("cap_x", &PlanckWeightFunction::cap_x);
 
     m.def(
         "gauss_legendre_rule",

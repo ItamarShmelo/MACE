@@ -25,7 +25,7 @@ WORKER_DETERMINISTIC = textwrap.dedent("""\
     from compton_matrix._units import kev, kev_kelvin
 
     boundaries = [0.5 * kev, 1.0 * kev, 5.0 * kev, 10.0 * kev, 50.0 * kev]
-    wf = cm.WienWeightFunction(cap_x=25.0)
+    wf = cm.CappedWienWeightFunction(cap_x=25.0)
     kernel = cq.ComptonKernelSolver()
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=boundaries,
@@ -48,7 +48,7 @@ WORKER_MONTE_CARLO = textwrap.dedent("""\
     from compton_matrix._units import kev, kev_kelvin
 
     boundaries = [0.5 * kev, 1.0 * kev, 5.0 * kev, 10.0 * kev, 50.0 * kev]
-    wf = cm.WienWeightFunction(cap_x=25.0)
+    wf = cm.CappedWienWeightFunction(cap_x=25.0)
     mc = cm.ComptonMonteCarloKernel(
         energy_group_boundaries=boundaries,
         weight_function=wf,

@@ -176,7 +176,7 @@ the `weight_function` constructor argument.
 
 **API summary.**
 
-- **Constructor**: `ComptonMultigroupKernel(energy_group_boundaries, weight_function, config=MGIntegrationConfig())` -- boundaries are G+1 strictly increasing values in [erg], all > 0. `weight_function` is a `WeightFunction` subclass (e.g. `PlanckWeightFunction`, `UniformWeightFunction`, `WienWeightFunction`). `config` controls quadrature orders, adaptive refinement depth, and convergence tolerance.
+- **Constructor**: `ComptonMultigroupKernel(energy_group_boundaries, weight_function, config=MGIntegrationConfig())` -- boundaries are G+1 strictly increasing values in [erg], all > 0. `weight_function` is a `WeightFunction` subclass (e.g. `CappedPlanckWeightFunction`, `UniformWeightFunction`, `CappedWienWeightFunction`). `config` controls quadrature orders, adaptive refinement depth, and convergence tolerance.
 - **`compute_sigma_matrix(kernel, num_angle_bins, T)`** -- returns a `(G, G, N_angles)` NumPy array.
 - **`compute_sigma_matrix(kernel, T)`** -- angle-integrated, returns a `(G, G)` NumPy array.
 - **`compute_kernel_derivative_contribution`** -- same signatures, using the temperature-derivative kernel.
@@ -193,7 +193,7 @@ from compton_matrix._units import kev, kev_kelvin
 kernel = cds.ComptonKernelSolver()
 mg = cm.ComptonMultigroupKernel(
     energy_group_boundaries=[0.1*kev, 0.5*kev, 1*kev, 5*kev, 10*kev],
-    weight_function=cm.PlanckWeightFunction(cap_x=25.0),
+    weight_function=cm.CappedPlanckWeightFunction(cap_x=25.0),
     config=cm.MGIntegrationConfig(
         xi_order=8,
         xi_tail_order=8,
@@ -579,8 +579,8 @@ The suite covers point-wise kernels, multigroup integration, and utilities:
   denominator sanity, adaptive tolerance convergence, and group cutoff.
 - **`test_monte_carlo`** -- `ComptonMonteCarloKernel`, seed reproducibility,
   and weight-function invariance.
-- **`test_weight_function`** -- `PlanckWeightFunction`, `UniformWeightFunction`,
-  `WienWeightFunction` against analytic formulae and SciPy quadrature.
+- **`test_weight_function`** -- `CappedPlanckWeightFunction`, `UniformWeightFunction`,
+  `CappedWienWeightFunction` against analytic formulae and SciPy quadrature.
 - **`test_integration_functions`** -- Gauss-Legendre and Gauss-Laguerre node/weight
   properties, polynomial exactness, and adaptive integrators vs SciPy.
 - **`test_openmp`** -- OpenMP bitwise reproducibility (deterministic) and
