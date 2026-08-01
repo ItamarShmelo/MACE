@@ -5,6 +5,29 @@ thermal Compton scattering kernel and reduces it to multigroup, angle-resolved
 redistribution matrices for radiation-transport calculations. The numerical
 core is written in C++23 and exposed through Python bindings.
 
+## What MACE computes
+
+For an incident-energy group $\Delta E_g$, scattered-energy group
+$\Delta E_{g'}$, and angular bin $\Delta\xi_i$, MACE calculates
+
+$$
+\sigma_{g\rightarrow g',i}(T)
+=
+\frac{
+2\pi\displaystyle\int_{\Delta E_g}\int_{\Delta E_{g'}}
+\int_{\Delta\xi_i}
+w(E,T)\,\Sigma_E(E\rightarrow E',\xi;T)
+\,d\xi\,dE'\,dE
+}{
+\displaystyle\int_{\Delta E_g} w(E,T)\,dE
+}.
+$$
+
+Here $\Sigma_E$ is the exact thermal Compton kernel and $w(E,T)$ is the
+incident-spectrum weight. The factor $2\pi$ accounts for azimuthal symmetry.
+The result is a group-to-group redistribution matrix, optionally resolved into
+angular bins.
+
 ## Capabilities
 
 - Pointwise thermal Compton kernels and temperature derivatives.
@@ -40,18 +63,29 @@ build configuration requires GitHub SSH access to that repository.
 ## Quick start
 
 ```python
+import compton_matrix._compton_multigroup as cm
 import compton_matrix._compton_differential_cross_section as cds
 from compton_matrix._units import kev, kev_kelvin
 
+boundaries = [0.1 * kev, 1.0 * kev, 10.0 * kev, 100.0 * kev]
+
 kernel = cds.ComptonKernelSolver()
-result = kernel.sigma_E(
-    E=10.0 * kev,
-    E_prime=12.0 * kev,
-    xi=0.0,
+weight = cm.PlanckWeightFunction(
+    cap_x=25.0,
+    group_boundaries=boundaries,
+)
+multigroup = cm.ComptonMultigroupKernel(
+    energy_group_boundaries=boundaries,
+    weight_function=weight,
+)
+
+sigma = multigroup.compute_sigma_matrix(
+    kernel,
+    num_angle_bins=4,
     T=10.0 * kev_kelvin,
 )
 
-print(result.value, result.estimated_rel_error)
+print(sigma.shape)  # (3 incident groups, 3 scattered groups, 4 angle bins)
 ```
 
 ## Examples
