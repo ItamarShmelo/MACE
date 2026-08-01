@@ -2,7 +2,7 @@
 
 ## Pre-computed tables
 
-The [MACE](https://itamarshmelo.github.io/MACE/) provides a browser-based interface for generating tabulated multigroup Compton scattering cross sections from a set of pre-computed tables, with configurable energy groups, angle bins, and temperatures -- no local build required.
+The [MACE](https://itamarshmelo.github.io/MACE-Website/) provides a browser-based interface for generating tabulated multigroup Compton scattering cross sections from a set of pre-computed tables, with configurable energy groups, angle bins, and temperatures -- no local build required.
 
 ## Overview
 
