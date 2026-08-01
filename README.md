@@ -11,16 +11,7 @@ For an incident-energy group $\Delta E_g$, scattered-energy group
 $\Delta E_{g'}$, and angular bin $\Delta\xi_i$, MACE calculates
 
 $$
-\sigma_{g\rightarrow g',i}(T)
-=
-\frac{
-2\pi\displaystyle\int_{\Delta E_g}\int_{\Delta E_{g'}}
-\int_{\Delta\xi_i}
-w(E,T)\,\Sigma_E(E\rightarrow E',\xi;T)
-\,d\xi\,dE'\,dE
-}{
-\displaystyle\int_{\Delta E_g} w(E,T)\,dE
-}.
+\sigma_{g\rightarrow g',i}(T) = \frac{2\pi \int_{\Delta E_g} \int_{\Delta E_{g'}} \int_{\Delta\xi_i} w(E,T)\,\Sigma_E(E\rightarrow E',\xi;T) \,d\xi\,dE'\,dE}{\int_{\Delta E_g} w(E,T)\,dE}
 $$
 
 Here $\Sigma_E$ is the exact thermal Compton kernel and $w(E,T)$ is the
@@ -63,18 +54,16 @@ build configuration requires GitHub SSH access to that repository.
 ## Quick start
 
 ```python
-import compton_matrix._compton_multigroup as cm
-import compton_matrix._compton_differential_cross_section as cds
-from compton_matrix._units import kev, kev_kelvin
+import compton_matrix as MACE
 
-boundaries = [0.1 * kev, 1.0 * kev, 10.0 * kev, 100.0 * kev]
+boundaries = [0.1 * MACE.kev, 1.0 * MACE.kev, 10.0 * MACE.kev, 100.0 * MACE.kev]
 
-kernel = cds.ComptonKernelSolver()
-weight = cm.PlanckWeightFunction(
+kernel = MACE.ComptonKernelSolver()
+weight = MACE.PlanckWeightFunction(
     cap_x=25.0,
     group_boundaries=boundaries,
 )
-multigroup = cm.ComptonMultigroupKernel(
+multigroup = MACE.ComptonMultigroupKernel(
     energy_group_boundaries=boundaries,
     weight_function=weight,
 )
@@ -82,7 +71,7 @@ multigroup = cm.ComptonMultigroupKernel(
 sigma = multigroup.compute_sigma_matrix(
     kernel,
     num_angle_bins=4,
-    T=10.0 * kev_kelvin,
+    T=10.0 * MACE.kev_kelvin,
 )
 
 print(sigma.shape)  # (3 incident groups, 3 scattered groups, 4 angle bins)
