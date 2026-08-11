@@ -3,6 +3,7 @@
 
 #include "compton_common/compton_common.hpp"
 #include "compton_differential_cross_section/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.hpp"
+#include "compton_differential_cross_section/compton_kernel_approximate/compton_kernel_approximate.hpp"
 #include "compton_differential_cross_section/compton_kernel_power_series/compton_kernel_power_series.hpp"
 #include "compton_differential_cross_section/compton_kernel_quadrature/compton_kernel_quadrature.hpp"
 #include "compton_differential_cross_section/compton_kernel_solver/compton_kernel_solver.hpp"
@@ -372,6 +373,39 @@ PYBIND11_MODULE(
                     xi,
                     T,
                     &ComptonKernelSolver::dsigma_E_dT);
+            },
+            "E"_a,
+            "E_prime_arr"_a,
+            "xi"_a,
+            "T"_a);
+
+    // --- Approximate (fifth-order global approximation) ---
+    py::class_<ComptonKernelApproximate>(m, "ComptonKernelApproximate")
+        .def(py::init<>())
+        .def(
+            "sigma_E",
+            &ComptonKernelApproximate::sigma_E,
+            "E"_a,
+            "E_prime"_a,
+            "xi"_a,
+            "T"_a)
+        .def(
+            "sigma_E_vec",
+            [](ComptonKernelApproximate const& self,
+               double E,
+               py::array_t<
+                   double,
+                   py::array::c_style | py::array::forcecast> const&
+                   E_prime_arr,
+               double xi,
+               double T) {
+                return compton::bind::vectorize_sigma(
+                    self,
+                    E,
+                    E_prime_arr,
+                    xi,
+                    T,
+                    &ComptonKernelApproximate::sigma_E);
             },
             "E"_a,
             "E_prime_arr"_a,

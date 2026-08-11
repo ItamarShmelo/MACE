@@ -53,6 +53,7 @@ pybind11_add_module(_compton_differential_cross_section
     src/compton_differential_cross_section/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.cpp
     src/compton_differential_cross_section/compton_kernel_quadrature/compton_kernel_quadrature.cpp
     src/compton_differential_cross_section/compton_kernel_solver/compton_kernel_solver.cpp
+    src/compton_differential_cross_section/compton_kernel_approximate/compton_kernel_approximate.cpp
 )
 target_compile_options(_compton_differential_cross_section PRIVATE
     -O3 -Wall -Wextra -Wpedantic

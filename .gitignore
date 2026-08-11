@@ -36,3 +36,6 @@ compile_commands.json
 *.so
 *.png
 *.npy
+
+# misc
+tmp/
