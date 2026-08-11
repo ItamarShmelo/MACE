@@ -8,6 +8,8 @@ quadrature or Monte Carlo sampling.
 
 from compton_matrix._compton_common import ComptonResult
 from compton_matrix._compton_differential_cross_section import (
+    ComptonKernelApproximate,
+    ComptonKernelApproximateSolver,
     ComptonKernelAsymptoticSeries,
     ComptonKernelQuadrature,
     ComptonKernelSolver,
@@ -37,6 +39,8 @@ from compton_matrix._units import (
 __all__ = [
     "CappedPlanckWeightFunction",
     "CappedWienWeightFunction",
+    "ComptonKernelApproximate",
+    "ComptonKernelApproximateSolver",
     "ComptonKernelAsymptoticSeries",
     "ComptonKernelQuadrature",
     "ComptonKernelSolver",
@@ -57,3 +61,4 @@ __all__ = [
     "me_c2",
     "sigma_thomson",
 ]
+
