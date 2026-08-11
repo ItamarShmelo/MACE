@@ -4,6 +4,7 @@
 #include "compton_common/compton_common.hpp"
 #include "compton_differential_cross_section/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.hpp"
 #include "compton_differential_cross_section/compton_kernel_approximate/compton_kernel_approximate.hpp"
+#include "compton_differential_cross_section/compton_kernel_approximate_solver/compton_kernel_approximate_solver.hpp"
 #include "compton_differential_cross_section/compton_kernel_power_series/compton_kernel_power_series.hpp"
 #include "compton_differential_cross_section/compton_kernel_quadrature/compton_kernel_quadrature.hpp"
 #include "compton_differential_cross_section/compton_kernel_solver/compton_kernel_solver.hpp"
@@ -406,6 +407,78 @@ PYBIND11_MODULE(
                     xi,
                     T,
                     &ComptonKernelApproximate::sigma_E);
+            },
+            "E"_a,
+            "E_prime_arr"_a,
+            "xi"_a,
+            "T"_a);
+
+    // --- Approximate Solver (KG5 + full solver fallback) ---
+    py::class_<ComptonKernelApproximateSolver>(m, "ComptonKernelApproximateSolver")
+        .def(
+            py::init<double, double, double, double, double, double, double, bool>(),
+            "gamma_tau_ratio"_a = 3.0,
+            "tau_max"_a = 0.098,
+            "asymp_tau_alpha_threshold"_a =
+                constants::ASYMP_TAU_ALPHA_THRESHOLD,
+            "power_series_self_tol"_a = 1e-7,
+            "asymp_self_tol"_a = 1e-7,
+            "dd_power_series_self_tol"_a = 0.5,
+            "dd_asymp_self_tol"_a = 0.5,
+            "verbose"_a = false)
+        .def(
+            "sigma_E",
+            &ComptonKernelApproximateSolver::sigma_E,
+            "E"_a,
+            "E_prime"_a,
+            "xi"_a,
+            "T"_a)
+        .def(
+            "dsigma_E_dT",
+            &ComptonKernelApproximateSolver::dsigma_E_dT,
+            "E"_a,
+            "E_prime"_a,
+            "xi"_a,
+            "T"_a)
+        .def(
+            "sigma_E_vec",
+            [](ComptonKernelApproximateSolver const& self,
+               double E,
+               py::array_t<
+                   double,
+                   py::array::c_style | py::array::forcecast> const&
+                   E_prime_arr,
+               double xi,
+               double T) {
+                return compton::bind::vectorize_sigma(
+                    self,
+                    E,
+                    E_prime_arr,
+                    xi,
+                    T,
+                    &ComptonKernelApproximateSolver::sigma_E);
+            },
+            "E"_a,
+            "E_prime_arr"_a,
+            "xi"_a,
+            "T"_a)
+        .def(
+            "dsigma_E_dT_vec",
+            [](ComptonKernelApproximateSolver const& self,
+               double E,
+               py::array_t<
+                   double,
+                   py::array::c_style | py::array::forcecast> const&
+                   E_prime_arr,
+               double xi,
+               double T) {
+                return compton::bind::vectorize_sigma(
+                    self,
+                    E,
+                    E_prime_arr,
+                    xi,
+                    T,
+                    &ComptonKernelApproximateSolver::dsigma_E_dT);
             },
             "E"_a,
             "E_prime_arr"_a,
