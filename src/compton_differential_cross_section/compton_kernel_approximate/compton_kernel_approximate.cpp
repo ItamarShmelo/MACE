@@ -13,75 +13,110 @@ namespace compton {
 
 namespace {
 
-// Precomputed generalized binomial coefficients binom(-1/2, j) for j=0..5.
-// binom(z, j) = z*(z-1)*...*(z-j+1) / j!
-constexpr std::array<double, 6> BINOM_NEG_HALF = {
-    1.0,         // binom(-1/2, 0)
-    -0.5,        // binom(-1/2, 1)
-    3.0 / 8.0,   // binom(-1/2, 2)
-    -5.0 / 16.0, // binom(-1/2, 3)
-    35.0 / 128.0,  // binom(-1/2, 4)
-    -63.0 / 256.0  // binom(-1/2, 5)
+// Precomputed combined coefficients for F_n^(p)(rho) evaluation.
+// Each entry stores: FACTORIAL[n] * gen_binom[j] * BINOM_STANDARD[j][n-j]
+// for the valid (n, j) pairs, separately for p=1 and p=3.
+//
+// Within F_np, the sum is:
+//   sum_j  coeff * (2*rho)^(2j-n) * s2^(-(p/2 + j))
+//
+// With power tables:
+//   p=1: s2_nhalf[j]      (s2^{-(0.5+j)})
+//   p=3: s2_nhalf[j + 1]  (s2^{-(1.5+j)})
+//   (2*rho)^k: tr_pow[2*j - n]
+
+struct FnpTerm {
+    int tr_idx;   // index into tr_pow: 2*j - n
+    int s2_idx;   // index into s2_nhalf: j for p=1, j+1 for p=3
+    double w1;    // combined weight for p=1
+    double w3;    // combined weight for p=3
 };
 
-// Precomputed generalized binomial coefficients binom(-3/2, j) for j=0..5.
-constexpr std::array<double, 6> BINOM_NEG_THREE_HALF = {
-    1.0,            // binom(-3/2, 0)
-    -3.0 / 2.0,    // binom(-3/2, 1)
-    15.0 / 8.0,    // binom(-3/2, 2)
-    -35.0 / 16.0,  // binom(-3/2, 3)
-    315.0 / 128.0,  // binom(-3/2, 4)
-    -693.0 / 256.0  // binom(-3/2, 5)
-};
-
-// Standard binomial coefficients binom(j, k) for j=0..5, k=0..5.
-// Only j >= k entries are meaningful.
-constexpr std::array<std::array<int, 6>, 6> BINOM_STANDARD = {{
-    {1, 0, 0, 0, 0, 0},
-    {1, 1, 0, 0, 0, 0},
-    {1, 2, 1, 0, 0, 0},
-    {1, 3, 3, 1, 0, 0},
-    {1, 4, 6, 4, 1, 0},
-    {1, 5, 10, 10, 5, 1}
+// Term groups by n. j_min = ceil(n/2), j_max = n.
+// n=0: 1 term; n=1: 1 term; n=2: 2 terms; n=3: 2 terms;
+// n=4: 3 terms; n=5: 3 terms.  Total: 12 entries.
+constexpr std::array<FnpTerm, 12> FNP_TABLE = {{
+    // n=0: j=0
+    {0, 0,  1.0,  1.0},
+    // n=1: j=1
+    {1, 1, -0.5, -1.5},
+    // n=2: j=1
+    {0, 1, -1.0, -3.0},
+    // n=2: j=2
+    {2, 2,  0.75,  3.75},
+    // n=3: j=2
+    {1, 2,  4.5,  22.5},
+    // n=3: j=3
+    {3, 3, -1.875, -13.125},
+    // n=4: j=2
+    {0, 2,  9.0,  45.0},
+    // n=4: j=3
+    {2, 3, -22.5, -157.5},
+    // n=4: j=4
+    {4, 4,  6.5625,  59.0625},
+    // n=5: j=3
+    {1, 3, -112.5, -787.5},
+    // n=5: j=4
+    {3, 4,  131.25,  1181.25},
+    // n=5: j=5
+    {5, 5, -29.53125, -324.84375},
 }};
 
-constexpr std::array<int, 6> FACTORIAL = {1, 1, 2, 6, 24, 120};
+// Start index in FNP_TABLE for each n=0..5, plus sentinel at end.
+constexpr std::array<int, 7> FNP_OFFSETS = {0, 1, 2, 4, 6, 9, 12};
 
-/**
- * Evaluate the finite derivative polynomial F_n^(p)(rho).
- * p must be 1 or 3.
- * omega2 = (1+xi)/(1-xi).
- */
-double
-F_np(int n, int p, double rho, double omega2)
+// Precomputed power tables for a single endpoint (rho, omega2).
+struct EndpointPowers {
+    std::array<double, 6> tr_pow;   // (2*rho)^k for k=0..5
+    std::array<double, 7> s2_nhalf; // s2^{-(k+0.5)} for k=0..6
+};
+
+inline EndpointPowers
+compute_endpoint_powers(double rho, double omega2)
 {
-    double const s2 = rho * rho + omega2;
-    double const half_p = static_cast<double>(p) / 2.0;
+    EndpointPowers ep{};
 
-    std::array<double, 6> const& gen_binom =
-        (p == 1) ? BINOM_NEG_HALF : BINOM_NEG_THREE_HALF;
+    double const s2 = (rho * rho) + omega2;
+    double const inv_sqrt_s2 = 1.0 / std::sqrt(s2);
+    double const inv_s2 = inv_sqrt_s2 * inv_sqrt_s2;
 
-    int const j_min = (n + 1) / 2; // ceil(n/2) for non-negative n
-    double sum = 0.0;
-
-    for (int j = j_min; j <= n; ++j) {
-        double const binom_gen = gen_binom[j];
-        double const binom_std =
-            static_cast<double>(BINOM_STANDARD[j][n - j]);
-        double const two_rho_power = std::pow(2.0 * rho, (2 * j) - n);
-        double const s2_power = std::pow(s2, -half_p - static_cast<double>(j));
-
-        sum += binom_gen * binom_std * two_rho_power * s2_power;
+    ep.s2_nhalf[0] = inv_sqrt_s2;
+    for (int k = 1; k < 7; ++k) {
+        ep.s2_nhalf[k] = ep.s2_nhalf[k - 1] * inv_s2;
     }
 
-    return static_cast<double>(FACTORIAL[n]) * sum;
+    double const two_rho = 2.0 * rho;
+    ep.tr_pow[0] = 1.0;
+    for (int k = 1; k < 6; ++k) {
+        ep.tr_pow[k] = ep.tr_pow[k - 1] * two_rho;
+    }
+
+    return ep;
+}
+
+// Evaluate F_n^(1) and F_n^(3) simultaneously using precomputed tables.
+inline void
+eval_fnp_pair(
+    int n,
+    EndpointPowers const& ep,
+    double& f_p1,
+    double& f_p3)
+{
+    f_p1 = 0.0;
+    f_p3 = 0.0;
+    int const start = FNP_OFFSETS[n];
+    int const end = FNP_OFFSETS[n + 1];
+
+    for (int i = start; i < end; ++i) {
+        FnpTerm const& t = FNP_TABLE[i];
+        double const base = ep.tr_pow[t.tr_idx];
+        f_p1 += t.w1 * base * ep.s2_nhalf[t.s2_idx];
+        f_p3 += t.w3 * base * ep.s2_nhalf[t.s2_idx + 1];
+    }
 }
 
 /**
  * Solve a 2x2 linear system with partial pivoting.
- * | a00  a01 | | x0 |   | b0 |
- * | a10  a11 | | x1 | = | b1 |
- *
  * Throws if the system is singular (pivot below threshold).
  */
 void
@@ -96,7 +131,6 @@ solve_2x2(
     double& x1,
     double scale)
 {
-    // Partial pivoting
     if (std::abs(a00) < std::abs(a10)) {
         std::swap(a00, a10);
         std::swap(a01, a11);
@@ -130,7 +164,6 @@ solve_3x3(
     double scale)
 {
     for (int col = 0; col < 3; ++col) {
-        // Find pivot
         int pivot_row = col;
         double max_val = std::abs(A[col][col]);
         for (int row = col + 1; row < 3; ++row) {
@@ -149,7 +182,6 @@ solve_3x3(
             std::swap(b[col], b[pivot_row]);
         }
 
-        // Eliminate below
         for (int row = col + 1; row < 3; ++row) {
             double const factor = A[row][col] / A[col][col];
             for (int k = col + 1; k < 3; ++k) {
@@ -159,7 +191,6 @@ solve_3x3(
         }
     }
 
-    // Back-substitution
     for (int row = 2; row >= 0; --row) {
         for (int col = row + 1; col < 3; ++col) {
             b[row] -= A[row][col] * b[col];
@@ -218,7 +249,7 @@ ComptonKernelApproximate::evaluate_sigma_E(
     double const a = 1.0 - xi;
     double const A = gamma * gamma_prime * a;
     double const Delta = gamma_prime - gamma;
-    double const q = std::hypot(Delta, std::sqrt(2.0 * A));
+    double const q = std::sqrt(Delta * Delta + 2.0 * A);
     double const omega2 = (1.0 + xi) / a;
 
     // Step 3: Minimum electron Lorentz factor
@@ -245,31 +276,37 @@ ComptonKernelApproximate::evaluate_sigma_E(
     double const sum_gamma = gamma + gamma_prime;
     double const inv_A_sq = 1.0 / A_sq;
 
-    // Step 5: Explicit coefficients C[0..5]
-    std::array<double, 6> C{};
-    for (int n = 0; n <= 5; ++n) {
-        double const kronecker_n0 = (n == 0) ? 1.0 : 0.0;
-        double const F_n_1_minus = F_np(n, 1, rho_minus, omega2);
-        double const F_n_1_plus = F_np(n, 1, rho_plus, omega2);
-        double const F_n_3_minus = F_np(n, 3, rho_minus, omega2);
-        double const F_n_3_plus = F_np(n, 3, rho_plus, omega2);
+    // Step 5: Precompute power tables for both endpoints
+    EndpointPowers const ep_minus = compute_endpoint_powers(rho_minus, omega2);
+    EndpointPowers const ep_plus = compute_endpoint_powers(rho_plus, omega2);
 
-        double F_nm1_3_minus = 0.0;
-        double F_nm1_3_plus = 0.0;
-        if (n > 0) {
-            F_nm1_3_minus = F_np(n - 1, 3, rho_minus, omega2);
-            F_nm1_3_plus = F_np(n - 1, 3, rho_plus, omega2);
-        }
+    // Step 6: Compute coefficients C[0..5] using flattened tables,
+    // caching F_(n-1)^(3) across iterations.
+    std::array<double, 6> C{};
+    double prev_f3_minus = 0.0;
+    double prev_f3_plus = 0.0;
+
+    for (int n = 0; n <= 5; ++n) {
+        double f1_minus = 0.0;
+        double f3_minus = 0.0;
+        double f1_plus = 0.0;
+        double f3_plus = 0.0;
+        eval_fnp_pair(n, ep_minus, f1_minus, f3_minus);
+        eval_fnp_pair(n, ep_plus, f1_plus, f3_plus);
+
+        double const kronecker_n0 = (n == 0) ? 1.0 : 0.0;
 
         C[n] = (2.0 * kronecker_n0) / q +
-               B * (F_n_1_minus - F_n_1_plus) +
-               (delta_minus * F_n_3_minus + delta_plus * F_n_3_plus) *
-                   inv_A_sq +
+               B * (f1_minus - f1_plus) +
+               (delta_minus * f3_minus + delta_plus * f3_plus) * inv_A_sq +
                static_cast<double>(n) * sum_gamma * inv_A_sq *
-                   (F_nm1_3_minus + F_nm1_3_plus);
+                   (prev_f3_minus + prev_f3_plus);
+
+        prev_f3_minus = f3_minus;
+        prev_f3_plus = f3_plus;
     }
 
-    // Step 6: [3/2] Padé continuation
+    // Step 7: [3/2] Padé continuation
     double const coeff_scale =
         std::max({std::abs(C[0]), std::abs(C[1]), std::abs(C[2]),
                   std::abs(C[3]), std::abs(C[4]), std::abs(C[5])});
@@ -285,7 +322,7 @@ ComptonKernelApproximate::evaluate_sigma_E(
                        (C[2] + b1 * C[1] + b2 * C[0]) * tau2 +
                        (C[3] + b1 * C[2] + b2 * C[1]) * tau3;
 
-    // Step 7: [2/3] Padé continuation
+    // Step 8: [2/3] Padé continuation
     std::array<std::array<double, 3>, 3> mat = {{
         {C[2], C[1], C[0]},
         {C[3], C[2], C[1]},
@@ -301,7 +338,7 @@ ComptonKernelApproximate::evaluate_sigma_E(
     double const P23 =
         C[0] + (C[1] + e1 * C[0]) * tau + (C[2] + e1 * C[1] + e2 * C[0]) * tau2;
 
-    // Step 8: Pole-suppressed amplitude
+    // Step 9: Pole-suppressed amplitude
     double const D32_2 = D32 * D32;
     double const D32_3 = D32_2 * D32;
     double const D32_4 = D32_2 * D32_2;
@@ -320,16 +357,17 @@ ComptonKernelApproximate::evaluate_sigma_E(
         throw std::runtime_error("nonpositive amplitude");
     }
 
-    // Step 9: Maxwell-Jüttner normalization approximation
+    // Step 10: Maxwell-Jüttner normalization approximation
     double const N_tau =
         (1.0 + (141.0 / 208.0) * tau - (441.0 / 3328.0) * tau2) /
         (1.0 + (531.0 / 208.0) * tau + (6519.0 / 3328.0) * tau2);
 
-    // Step 10: Direct kernel assembly
+    // Step 11: Direct kernel assembly
+    double const inv_sqrt_tau = 1.0 / std::sqrt(tau);
     double const E = gamma * units::me_c2;
     double const result = units::r_e2 * gamma_prime / (4.0 * E) *
                           std::sqrt(2.0 / std::numbers::pi) *
-                          std::pow(tau, -0.5) * N_tau * A_G5 *
+                          inv_sqrt_tau * N_tau * A_G5 *
                           std::exp(-(lambda_min - 1.0) / tau);
 
     return result;
