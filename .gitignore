@@ -14,7 +14,6 @@ cpp_modules/
 # Generated data & outputs
 reports/
 scripts/
-benchmarks
 experiments
 references/
 tests/output/
