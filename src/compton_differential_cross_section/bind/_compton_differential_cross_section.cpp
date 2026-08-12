@@ -2,6 +2,8 @@
 #include <pybind11/pybind11.h>
 
 #include "compton_common/compton_common.hpp"
+#include "compton_differential_cross_section/compton_kernel_approximate/compton_kernel_approximate.hpp"
+#include "compton_differential_cross_section/compton_kernel_approximate_solver/compton_kernel_approximate_solver.hpp"
 #include "compton_differential_cross_section/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.hpp"
 #include "compton_differential_cross_section/compton_kernel_power_series/compton_kernel_power_series.hpp"
 #include "compton_differential_cross_section/compton_kernel_quadrature/compton_kernel_quadrature.hpp"
@@ -17,10 +19,72 @@ PYBIND11_MODULE(
     _compton_differential_cross_section,
     m) // NOLINT(misc-include-cleaner)
 {
-    m.doc() = "Compton differential cross-section kernels: power series, "
-              "asymptotic series, quadrature, and adaptive solver";
+    m.doc() = "Compton differential cross-section kernels: approximation, "
+              "power and asymptotic series, quadrature, and adaptive solvers";
 
     py::module_::import("compton_matrix._compton_common");
+
+    // --- Fast Sazonov K_G5 approximation ---
+    py::class_<ComptonKernelApproximate>(m, "ComptonKernelApproximate")
+        .def(py::init<>())
+        .def(
+            "sigma_E",
+            &ComptonKernelApproximate::sigma_E,
+            "E"_a,
+            "E_prime"_a,
+            "xi"_a,
+            "T"_a)
+        .def(
+            "sigma_E_vec",
+            [](ComptonKernelApproximate const& self,
+               double E,
+               py::array_t<
+                   double,
+                   py::array::c_style | py::array::forcecast> const&
+                   E_prime_arr,
+               double xi,
+               double T) {
+                return compton::bind::vectorize_sigma(
+                    self,
+                    E,
+                    E_prime_arr,
+                    xi,
+                    T,
+                    &ComptonKernelApproximate::sigma_E);
+            },
+            "E"_a,
+            "E_prime_arr"_a,
+            "xi"_a,
+            "T"_a)
+        .def(
+            "dsigma_E_dT",
+            &ComptonKernelApproximate::dsigma_E_dT,
+            "E"_a,
+            "E_prime"_a,
+            "xi"_a,
+            "T"_a)
+        .def(
+            "dsigma_E_dT_vec",
+            [](ComptonKernelApproximate const& self,
+               double E,
+               py::array_t<
+                   double,
+                   py::array::c_style | py::array::forcecast> const&
+                   E_prime_arr,
+               double xi,
+               double T) {
+                return compton::bind::vectorize_sigma(
+                    self,
+                    E,
+                    E_prime_arr,
+                    xi,
+                    T,
+                    &ComptonKernelApproximate::dsigma_E_dT);
+            },
+            "E"_a,
+            "E_prime_arr"_a,
+            "xi"_a,
+            "T"_a);
 
     // --- Power Series ---
     py::class_<ComptonPowerSeries>(m, "ComptonPowerSeries")
@@ -372,6 +436,69 @@ PYBIND11_MODULE(
                     xi,
                     T,
                     &ComptonKernelSolver::dsigma_E_dT);
+            },
+            "E"_a,
+            "E_prime_arr"_a,
+            "xi"_a,
+            "T"_a);
+    // --- Fast three-case solver ---
+    py::class_<ComptonKernelApproximateSolver, ComptonKernelSolver>(
+        m,
+        "ComptonKernelApproximateSolver")
+        .def(py::init<bool>(), "verbose"_a = false)
+        .def(
+            "sigma_E",
+            &ComptonKernelApproximateSolver::sigma_E,
+            "E"_a,
+            "E_prime"_a,
+            "xi"_a,
+            "T"_a)
+        .def(
+            "dsigma_E_dT",
+            &ComptonKernelApproximateSolver::dsigma_E_dT,
+            "E"_a,
+            "E_prime"_a,
+            "xi"_a,
+            "T"_a)
+        .def(
+            "sigma_E_vec",
+            [](ComptonKernelApproximateSolver const& self,
+               double E,
+               py::array_t<
+                   double,
+                   py::array::c_style | py::array::forcecast> const&
+                   E_prime_arr,
+               double xi,
+               double T) {
+                return compton::bind::vectorize_sigma(
+                    self,
+                    E,
+                    E_prime_arr,
+                    xi,
+                    T,
+                    &ComptonKernelApproximateSolver::sigma_E);
+            },
+            "E"_a,
+            "E_prime_arr"_a,
+            "xi"_a,
+            "T"_a)
+        .def(
+            "dsigma_E_dT_vec",
+            [](ComptonKernelApproximateSolver const& self,
+               double E,
+               py::array_t<
+                   double,
+                   py::array::c_style | py::array::forcecast> const&
+                   E_prime_arr,
+               double xi,
+               double T) {
+                return compton::bind::vectorize_sigma(
+                    self,
+                    E,
+                    E_prime_arr,
+                    xi,
+                    T,
+                    &ComptonKernelApproximateSolver::dsigma_E_dT);
             },
             "E"_a,
             "E_prime_arr"_a,

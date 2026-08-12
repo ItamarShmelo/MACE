@@ -59,10 +59,12 @@ class ComptonKernelSolver {
         double dd_asymp_self_tol = 0.5,
         bool verbose = false);
 
-    ComptonResult
+    virtual ~ComptonKernelSolver() = default;
+
+    [[nodiscard]] virtual ComptonResult
     sigma_E(double E, double E_prime, double xi, double T) const;
 
-    ComptonResult
+    [[nodiscard]] virtual ComptonResult
     dsigma_E_dT(double E, double E_prime, double xi, double T) const;
 
   private:
@@ -86,3 +88,4 @@ class ComptonKernelSolver {
 } // namespace compton
 
 #endif
+
