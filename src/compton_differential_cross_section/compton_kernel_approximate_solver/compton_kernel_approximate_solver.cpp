@@ -119,24 +119,25 @@ ComptonResult ComptonKernelApproximateSolver::dispatch(
     bool const asymptotic_is_fastest =
         in_asymptotic_domain &&
         parameters.tau <
-            approximate_solver_constants::FAST_ASYMP_TAU_THRESHOLD &&
-        std::min(parameters.gamma, parameters.gamma_prime) >=
-            approximate_solver_constants::FAST_ASYMP_MIN_GAMMA;
+            approximate_solver_constants::FAST_ASYMP_TAU_THRESHOLD;
+    bool const in_approximate_domain =
+        parameters.tau <=
+            approximate_solver_constants::APPROXIMATE_MAX_TAU &&
+        std::max(parameters.gamma, parameters.gamma_prime) <=
+            approximate_solver_constants::APPROXIMATE_MAX_GAMMA;
 
     ComptonResult approximate_result{};
     bool approximate_is_accurate = false;
-    if (!asymptotic_is_fastest) {
+    if (!asymptotic_is_fastest && in_approximate_domain) {
         approximate_result =
             evaluate_kernel<Op>(approximate_, E, E_prime, xi, T);
-        constexpr double approximate_tolerance =
-            Op == KernelOp::sigma
-                ? approximate_solver_constants::
-                      APPROXIMATE_PADE_DISAGREEMENT_THRESHOLD
-                : approximate_solver_constants::
-                      APPROXIMATE_DERIVATIVE_PADE_DISAGREEMENT_THRESHOLD;
         approximate_is_accurate =
             approximate_result.estimated_abs_error != 1.0 &&
-            approximate_result.estimated_rel_error < approximate_tolerance;
+            std::isfinite(approximate_result.estimated_rel_error) &&
+            (Op == KernelOp::sigma ||
+             approximate_result.estimated_rel_error <
+                 approximate_solver_constants::
+                     APPROXIMATE_DERIVATIVE_PADE_DISAGREEMENT_THRESHOLD);
     }
 
     enum class Backend { asymptotic, approximate, power };
@@ -168,7 +169,7 @@ ComptonResult ComptonKernelApproximateSolver::dispatch(
         }
         throw std::runtime_error("asymptotic kernel backends failed");
     } else if (backend == Backend::approximate) {
-        // Case 2: explicit coefficients and the Padé pair pass their gates.
+        // Case 2: finite explicit result inside the calibrated matrix domain.
         return approximate_result;
     }
 

@@ -131,6 +131,27 @@ if(COMPTON_BUILD_BENCHMARKS)
             PRIVATE OpenMP::OpenMP_CXX
         )
     endif()
+
+    add_executable(compton_multigroup_approximate_stress_benchmark
+        benchmarks/benchmark_multigroup_stress.cpp
+        src/compton_multigroup/compton_multigroup_deterministic/compton_multigroup_deterministic.cpp
+        src/compton_multigroup/weight_function.cpp
+        src/compton_differential_cross_section/compton_kernel_approximate/compton_kernel_approximate.cpp
+        src/compton_differential_cross_section/compton_kernel_approximate_solver/compton_kernel_approximate_solver.cpp
+        src/compton_differential_cross_section/compton_kernel_solver/compton_kernel_solver.cpp
+        src/compton_differential_cross_section/compton_kernel_power_series/compton_kernel_power_series.cpp
+        src/compton_differential_cross_section/compton_kernel_asymptotic_series/compton_kernel_asymptotic_series.cpp
+    )
+    target_compile_options(
+        compton_multigroup_approximate_stress_benchmark
+        PRIVATE -O3 -Wall -Wextra -Wpedantic
+    )
+    if(COMPTON_ENABLE_OMP)
+        target_link_libraries(
+            compton_multigroup_approximate_stress_benchmark
+            PRIVATE OpenMP::OpenMP_CXX
+        )
+    endif()
 endif()
 
 install(TARGETS

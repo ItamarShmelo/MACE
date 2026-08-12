@@ -9,7 +9,8 @@
  *
  *   1. asymptotic when the cold series is fastest, or when a cold point fails
  *      the explicit approximation gate
- *   2. approximate when the explicit-coefficient and Padé gates both pass
+ *   2. approximate inside the matrix-calibrated temperature and photon-energy
+ *      domain when the explicit evaluation is finite
  *   3. power series otherwise
  *
  * In boolean form:
@@ -32,8 +33,8 @@ namespace compton {
 namespace approximate_solver_constants {
 constexpr double ASYMP_TAU_ALPHA_THRESHOLD = 0.035;
 constexpr double FAST_ASYMP_TAU_THRESHOLD = 0.02;
-constexpr double FAST_ASYMP_MIN_GAMMA = 1e-4;
-constexpr double APPROXIMATE_PADE_DISAGREEMENT_THRESHOLD = 3e-4;
+constexpr double APPROXIMATE_MAX_TAU = 0.45;
+constexpr double APPROXIMATE_MAX_GAMMA = 2.4;
 constexpr double APPROXIMATE_DERIVATIVE_PADE_DISAGREEMENT_THRESHOLD = 1e-6;
 constexpr double DOUBLE_SERIES_SELF_TOL = 5e-3;
 constexpr double DOUBLE_DERIVATIVE_SERIES_SELF_TOL = 1e-7;

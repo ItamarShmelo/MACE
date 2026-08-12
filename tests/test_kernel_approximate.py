@@ -74,8 +74,8 @@ SOLVER_POINTS = [
     (10.0, 9.9, 0.0, 1.0),
     # Fast approximate case
     (50.0, 52.0, 0.5, 50.0),
-    # Padé rejection and power-series case
-    (1000.0, 1176.340723, -0.5, 100.0),
+    # Photon-energy-domain rejection and power-series case
+    (1500.0, 1764.5110845, -0.5, 100.0),
 ]
 
 
