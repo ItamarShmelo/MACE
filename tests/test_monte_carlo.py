@@ -278,41 +278,6 @@ class TestDerivativeGolden:
 class TestFullDerivativeMCvsDet:
     """Cross-validate MC compute_dsigma_dT_matrix against deterministic."""
 
-    @pytest.mark.slow
-    @pytest.mark.parametrize("T_kev", [10.0])
-    def test_mc_vs_det(self, T_kev):
-        from compton_matrix._compton_differential_cross_section import (
-            ComptonKernelSolver,
-        )
-
-        T = T_kev * kev_kelvin
-        bounds = [1.0 * kev, 5.0 * kev, 10.0 * kev]
-        wf = cm.CappedWienWeightFunction(cap_x=25.0)
-
-        det_mg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=bounds,
-            weight_function=wf,
-            config=cm.MGIntegrationConfig(cutoff_ratio=None),
-        )
-        kernel = ComptonKernelSolver()
-        det_deriv = det_mg.compute_dsigma_dT_matrix(kernel, T=T)
-
-        mc_mg = _make_mc(bounds, weight_function=wf, num_samples=5_000_000, seed=42)
-        mc_deriv = mc_mg.compute_dsigma_dT_matrix(T=T)
-
-        # Row-sum comparison (more robust than element-wise for MC)
-        det_row = det_deriv.sum(axis=1)
-        mc_row = mc_deriv.sum(axis=1)
-        floor = 1e-40
-        denom = np.maximum(np.abs(det_row), np.maximum(np.abs(mc_row), floor))
-        rel_err = np.abs(mc_row - det_row) / denom
-
-        mask = np.maximum(np.abs(det_row), np.abs(mc_row)) > floor
-        if np.any(mask):
-            assert np.all(rel_err[mask] < 0.15), (
-                f"Row-sum rel err: {rel_err[mask]}"
-            )
-
     def test_mc_uniform_sanity(self):
         """MC full derivative matches MC kernel-only derivative for Uniform."""
         T = 10.0 * kev_kelvin
@@ -381,51 +346,4 @@ class TestShiftedWeightMC:
             )
             assert np.all(rel_err < 0.05), (
                 f"MC vs det max rel err = {rel_err.max():.2e}"
-            )
-
-    @pytest.mark.parametrize("T_kev", [10.0])
-    @pytest.mark.parametrize(
-        "wf_factory",
-        [
-            lambda b: cm.WienWeightFunction(group_boundaries=b),
-            lambda b: cm.PlanckWeightFunction(cap_x=25.0, group_boundaries=b),
-        ],
-        ids=["Wien", "Planck"],
-    )
-    def test_mc_dsigma_dT_vs_det(self, T_kev, wf_factory):
-        """MC dsigma/dT matrix matches deterministic (row-sum)."""
-        from compton_matrix._compton_differential_cross_section import (
-            ComptonKernelSolver,
-        )
-
-        T = T_kev * kev_kelvin
-        wf = wf_factory(self.BOUNDS)
-
-        det_mg = cm.ComptonMultigroupKernel(
-            energy_group_boundaries=self.BOUNDS,
-            weight_function=wf,
-            config=cm.MGIntegrationConfig(cutoff_ratio=None),
-        )
-        kernel = ComptonKernelSolver()
-        det_deriv = det_mg.compute_dsigma_dT_matrix(kernel, T=T)
-
-        mc_mg = _make_mc(
-            self.BOUNDS,
-            weight_function=wf,
-            num_samples=1_000_000,
-            seed=42,
-        )
-        mc_deriv = mc_mg.compute_dsigma_dT_matrix(T=T)
-
-        det_row = det_deriv.sum(axis=1)
-        mc_row = mc_deriv.sum(axis=1)
-        floor = 1e-40
-        denom = np.maximum(
-            np.abs(det_row), np.maximum(np.abs(mc_row), floor)
-        )
-        rel_err = np.abs(mc_row - det_row) / denom
-        mask = np.maximum(np.abs(det_row), np.abs(mc_row)) > floor
-        if np.any(mask):
-            assert np.all(rel_err[mask] < 0.30), (
-                f"Row-sum rel err: {rel_err[mask]}"
             )

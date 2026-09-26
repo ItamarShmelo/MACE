@@ -98,11 +98,11 @@ class TestPointwise:
 @pytest.mark.parametrize("cls", [km.NumberWeightedEnergyTransferMultiplier, km.NumberWeightMultiplier])
 class TestValidation:
     def test_size_mismatch(self, cls):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="centers.size"):
             cls(energy_group_boundaries=[1.0, 2.0, 3.0], energy_group_centers=[1.5])
 
     def test_not_increasing(self, cls):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="strictly increasing"):
             cls(energy_group_boundaries=[1.0, 3.0, 2.0], energy_group_centers=[1.5, 2.5])
 
 
@@ -180,7 +180,10 @@ class TestWienDetailedBalance:
         )
         sigma = np.asarray(mg.compute_sigma_matrix(KERNEL, T=self.T, multiplier=multiplier))
         D = np.array(
-            [self.WEIGHT.compute_denominator(lo, hi, self.T) for lo, hi in zip(BOUNDARIES_ERG[:-1], BOUNDARIES_ERG[1:])]
+            [
+                self.WEIGHT.compute_denominator(lo, hi, self.T)
+                for lo, hi in zip(BOUNDARIES_ERG[:-1], BOUNDARIES_ERG[1:], strict=True)
+            ]
         )
         flux = sigma * (D / CENTERS_ERG)[:, np.newaxis]
         G = len(CENTERS_ERG)
