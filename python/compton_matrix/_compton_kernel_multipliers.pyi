@@ -5,7 +5,7 @@ from __future__ import annotations
 import collections.abc
 import compton_matrix._compton_multigroup
 import typing
-__all__: list[str] = ['EMinusEpMultiplier', 'EnergyMomentMultiplier', 'EnergyTransferMultiplier', 'EpMultiplier', 'EpOverEMultiplier', 'LegendreMultiplier0123']
+__all__: list[str] = ['EMinusEpMultiplier', 'EnergyMomentMultiplier', 'EnergyTransferMultiplier', 'EpMultiplier', 'EpOverEMultiplier', 'LegendreMultiplier0123', 'NumberWeightMultiplier', 'NumberWeightedEnergyTransferMultiplier']
 class EMinusEpMultiplier(compton_matrix._compton_multigroup.KernelMultiplier):
     def __init__(self) -> None:
         ...
@@ -23,4 +23,10 @@ class EpOverEMultiplier(compton_matrix._compton_multigroup.KernelMultiplier):
         ...
 class LegendreMultiplier0123(compton_matrix._compton_multigroup.KernelMultiplier):
     def __init__(self, n: int) -> None:
+        ...
+class NumberWeightMultiplier(compton_matrix._compton_multigroup.KernelMultiplier):
+    def __init__(self, energy_group_boundaries: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex], energy_group_centers: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex]) -> None:
+        ...
+class NumberWeightedEnergyTransferMultiplier(compton_matrix._compton_multigroup.KernelMultiplier):
+    def __init__(self, energy_group_boundaries: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex], energy_group_centers: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex]) -> None:
         ...

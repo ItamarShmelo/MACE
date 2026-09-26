@@ -29,6 +29,8 @@ angular bins.
   normalization terms.
 - Planck, Wien, capped, and uniform spectral weights, plus angular and energy
   moment multipliers.
+- Number-weighted photon-transfer multipliers for photon-number-conserving
+  multigroup operators.
 
 All cross sections are microscopic, per free electron. Multiply by the free
 electron number density to obtain macroscopic coefficients.

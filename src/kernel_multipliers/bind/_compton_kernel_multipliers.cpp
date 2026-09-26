@@ -57,6 +57,107 @@ class EnergyTransferMultiplier : public KernelMultiplier {
     std::vector<double> centers_;
 };
 
+/**
+ * Group lookup shared by the number-weighted multipliers.
+ *
+ * With the energy weight B(E) and its denominator B_g, the factor E_g/E turns
+ * the group integral into (E_g/B_g) int (B(E)/E) ..., the photon-number
+ * weight B(E)/E normalized to the model photon count B_g/E_g of the group.
+ */
+class GroupCenters {
+  public:
+    GroupCenters(
+        std::vector<double> boundaries,
+        std::vector<double> centers)
+        : boundaries_(std::move(boundaries)),
+          centers_(std::move(centers))
+    {
+        if (boundaries_.size() != centers_.size() + 1) {
+            throw std::invalid_argument(
+                "boundaries.size() must equal centers.size() + 1");
+        }
+        for (std::size_t i = 0; i + 1 < boundaries_.size(); ++i) {
+            if (boundaries_[i] >= boundaries_[i + 1]) {
+                throw std::invalid_argument(
+                    "boundaries must be strictly increasing");
+            }
+        }
+    }
+
+    int group_of(double const E) const
+    {
+        auto const it =
+            std::upper_bound(boundaries_.begin(), boundaries_.end(), E);
+        return static_cast<int>(std::distance(boundaries_.begin(), it)) - 1;
+    }
+
+    double center(int const g) const
+    {
+        return centers_[static_cast<std::size_t>(g)];
+    }
+
+  private:
+    std::vector<double> boundaries_;
+    std::vector<double> centers_;
+};
+
+/**
+ * Number-weighted photon transfer between group centers,
+ *
+ *     (E_g/E) (E' - E) / (E_g' - E_g)   for g != g',
+ *     E_g/E                             for g == g'.
+ *
+ * With the energy weight and denominator B_g, the off-diagonal integral is
+ * E_g [sigma_in - sigma_out] / (E_g' - E_g), where sigma_in and sigma_out use
+ * the multipliers E'/E and 1.
+ */
+class NumberWeightedEnergyTransferMultiplier : public KernelMultiplier {
+  public:
+    NumberWeightedEnergyTransferMultiplier(
+        std::vector<double> boundaries,
+        std::vector<double> centers)
+        : groups_(std::move(boundaries), std::move(centers))
+    {
+    }
+
+    double
+    operator()(double E, double Ep, double /*xi*/)
+        const override
+    {
+        int const g = groups_.group_of(E);
+        int const gp = groups_.group_of(Ep);
+        double const Eg = groups_.center(g);
+        if (g == gp) {
+            return Eg / E;
+        }
+        return (Eg / E) * (Ep - E) / (groups_.center(gp) - Eg);
+    }
+
+  private:
+    GroupCenters groups_;
+};
+
+/// Number weight E_g/E of the incident photon, without an energy split.
+class NumberWeightMultiplier : public KernelMultiplier {
+  public:
+    NumberWeightMultiplier(
+        std::vector<double> boundaries,
+        std::vector<double> centers)
+        : groups_(std::move(boundaries), std::move(centers))
+    {
+    }
+
+    double
+    operator()(double E, double /*Ep*/, double /*xi*/)
+        const override
+    {
+        return groups_.center(groups_.group_of(E)) / E;
+    }
+
+  private:
+    GroupCenters groups_;
+};
+
 class EpMultiplier : public KernelMultiplier {
   public:
     double
@@ -154,6 +255,22 @@ PYBIND11_MODULE(_compton_kernel_multipliers, m) // NOLINT(misc-include-cleaner)
         .def(
             py::init<std::vector<double>, std::vector<double>>(),
             "energy_group_boundaries"_a, // NOLINT(misc-include-cleaner)
+            "energy_group_centers"_a);
+
+    py::class_<NumberWeightedEnergyTransferMultiplier, KernelMultiplier>(
+        m,
+        "NumberWeightedEnergyTransferMultiplier")
+        .def(
+            py::init<std::vector<double>, std::vector<double>>(),
+            "energy_group_boundaries"_a,
+            "energy_group_centers"_a);
+
+    py::class_<NumberWeightMultiplier, KernelMultiplier>(
+        m,
+        "NumberWeightMultiplier")
+        .def(
+            py::init<std::vector<double>, std::vector<double>>(),
+            "energy_group_boundaries"_a,
             "energy_group_centers"_a);
 
     py::class_<EpMultiplier, KernelMultiplier>(
