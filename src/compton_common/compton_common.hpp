@@ -222,6 +222,30 @@ template <typename T> inline T ehat_series(T const& x, double const tol)
     return param_exp(x) * E1;
 }
 
+/**
+ * @brief Hankel asymptotic sum for exp(x) K_ν(x) · √(2x/π), with μ = 4ν².
+ *
+ * The k-th term is Π_{j=1}^{k} (μ − (2j−1)²) / (8 x j).  Summation stops once
+ * a term falls below double-precision resolution of the running sum.  For
+ * x ≥ 50 and ν ≤ 2 this takes at most 13 terms, far below the k ≈ 2x where
+ * the asymptotic series starts to diverge.
+ */
+inline double hankel_scaled_K_sum(double const mu, double const x)
+{
+    double const inv8x = 1.0 / (8.0 * x);
+    double term = 1.0;
+    double sum = 1.0;
+    for (int k = 1; k <= 40; ++k) {
+        double const odd = 2.0 * k - 1.0;
+        term *= (mu - odd * odd) * inv8x / k;
+        sum += term;
+        if (std::abs(term) < 1e-17 * std::abs(sum)) {
+            break;
+        }
+    }
+    return sum;
+}
+
 } // namespace details
 
 /**
@@ -304,8 +328,8 @@ inline T ehat(
  * @brief Scaled modified Bessel function: K̃₂(x) = exp(x) · K₂(x).
  *
  * Uses Boost cyl_bessel_k for x < 50 (numerically stable after multiplying
- * by exp(x)), and a 5-term Hankel asymptotic expansion for x ≥ 50 where
- * the direct computation would overflow/underflow.
+ * by exp(x)), and the Hankel asymptotic expansion summed to double precision
+ * for x ≥ 50 where the direct computation would overflow/underflow.
  */
 inline double scaled_K2(double x)
 {
@@ -317,25 +341,9 @@ inline double scaled_K2(double x)
         return std::exp(x) * boost::math::cyl_bessel_k(2, x);
     }
 
-    double const inv8x = 1.0 / (8.0 * x);
     constexpr double mu = 16.0;
-
-    double term = 1.0;
-    double sum = 1.0;
-
-    term *= (mu - 1.0) * inv8x;
-    sum += term;
-
-    term *= (mu - 9.0) * inv8x / 2.0;
-    sum += term;
-
-    term *= (mu - 25.0) * inv8x / 3.0;
-    sum += term;
-
-    term *= (mu - 49.0) * inv8x / 4.0;
-    sum += term;
-
-    return std::sqrt(std::numbers::pi / (2.0 * x)) * sum;
+    return std::sqrt(std::numbers::pi / (2.0 * x)) *
+           details::hankel_scaled_K_sum(mu, x);
 }
 
 /**
@@ -354,25 +362,9 @@ inline double scaled_K1(double const x)
         return std::exp(x) * boost::math::cyl_bessel_k(1, x);
     }
 
-    double const inv8x = 1.0 / (8.0 * x);
     constexpr double mu = 4.0;
-
-    double term = 1.0;
-    double sum = 1.0;
-
-    term *= (mu - 1.0) * inv8x;
-    sum += term;
-
-    term *= (mu - 9.0) * inv8x / 2.0;
-    sum += term;
-
-    term *= (mu - 25.0) * inv8x / 3.0;
-    sum += term;
-
-    term *= (mu - 49.0) * inv8x / 4.0;
-    sum += term;
-
-    return std::sqrt(std::numbers::pi / (2.0 * x)) * sum;
+    return std::sqrt(std::numbers::pi / (2.0 * x)) *
+           details::hankel_scaled_K_sum(mu, x);
 }
 
 /**
