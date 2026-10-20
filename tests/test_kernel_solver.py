@@ -307,6 +307,30 @@ class TestUltraLowGammaAccuracy:
         assert rd < 1e-3, f"reldiff={rd:.2e}"
 
 
+# ── Series false convergence ──────────────────────────────────────────────
+
+# omega0 = 10, theta = 10^-0.5, omega'/omega0 = 0.6994. In a ~1e-5 wide band
+# of xi around 0.7721104 the change of the P+ - P- difference vanished at a
+# single n by cancellation, the power series stopped at n = 6, and the
+# double-double result was accepted with a 63% error.
+FALSE_CONVERGENCE_POINT = (5109.989506933239, 3573.72722041962, 161.59205661469812)
+FALSE_CONVERGENCE_XI = np.linspace(0.7721103633 - 2e-5, 0.7721103633 + 2e-5, 201)
+
+
+class TestSeriesFalseConvergence:
+    @pytest.mark.parametrize("op", ["sigma_E", "dsigma_E_dT"])
+    def test_band_vs_q256(self, op):
+        E_kev, Ep_kev, T_kev = FALSE_CONVERGENCE_POINT
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+        worst = 0.0
+        for xi in FALSE_CONVERGENCE_XI:
+            qres = getattr(QUAD_REF, op)(E, Ep, xi, T)
+            assert qres.estimated_rel_error < 1e-12
+            sres = getattr(SOLVER, op)(E, Ep, xi, T)
+            worst = max(worst, _rel_diff(sres.value, qres.value))
+        assert worst < 1e-7, f"max reldiff={worst:.2e}"
+
+
 # ── Vec methods: verify vectorized wrappers match scalar calls ────────────
 
 VEC_KERNELS = [

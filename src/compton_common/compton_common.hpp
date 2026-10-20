@@ -392,6 +392,12 @@ namespace constants {
 /// Floor added to relative-error denominators to avoid division by zero.
 constexpr double REL_ERROR_TINY_SCALE = 1e-300;
 
+/// Number of consecutive below-tolerance terms required before a series is
+/// accepted as converged.  The convergence tests compare the change of a
+/// difference of two series, which can vanish at a single n by cancellation
+/// while both series are still far from converged.
+constexpr int SERIES_CONVERGED_STREAK = 2;
+
 } // namespace constants
 
 /**
