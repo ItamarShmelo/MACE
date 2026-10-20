@@ -160,8 +160,12 @@ template <> struct EhatCfConfig<double> {
     static constexpr int max_iter = 1000;
 };
 
+/// The tolerance must sit near DD machine epsilon (~5e-32): the E_1 series
+/// cancels by up to ~500x for x < 4, and the power-series P+ - P- difference
+/// can cancel by 1e13, so a looser tolerance leaks into the kernel at the
+/// 1e-5 level without showing in the roundoff estimate.
 template <> struct EhatCfConfig<DD> {
-    static constexpr double cf_tol = 1e-20;
+    static constexpr double cf_tol = 1e-30;
     static constexpr int max_iter = 2000;
 };
 
@@ -209,9 +213,13 @@ template <typename T> inline T ehat_series(T const& x, double const tol)
     T term(x);
     T S = term;
     for (int k = 1; k <= 80; ++k) {
-        double const recur_factor =
-            static_cast<double>(k) / static_cast<double>((k + 1) * (k + 1));
-        term = term * neg_x * T(recur_factor);
+        // k/(k+1)^2 is not exact in double; rounding it would cap the DD
+        // series at double accuracy, and E_1 = -gamma - ln x + S cancels
+        // by up to ~500x for x < 4.
+        T const recur_factor =
+            T(static_cast<double>(k)) /
+            T(static_cast<double>((k + 1) * (k + 1)));
+        term = term * neg_x * recur_factor;
         S = S + term;
         if (param_abs(term) < tol * param_abs(S)) {
             break;

@@ -331,6 +331,36 @@ class TestSeriesFalseConvergence:
         assert worst < 1e-7, f"max reldiff={worst:.2e}"
 
 
+# ── DD power series under extreme P+ - P- cancellation ────────────────────
+
+# omega0 ~ 1e-4 in a relativistic plasma: x+ ~ x- and P+ - P- cancels by ~1e13,
+# so any double-rounded input to the DD series shows up at the 1e-5 level.
+# References: 60-digit adaptive quadrature of the pre-IBP Kershaw integral.
+# Before the fix the DD series returned errors of 5e-5 (sigma) and 4e-4
+# (dsigma) with self-reported errors below 1e-7.
+EXTREME_CANCELLATION_POINTS = [
+    # (E_kev, Ep_kev, xi, T_kev, sigma_ref, dsigma_ref)
+    (0.06014780586977525, 0.004823388541701934, 0.3272052552830874,
+     444.1757162303742, 6.048319393025396e-19, 1.1049038505990403e-28),
+    (0.059184928497752684, 0.005681327669580214, -0.8805526688864665,
+     266.7166781675484, 2.6024330782832904e-18, 2.75878253735444e-28),
+]
+
+
+class TestDDPowerSeriesCancellation:
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev,sigma_ref,dsigma_ref", EXTREME_CANCELLATION_POINTS)
+    def test_sigma_E(self, E_kev, Ep_kev, xi, T_kev, sigma_ref, dsigma_ref):
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+        assert _rel_diff(DD_SERIES.sigma_E(E, Ep, xi, T).value, sigma_ref) < 1e-10
+        assert _rel_diff(SOLVER.sigma_E(E, Ep, xi, T).value, sigma_ref) < 1e-10
+
+    @pytest.mark.parametrize("E_kev,Ep_kev,xi,T_kev,sigma_ref,dsigma_ref", EXTREME_CANCELLATION_POINTS)
+    def test_dsigma_E_dT(self, E_kev, Ep_kev, xi, T_kev, sigma_ref, dsigma_ref):
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+        assert _rel_diff(DD_SERIES.dsigma_E_dT(E, Ep, xi, T).value, dsigma_ref) < 1e-10
+        assert _rel_diff(SOLVER.dsigma_E_dT(E, Ep, xi, T).value, dsigma_ref) < 1e-10
+
+
 # ── Asymptotic-to-power fallback just below the dispatch threshold ────────
 
 # tau * max(alpha+-) = 0.034: the divergent asymptotic series is truncation
