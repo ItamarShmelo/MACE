@@ -370,6 +370,48 @@ class TestEndpointLocalizedPredicate:
         # |dg|/gamma = 0.4/0.1 = 4.0 >> 0.1
         assert cm.endpoint_localized_xi(0.1, 0.5, 2.0) is False
 
+    def test_near_elastic_cusp_resolvable_peak_rejected(self):
+        """High-energy photon: |dg|/gamma <= eps but the peak is many sigma_xi from 1."""
+        # gamma=10, gamma_p=9.28, tau=10^-2.5
+        # peak_distance = 0.72/92.8 = 7.8e-3, sigma_xi = 8.5e-4
+        assert cm.endpoint_localized_xi(10.0, 9.28, 10**-2.5) is False
+
+
+class TestNearElasticHighEnergyXiIntegral:
+    """Full-range xi integral where the near-elastic cusp shortcut used to misfire.
+
+    The reflected-log rule over [-1, 1] missed the narrow interior peak and
+    returned a value 98% low at the default orders.
+    """
+
+    def test_default_orders_vs_adaptive(self):
+        from scipy.integrate import quad
+
+        me_c2 = 511.0 * kev
+        gamma, gamma_p, tau = 10.0, 9.28, 10**-2.5
+        E, Ep = gamma * me_c2, gamma_p * me_c2
+        T = tau * 511.0 * kev_kelvin
+
+        mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=[1e-3 * me_c2, 100.0 * me_c2],
+            weight_function=cm.UniformWeightFunction(),
+            config=cm.MGIntegrationConfig(),
+        )
+        value = mg.compute_xi_integral_sigma(KERNEL, E, Ep, 1, T)[0]
+
+        dg = abs(gamma_p - gamma)
+        xi_pk = 1.0 - dg / (gamma * gamma_p)
+        sigma_xi = math.sqrt(tau * dg * (2.0 + dg)) / (gamma * gamma_p)
+        xi_max = 1.0 - 1e-14
+        interior = [xi_pk + k * sigma_xi for k in (-30, -10, -3, 0, 3, 10, 30)]
+        edges = [-1.0] + [x for x in interior if -1.0 < x < xi_max] + [xi_max]
+        ref = sum(
+            quad(lambda x: KERNEL.sigma_E(E, Ep, x, T).value, a, b, epsabs=0.0, epsrel=1e-12, limit=400)[0]
+            for a, b in zip(edges[:-1], edges[1:])
+        )
+        rel = abs(value / ref - 1.0)
+        assert rel < 1e-3, f"default-order xi integral rel err = {rel:.2e}"
+
 
 # ---------------------------------------------------------------------------
 # 8. Regression sweep: last-bin accuracy across temperatures

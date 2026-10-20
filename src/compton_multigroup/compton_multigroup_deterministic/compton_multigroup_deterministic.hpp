@@ -535,11 +535,14 @@ inline constexpr double XI_CUSP_TAU = 0.001;
  *   B. **Near-elastic kinematic cusp:** at warm/hot temperatures the
  *      fractional energy transfer is small enough that the Klein–Nishina
  *      forward peak at ξ = 1 still dominates the last angular bin:
- *          |Δγ| / γ ≤ ε_ξ  AND  τ > τ_cusp
+ *          |Δγ| / γ ≤ ε_ξ  AND  τ > τ_cusp  AND  Δγ / (γ γ') ≤ σ_ξ
  *
  * Condition (A) handles the narrow-peak regime (cold/moderate T).
  * Condition (B) handles same-group scattering at hot T where σ_ξ ≫ 1
- * but the KN forward cusp still needs rlog resolution.
+ * but the KN forward cusp still needs rlog resolution.  Its last clause
+ * excludes high-energy photons (γ ≳ 20τ), whose angular peak is narrow
+ * and lies many σ_ξ below ξ = 1, where the reflected-log rule clusters
+ * its nodes away from the peak.
  *
  * The constants ε_ξ = XI_ENDPOINT_EPS and τ_cusp = XI_CUSP_TAU were
  * calibrated against a 50-point temperature sweep (1e-5 to 1e3 keV)
@@ -566,7 +569,8 @@ inline bool endpoint_localized_xi(
         sigma_xi <= XI_ENDPOINT_EPS;
     bool const near_elastic_cusp =
         abs_dg <= gamma * XI_ENDPOINT_EPS &&
-        tau > XI_CUSP_TAU;
+        tau > XI_CUSP_TAU &&
+        peak_distance_from_one <= sigma_xi;
 
     return thermal_endpoint || near_elastic_cusp;
 }
