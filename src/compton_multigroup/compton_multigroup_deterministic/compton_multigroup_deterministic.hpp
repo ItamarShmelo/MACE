@@ -105,7 +105,7 @@ struct MGIntegrationConfig {
      * @param xi_peak_k               Half-width of the ξ peak window in sigma
      * units.
      * @param xi_tail_order           GL order for ξ tail sub-intervals
-     * (defaults to 16).
+     * (defaults to 48).
      * @param ep_k_cut                E' truncation width in sigma units (must
      * be > 0).
      * @param ep_k_in                 E' interior-edge separator in sigma units
@@ -138,9 +138,9 @@ struct MGIntegrationConfig {
     /** @brief Effective ξ GL order (xi_order if set, otherwise 48). */
     int effective_xi_order() const { return xi_order.value_or(48); }
 
-    /** @brief Effective ξ tail GL order (xi_tail_order if set, otherwise 16).
+    /** @brief Effective ξ tail GL order (xi_tail_order if set, otherwise 48).
      */
-    int effective_xi_tail_order() const { return xi_tail_order.value_or(16); }
+    int effective_xi_tail_order() const { return xi_tail_order.value_or(48); }
 
     /** @brief Effective E' edge GL order (ep_edge_order if set, otherwise 24).
      */
