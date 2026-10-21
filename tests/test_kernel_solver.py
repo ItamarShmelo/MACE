@@ -414,6 +414,23 @@ class TestCrossRegimeConsistency:
         assert _rel_diff(getattr(SOLVER, op)(E, Ep, xi, T).value, point[ref_index]) < 1e-6
 
 
+# ── All backends fail: the zero result is flagged ─────────────────────────
+
+# A 1 meV photon scattered forward at 100 keV: both asymptotic series report
+# self-errors above 100 and both power series underflow their Poisson weights.
+ALL_BACKENDS_FAIL_POINT = (1e-6, 0.9999e-6, 1.0 - 1e-11, 100.0)
+
+
+class TestAllBackendsFail:
+    @pytest.mark.parametrize("op", ["sigma_E", "dsigma_E_dT"])
+    def test_zero_with_unit_relative_error(self, op):
+        E_kev, Ep_kev, xi, T_kev = ALL_BACKENDS_FAIL_POINT
+        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
+        result = getattr(SOLVER, op)(E, Ep, xi, T)
+        assert result.value == 0.0
+        assert result.estimated_rel_error == 1.0
+
+
 # ── Vec methods: verify vectorized wrappers match scalar calls ────────────
 
 VEC_KERNELS = [
