@@ -63,6 +63,7 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
     double smallest_term_mag = std::numeric_limits<double>::infinity();
     T best_S = static_cast<T>(0.0);
     int increase_count = 0;
+    int small_streak = 0;
     double prev_combined_mag = std::numeric_limits<double>::infinity();
 
     T factorial_n = one;
@@ -129,6 +130,11 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series(
         if (n >= n_min_ &&
             combined_mag / (norm_so_far + constants::REL_ERROR_TINY_SCALE) <
                 eps_rel_) {
+            ++small_streak;
+        } else {
+            small_streak = 0;
+        }
+        if (small_streak >= constants::SERIES_CONVERGED_STREAK) {
             double const normalized = to_double(base_term + S_combined);
             double const norm_abs_error = std::max(combined_mag, roundoff_sum);
             double const value = sigma0 * normalized;
@@ -239,6 +245,7 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
     double smallest_dterm_mag = std::numeric_limits<double>::infinity();
     T best_dS = static_cast<T>(0.0);
     int increase_count = 0;
+    int small_streak = 0;
     double prev_dcombined_mag = std::numeric_limits<double>::infinity();
 
     T factorial_n = one;
@@ -307,6 +314,11 @@ ComptonResult ComptonKernelAsymptoticSeries::asymptotic_series_derivative(
         if (n >= n_min_ &&
             dcombined_mag / (norm_so_far + constants::REL_ERROR_TINY_SCALE) <
                 eps_rel_) {
+            ++small_streak;
+        } else {
+            small_streak = 0;
+        }
+        if (small_streak >= constants::SERIES_CONVERGED_STREAK) {
             double const normalized = to_double(base_deriv + dS_combined);
             double const norm_abs_error = std::max(dcombined_mag, roundoff_sum);
             double const value = sigma0 * normalized;

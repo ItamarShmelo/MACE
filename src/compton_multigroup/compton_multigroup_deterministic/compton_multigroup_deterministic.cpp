@@ -557,6 +557,13 @@ std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_impl(
 //   3. Each selected (g, gp, angle) bin is evaluated by
 //   integrate_E_Ep_xi_bin().
 //
+// OpenMP: each incoming group g is a task, and each angle bin of a
+// (g, gp) pair is a nested task, so idle threads take angle bins from any g.
+// A flat parallel loop over g caps the speedup at G and at the cost of the
+// slowest group, and a parallel loop over angle bins alone leaves the
+// angle-integrated matrix (num_angle_bins = 1) serial.  The gp traversal
+// stays serial within g because each cutoff test needs the previous gp.
+//
 // E' uses fixed-order GL via integrate_Ep_ridge (no adaptive refinement).
 // Convergence is controlled by ep_edge_order and ep_interior_order.
 
@@ -594,7 +601,11 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
             T / units::kev_kelvin));
 
 // --- Main loop over incoming groups g ---
-#pragma omp parallel for schedule(dynamic)
+// default(shared) on both taskloops: otherwise GCC makes the reference
+// `multiplier` firstprivate, copying it as the abstract KernelMultiplier.
+#pragma omp parallel
+#pragma omp single
+#pragma omp taskloop grainsize(1) default(shared)
     for (int g = 0; g < G; ++g) {
         double const denom = weight_func_->compute_denominator(
             group_boundaries_[g],
@@ -603,8 +614,11 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
         double const inv_denom = 1.0 / denom;
 
         auto do_group = [&](int const gp) {
-            double group_sum = 0.0;
+            std::size_t const base =
+                static_cast<std::size_t>(g) * G * num_angle_bins +
+                static_cast<std::size_t>(gp) * num_angle_bins;
 
+#pragma omp taskloop grainsize(1) default(shared)
             for (int a = 0; a < num_angle_bins; ++a) {
                 double const xi_lo = -1.0 + a * dxi;
                 double const xi_hi = std::min(
@@ -621,12 +635,16 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
                     T,
                     multiplier);
 
-                std::size_t const idx =
-                    static_cast<std::size_t>(g) * G * num_angle_bins +
-                    static_cast<std::size_t>(gp) * num_angle_bins +
-                    static_cast<std::size_t>(a);
-                result[idx] = 2.0 * std::numbers::pi * numerator * inv_denom;
-                group_sum += std::abs(result[idx]);
+                result[base + static_cast<std::size_t>(a)] =
+                    2.0 * std::numbers::pi * numerator * inv_denom;
+            }
+
+            // Summed in a fixed order after the taskloop so that the cutoff
+            // decision does not depend on the thread count.
+            double group_sum = 0.0;
+            for (int a = 0; a < num_angle_bins; ++a) {
+                group_sum +=
+                    std::abs(result[base + static_cast<std::size_t>(a)]);
             }
             return group_sum;
         };

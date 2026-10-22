@@ -66,6 +66,7 @@ ComptonResult ComptonPowerSeries::power_series(
     T last_diff_change(0.0);
     T last_term_mag(0.0);
     int terms_used = 0;
+    int small_streak = 0;
 
     T ehat_plus = ehat(1, x_plus);
     T ehat_minus = ehat(1, x_minus);
@@ -91,7 +92,11 @@ ComptonResult ComptonPowerSeries::power_series(
             last_diff_change /
                     (param_abs(p.Psi + (P_plus - P_minus)) + eps_tiny) <
                 eps_rel_) {
-            break;
+            if (++small_streak >= SERIES_CONVERGED_STREAK) {
+                break;
+            }
+        } else {
+            small_streak = 0;
         }
 
         if (n < n_max_) {
@@ -209,6 +214,7 @@ ComptonResult ComptonPowerSeries::power_series_derivative(
     T last_P_diff_change(0.0);
     T last_P_term_mag(0.0);
     int terms_used = 0;
+    int small_streak = 0;
 
     T ehat_plus = ehat(1, x_plus);
     T ehat_minus = ehat(1, x_minus);
@@ -275,7 +281,11 @@ ComptonResult ComptonPowerSeries::power_series_derivative(
         if (n >= n_min_ &&
             total_trunc_est / (param_abs(deriv_normalized) + eps_tiny) <
                 eps_rel_) {
-            break;
+            if (++small_streak >= SERIES_CONVERGED_STREAK) {
+                break;
+            }
+        } else {
+            small_streak = 0;
         }
 
         if (n < n_max_) {

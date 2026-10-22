@@ -649,7 +649,6 @@ PYBIND11_MODULE(_compton_multigroup, m) // NOLINT(misc-include-cleaner)
         "met");
 
     m.attr("XI_ENDPOINT_EPS") = compton::XI_ENDPOINT_EPS;
-    m.attr("XI_CUSP_TAU") = compton::XI_CUSP_TAU;
 
     // --- Monte Carlo ---
     py::class_<MCIntegrationConfig>(m, "MCIntegrationConfig")

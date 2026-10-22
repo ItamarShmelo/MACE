@@ -160,8 +160,12 @@ template <> struct EhatCfConfig<double> {
     static constexpr int max_iter = 1000;
 };
 
+/// The tolerance must sit near DD machine epsilon (~5e-32): the E_1 series
+/// cancels by up to ~500x for x < 4, and the power-series P+ - P- difference
+/// can cancel by 1e13, so a looser tolerance leaks into the kernel at the
+/// 1e-5 level without showing in the roundoff estimate.
 template <> struct EhatCfConfig<DD> {
-    static constexpr double cf_tol = 1e-20;
+    static constexpr double cf_tol = 1e-30;
     static constexpr int max_iter = 2000;
 };
 
@@ -209,9 +213,13 @@ template <typename T> inline T ehat_series(T const& x, double const tol)
     T term(x);
     T S = term;
     for (int k = 1; k <= 80; ++k) {
-        double const recur_factor =
-            static_cast<double>(k) / static_cast<double>((k + 1) * (k + 1));
-        term = term * neg_x * T(recur_factor);
+        // k/(k+1)^2 is not exact in double; rounding it would cap the DD
+        // series at double accuracy, and E_1 = -gamma - ln x + S cancels
+        // by up to ~500x for x < 4.
+        T const recur_factor =
+            T(static_cast<double>(k)) /
+            T(static_cast<double>((k + 1) * (k + 1)));
+        term = term * neg_x * recur_factor;
         S = S + term;
         if (param_abs(term) < tol * param_abs(S)) {
             break;
@@ -220,6 +228,30 @@ template <typename T> inline T ehat_series(T const& x, double const tol)
 
     T const E1 = -gamma_euler - ln_x + S;
     return param_exp(x) * E1;
+}
+
+/**
+ * @brief Hankel asymptotic sum for exp(x) K_ν(x) · √(2x/π), with μ = 4ν².
+ *
+ * The k-th term is Π_{j=1}^{k} (μ − (2j−1)²) / (8 x j).  Summation stops once
+ * a term falls below double-precision resolution of the running sum.  For
+ * x ≥ 50 and ν ≤ 2 this takes at most 13 terms, far below the k ≈ 2x where
+ * the asymptotic series starts to diverge.
+ */
+inline double hankel_scaled_K_sum(double const mu, double const x)
+{
+    double const inv8x = 1.0 / (8.0 * x);
+    double term = 1.0;
+    double sum = 1.0;
+    for (int k = 1; k <= 40; ++k) {
+        double const odd = 2.0 * k - 1.0;
+        term *= (mu - odd * odd) * inv8x / k;
+        sum += term;
+        if (std::abs(term) < 1e-17 * std::abs(sum)) {
+            break;
+        }
+    }
+    return sum;
 }
 
 } // namespace details
@@ -304,8 +336,8 @@ inline T ehat(
  * @brief Scaled modified Bessel function: K̃₂(x) = exp(x) · K₂(x).
  *
  * Uses Boost cyl_bessel_k for x < 50 (numerically stable after multiplying
- * by exp(x)), and a 5-term Hankel asymptotic expansion for x ≥ 50 where
- * the direct computation would overflow/underflow.
+ * by exp(x)), and the Hankel asymptotic expansion summed to double precision
+ * for x ≥ 50 where the direct computation would overflow/underflow.
  */
 inline double scaled_K2(double x)
 {
@@ -317,25 +349,9 @@ inline double scaled_K2(double x)
         return std::exp(x) * boost::math::cyl_bessel_k(2, x);
     }
 
-    double const inv8x = 1.0 / (8.0 * x);
     constexpr double mu = 16.0;
-
-    double term = 1.0;
-    double sum = 1.0;
-
-    term *= (mu - 1.0) * inv8x;
-    sum += term;
-
-    term *= (mu - 9.0) * inv8x / 2.0;
-    sum += term;
-
-    term *= (mu - 25.0) * inv8x / 3.0;
-    sum += term;
-
-    term *= (mu - 49.0) * inv8x / 4.0;
-    sum += term;
-
-    return std::sqrt(std::numbers::pi / (2.0 * x)) * sum;
+    return std::sqrt(std::numbers::pi / (2.0 * x)) *
+           details::hankel_scaled_K_sum(mu, x);
 }
 
 /**
@@ -354,25 +370,9 @@ inline double scaled_K1(double const x)
         return std::exp(x) * boost::math::cyl_bessel_k(1, x);
     }
 
-    double const inv8x = 1.0 / (8.0 * x);
     constexpr double mu = 4.0;
-
-    double term = 1.0;
-    double sum = 1.0;
-
-    term *= (mu - 1.0) * inv8x;
-    sum += term;
-
-    term *= (mu - 9.0) * inv8x / 2.0;
-    sum += term;
-
-    term *= (mu - 25.0) * inv8x / 3.0;
-    sum += term;
-
-    term *= (mu - 49.0) * inv8x / 4.0;
-    sum += term;
-
-    return std::sqrt(std::numbers::pi / (2.0 * x)) * sum;
+    return std::sqrt(std::numbers::pi / (2.0 * x)) *
+           details::hankel_scaled_K_sum(mu, x);
 }
 
 /**
@@ -391,6 +391,12 @@ namespace constants {
 
 /// Floor added to relative-error denominators to avoid division by zero.
 constexpr double REL_ERROR_TINY_SCALE = 1e-300;
+
+/// Number of consecutive below-tolerance terms required before a series is
+/// accepted as converged.  The convergence tests compare the change of a
+/// difference of two series, which can vanish at a single n by cancellation
+/// while both series are still far from converged.
+constexpr int SERIES_CONVERGED_STREAK = 2;
 
 } // namespace constants
 

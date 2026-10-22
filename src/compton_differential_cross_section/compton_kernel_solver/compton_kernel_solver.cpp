@@ -143,7 +143,7 @@ ComptonResult ComptonKernelSolver::sigma_E(
                 tau,
                 xi);
         }
-        return ComptonResult{0.0, 1.0};
+        return ComptonResult{0.0, 1.0, 1.0, 0};
     }
     if (result.value < 0.0) {
         if (verbose_) {
@@ -195,7 +195,7 @@ ComptonResult ComptonKernelSolver::dsigma_E_dT(
                 tau,
                 xi);
         }
-        return ComptonResult{0.0, 1.0};
+        return ComptonResult{0.0, 1.0, 1.0, 0};
     }
 }
 

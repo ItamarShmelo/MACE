@@ -21,6 +21,20 @@
  *
  *   Throws if no backend passes its tolerance.
  *
+ * Known limitation near the threshold: the threshold is the cost crossover of
+ * the two series, not an accuracy boundary. For tau_alpha_max between about
+ * 0.025 and the threshold, the divergent asymptotic series is
+ * truncation-limited for dsigma_E_dT, and DD does not help. A2 then returns a
+ * result whose error exceeds 1e-7 but is reported in estimated_rel_error (up
+ * to ~5e-3 at ~0.1% of these points). sigma_E is unaffected. Replacing these
+ * values by the converged DD power series changes group matrices by at most
+ * ~1e-7 of the row maximum, so the dispatch keeps its loose DD tolerances and
+ * never crosses regimes. Pointwise callers that need dsigma_E_dT to 1e-7
+ * should check estimated_rel_error. Any cross-regime fallback must guard
+ * against the DD power series, which deep in the asymptotic regime
+ * (E/kT <~ 1e-6) can stall with a tiny self-error and a value wrong by many
+ * orders of magnitude.
+ *
  * All dispatch thresholds are configurable at construction time.
  */
 
