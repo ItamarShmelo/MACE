@@ -115,7 +115,7 @@ struct MGIntegrationConfig {
      * @param ep_interior_order       GL order for E' ridge interior (defaults
      * to 24).
      * @param e_panel_order           GL order for E-axis sub-panels (defaults
-     * to 12).
+     * to 16).
      * @param log_e_panel_ratio       Panel width ratio threshold for log/rlog
      * mapping (must be > 1).
      * @param e_boundary_k            E-panel boundary-layer width in sigma
@@ -154,8 +154,8 @@ struct MGIntegrationConfig {
     }
 
     /** @brief Effective E-axis per-panel GL order (e_panel_order if set,
-     * otherwise 12). */
-    int effective_e_panel_order() const { return e_panel_order.value_or(12); }
+     * otherwise 16). */
+    int effective_e_panel_order() const { return e_panel_order.value_or(16); }
 };
 
 /**

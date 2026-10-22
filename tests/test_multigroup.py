@@ -547,11 +547,11 @@ class TestNewConfigFields:
 
     def test_e_panel_order_default(self):
         cfg = cm.MGIntegrationConfig()
-        assert cfg.effective_e_panel_order() == 12
+        assert cfg.effective_e_panel_order() == 16
 
     def test_e_panel_order_explicit(self):
-        cfg = cm.MGIntegrationConfig(e_panel_order=16)
-        assert cfg.effective_e_panel_order() == 16
+        cfg = cm.MGIntegrationConfig(e_panel_order=12)
+        assert cfg.effective_e_panel_order() == 12
 
     def test_log_e_panel_ratio_default(self):
         cfg = cm.MGIntegrationConfig()
