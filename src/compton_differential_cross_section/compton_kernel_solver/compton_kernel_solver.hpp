@@ -11,27 +11,29 @@
  *     A1. Asymptotic series (double) -- accepted if self-error <
  * asymp_self_tol. The roundoff-aware error estimator naturally reports large
  * errors at ultra-low gamma, triggering escalation to DD. A2. Asymptotic series
- * (DD) -- accepted if self-error < dd_asymp_self_tol. A3. Power series (DD) --
- * accepted if self-error < dd_power_series_self_tol, (for sigma_E)
- * non-negative, and consistent with the A2 result. The asymptotic series is
- * divergent, so just below the threshold A2 is truncation-limited (up to ~1e-4
- * for dsigma_E_dT) while the DD power series is accurate.
+ * (DD) -- accepted if self-error < dd_asymp_self_tol.
  *
  *   Power series regime (tau_alpha_max >= threshold):
  *     P1. Power series (double) -- accepted if self-error <
  * power_series_self_tol and (for sigma_E) non-negative. P2. Power series (DD,
  * n_max=500) -- accepted if self-error < dd_power_series_self_tol and (for
- * sigma_E) non-negative. P3. Asymptotic series (DD) -- accepted if
- * self-error < dd_asymp_self_tol and consistent with the P2 result.
+ * sigma_E) non-negative.
  *
- *   Consistent means the cross-regime value differs from the in-regime DD
- *   value by at most 10 times the in-regime self-error.  Deep in the
- *   asymptotic regime the power series can stall after a few terms with a
- *   tiny self-error while being wrong by many orders of magnitude.
+ *   Throws if no backend passes its tolerance.
  *
- *   If no backend passes its tolerance, the in-regime DD result (A2 or P2) is
- *   returned when its self-error is below dd_last_resort_self_tol.  Otherwise
- *   the call throws.
+ * Known limitation near the threshold: the threshold is the cost crossover of
+ * the two series, not an accuracy boundary. For tau_alpha_max between about
+ * 0.025 and the threshold, the divergent asymptotic series is
+ * truncation-limited for dsigma_E_dT, and DD does not help. A2 then returns a
+ * result whose error exceeds 1e-7 but is reported in estimated_rel_error (up
+ * to ~5e-3 at ~0.1% of these points). sigma_E is unaffected. Replacing these
+ * values by the converged DD power series changes group matrices by at most
+ * ~1e-7 of the row maximum, so the dispatch keeps its loose DD tolerances and
+ * never crosses regimes. Pointwise callers that need dsigma_E_dT to 1e-7
+ * should check estimated_rel_error. Any cross-regime fallback must guard
+ * against the DD power series, which deep in the asymptotic regime
+ * (E/kT <~ 1e-6) can stall with a tiny self-error and a value wrong by many
+ * orders of magnitude.
  *
  * All dispatch thresholds are configurable at construction time.
  */
@@ -56,12 +58,10 @@ class ComptonKernelSolver {
      *        its self-reported relative error is below this tolerance.
      *        When exceeded, the solver escalates to DD within the regime.
      * @param dd_power_series_self_tol  Accept DD power-series result when
-     *        its self-reported relative error is below this tolerance.
+     *        its self-reported relative error is below this (looser)
+     *        tolerance.
      * @param dd_asymp_self_tol  Accept DD asymptotic result when its
-     *        self-reported relative error is below this tolerance.
-     * @param dd_last_resort_self_tol  When no backend meets its tolerance,
-     *        return the in-regime DD result if its self-reported error is
-     *        below this (looser) tolerance.
+     *        self-reported relative error is below this (looser) tolerance.
      */
     enum class KernelOp { sigma, dsigma_dT };
 
@@ -69,9 +69,8 @@ class ComptonKernelSolver {
         double asymp_tau_alpha_threshold = constants::ASYMP_TAU_ALPHA_THRESHOLD,
         double power_series_self_tol = 1e-7,
         double asymp_self_tol = 1e-7,
-        double dd_power_series_self_tol = 1e-6,
-        double dd_asymp_self_tol = 1e-6,
-        double dd_last_resort_self_tol = 0.5,
+        double dd_power_series_self_tol = 0.5,
+        double dd_asymp_self_tol = 0.5,
         bool verbose = false);
 
     virtual ~ComptonKernelSolver() = default;
@@ -88,7 +87,6 @@ class ComptonKernelSolver {
     double asymp_self_tol_;
     double dd_power_series_self_tol_;
     double dd_asymp_self_tol_;
-    double dd_last_resort_self_tol_;
     bool verbose_;
 
     ComptonKernelAsymptoticSeries asymp_series_;

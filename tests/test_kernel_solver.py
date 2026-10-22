@@ -361,59 +361,6 @@ class TestDDPowerSeriesCancellation:
         assert _rel_diff(SOLVER.dsigma_E_dT(E, Ep, xi, T).value, dsigma_ref) < 1e-10
 
 
-# ── Asymptotic-to-power fallback just below the dispatch threshold ────────
-
-# tau * max(alpha+-) = 0.034: the divergent asymptotic series is truncation
-# limited (dsigma error 4e-4, self-error 3e-4), while the DD power series is
-# accurate to 1e-10.
-THRESHOLD_FALLBACK_POINT = (17.584264094404613, 23.618746434472378, -0.35615451539261933, 20.996197624434828)
-
-
-class TestAsymptoticToPowerFallback:
-    def test_dsigma_E_dT_matches_dd_power_series(self):
-        E_kev, Ep_kev, xi, T_kev = THRESHOLD_FALLBACK_POINT
-        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        asymp = ComptonKernelAsymptoticSeries(high_precision=True).dsigma_E_dT(E, Ep, xi, T)
-        assert asymp.estimated_rel_error > 1e-6
-        dd = DD_SERIES.dsigma_E_dT(E, Ep, xi, T)
-        assert dd.estimated_rel_error < 1e-8
-        assert _rel_diff(SOLVER.dsigma_E_dT(E, Ep, xi, T).value, dd.value) < 1e-8
-
-    def test_old_tolerances_accept_the_asymptotic_result(self):
-        """With the former DD tolerance of 0.5 the truncation-limited result is kept."""
-        E_kev, Ep_kev, xi, T_kev = THRESHOLD_FALLBACK_POINT
-        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        old = ComptonKernelSolver(dd_power_series_self_tol=0.5, dd_asymp_self_tol=0.5)
-        asymp = ComptonKernelAsymptoticSeries(high_precision=True).dsigma_E_dT(E, Ep, xi, T)
-        assert old.dsigma_E_dT(E, Ep, xi, T).value == asymp.value
-
-
-# ── Cross-regime result rejected when inconsistent ────────────────────────
-
-# E/kT = 1e-6 near the forward direction: the DD asymptotic series is accurate
-# to 4e-8 but reports 1.5e-6, just above dd_asymp_self_tol, while the DD power
-# series stalls after six terms with a self-error of 5e-25 and a value 1e19 too
-# large.  References: 60-digit adaptive quadrature of the pre-IBP Kershaw
-# integral, unchanged at 80 digits.
-INCONSISTENT_FALLBACK_POINTS = [
-    # (E_kev, Ep_kev, xi, T_kev, sigma_ref, dsigma_ref)
-    (1e-5, 9.5e-06, 0.99, 10.0, 3.3579822886840964e-12, 7.876015670016806e-20),
-    (1e-5, 1.01e-05, 0.99, 10.0, 8.428605910848242e-11, -2.976772179869322e-19),
-]
-
-
-class TestCrossRegimeConsistency:
-    @pytest.mark.parametrize("op,ref_index", [("sigma_E", 4), ("dsigma_E_dT", 5)])
-    @pytest.mark.parametrize("point", INCONSISTENT_FALLBACK_POINTS)
-    def test_stalled_power_series_rejected(self, point, op, ref_index):
-        E_kev, Ep_kev, xi, T_kev = point[:4]
-        E, Ep, T = E_kev * kev, Ep_kev * kev, T_kev * kev_kelvin
-        stalled = getattr(DD_SERIES, op)(E, Ep, xi, T)
-        assert stalled.estimated_rel_error < 1e-6
-        assert _rel_diff(stalled.value, point[ref_index]) > 1.0
-        assert _rel_diff(getattr(SOLVER, op)(E, Ep, xi, T).value, point[ref_index]) < 1e-6
-
-
 # ── All backends fail: the zero result is flagged ─────────────────────────
 
 # A 1 meV photon scattered forward at 100 keV: both asymptotic series report

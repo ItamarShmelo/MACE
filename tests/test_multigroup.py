@@ -290,23 +290,6 @@ class TestHardPhysicsRegression:
         row_sums = S.sum(axis=(1, 2))
         assert np.all(row_sums >= 0), "negative row sums"
 
-    def test_soft_photons_in_hot_plasma(self):
-        """E/kT ~ 1e-6: the in-group fraction is scale invariant in the Thomson limit.
-
-        A stalled DD power series accepted as a cross-regime fallback once made
-        the [1e-5, 4.64e-5] keV entry 1e16 times sigma_T.
-        """
-        T = 10.0 * kev_kelvin
-        diag = []
-        for lo_kev in (1e-5, 2e-5):
-            mg = cm.ComptonMultigroupKernel(
-                energy_group_boundaries=[lo_kev * kev, 4.64 * lo_kev * kev],
-                weight_function=cm.UniformWeightFunction(),
-                config=_config(),
-            )
-            diag.append(mg.compute_sigma_matrix(KERNEL, T=T)[0, 0])
-        assert diag[0] == pytest.approx(diag[1], rel=1e-5)
-
 
 # ---------------------------------------------------------------------------
 # 5. Group cutoff (outward-from-peak early termination)
