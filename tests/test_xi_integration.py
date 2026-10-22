@@ -113,9 +113,8 @@ class TestEndpointLocalized:
         assert rel < 0.05, f"broad-sigma vs ref: max rel diff = {rel:.2e}"
 
     def test_constants_exposed(self):
-        """The calibrated constants are accessible from Python."""
+        """The calibrated constant is accessible from Python."""
         assert cm.XI_ENDPOINT_EPS == 0.1
-        assert cm.XI_CUSP_TAU == 0.001
 
 
 # ---------------------------------------------------------------------------
@@ -353,16 +352,24 @@ class TestEndpointLocalizedPredicate:
         assert cm.endpoint_localized_xi(1.0, 2.0, 0.0) is False
 
     def test_near_elastic_cusp_hot(self):
-        """Hot T, same-group: |dg|/gamma <= eps and tau > cusp_tau -> True."""
+        """Hot T, same-group: |dg|/gamma <= eps and the peak touches xi = 1 -> True."""
         # gamma=0.1, gamma_p=0.105, tau=2.0
-        # |dg|/gamma = 0.05 <= 0.1, tau=2.0 > 0.001
+        # |dg|/gamma = 0.05 <= 0.1
         assert cm.endpoint_localized_xi(0.1, 0.105, 2.0) is True
 
     def test_near_elastic_cusp_cold_rejected(self):
-        """Cold T, same-group: tau < cusp_tau so cusp condition does not fire."""
+        """Cold T, same-group: the peak lies many sigma_xi below xi = 1 -> False."""
         # gamma=0.1, gamma_p=0.105, tau=1e-8
-        # |dg|/gamma = 0.05 <= 0.1 but tau=1e-8 < 0.001
+        # peak_distance = 0.005/0.0105 = 0.48, sigma_xi = 9.5e-4
         assert cm.endpoint_localized_xi(0.1, 0.105, 1e-8) is False
+
+    def test_near_elastic_cusp_cold_thermal_photon(self):
+        """Cool T, low-energy photon: sigma_xi > eps, but the forward cusp dominates -> True."""
+        # kT = 0.1 keV, E = 1 keV, E'/E = 1 + 3e-4
+        # sigma_xi = 0.43 > 0.1, so condition A fails, and |dg|/gamma = 3e-4
+        tau = 0.1 / 511.0
+        gamma = 1.0 / 511.0
+        assert cm.endpoint_localized_xi(gamma, gamma * (1.0 + 3e-4), tau) is True
 
     def test_far_group_hot(self):
         """Hot T, far groups: |dg|/gamma >> eps -> False."""
@@ -411,6 +418,37 @@ class TestNearElasticHighEnergyXiIntegral:
         )
         rel = abs(value / ref - 1.0)
         assert rel < 1e-3, f"default-order xi integral rel err = {rel:.2e}"
+
+
+class TestNearElasticColdXiIntegral:
+    """Full-range xi integral for a near-elastic thermal photon below tau = 1e-3.
+
+    The forward cusp makes the integrand rise steeply toward xi = 1. When the
+    near-elastic condition was limited to tau > 1e-3, plain GL integrated it
+    and the default-order value was off by up to 1e-2.
+    """
+
+    @pytest.mark.parametrize("ratio", [1.0 + 1e-4, 1.0 + 3e-4, 1.0 - 3e-4])
+    def test_default_orders_vs_adaptive(self, ratio):
+        from scipy.integrate import quad
+
+        E, Ep, T = 1.0 * kev, ratio * kev, 0.1 * kev_kelvin
+
+        mg = cm.ComptonMultigroupKernel(
+            energy_group_boundaries=[0.5 * kev, 2.0 * kev],
+            weight_function=cm.UniformWeightFunction(),
+            config=cm.MGIntegrationConfig(),
+        )
+        value = mg.compute_xi_integral_sigma(KERNEL, E, Ep, 1, T)[0]
+
+        xi_max = 1.0 - 1e-14
+        edges = [-1.0, 0.0, 0.9, 0.99] + [1.0 - 10.0**-k for k in range(3, 14)] + [xi_max]
+        ref = sum(
+            quad(lambda x: KERNEL.sigma_E(E, Ep, x, T).value, a, b, epsabs=0.0, epsrel=1e-8, limit=400)[0]
+            for a, b in zip(edges[:-1], edges[1:])
+        )
+        rel = abs(value / ref - 1.0)
+        assert rel < 1e-6, f"default-order xi integral rel err = {rel:.2e}"
 
 
 # ---------------------------------------------------------------------------

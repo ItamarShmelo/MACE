@@ -518,10 +518,6 @@ inline RidgeBounds compute_ridge_bounds(
 /// Calibrated against 50 log-spaced temperatures from 1e-5 to 1e3 keV.
 inline constexpr double XI_ENDPOINT_EPS = 0.1;
 
-/// Minimum dimensionless temperature τ = kT/m_e c² for the near-elastic
-/// Klein–Nishina cusp path.  Below this τ, condition (A) alone is sufficient.
-inline constexpr double XI_CUSP_TAU = 0.001;
-
 /**
  * @brief Test whether the endpoint-localized reflected-log condition is met.
  *
@@ -532,21 +528,22 @@ inline constexpr double XI_CUSP_TAU = 0.001;
  *      narrow:
  *          Δγ / (γ γ') ≤ σ_ξ   AND   σ_ξ ≤ ε_ξ
  *
- *   B. **Near-elastic kinematic cusp:** at warm/hot temperatures the
- *      fractional energy transfer is small enough that the Klein–Nishina
- *      forward peak at ξ = 1 still dominates the last angular bin:
- *          |Δγ| / γ ≤ ε_ξ  AND  τ > τ_cusp  AND  Δγ / (γ γ') ≤ σ_ξ
+ *   B. **Near-elastic kinematic cusp:** the fractional energy transfer is
+ *      small enough that the Klein–Nishina forward peak at ξ = 1 still
+ *      dominates the angular bin:
+ *          |Δγ| / γ ≤ ε_ξ  AND  Δγ / (γ γ') ≤ σ_ξ
  *
- * Condition (A) handles the narrow-peak regime (cold/moderate T).
- * Condition (B) handles same-group scattering at hot T where σ_ξ ≫ 1
- * but the KN forward cusp still needs rlog resolution.  Its last clause
- * excludes high-energy photons (γ ≳ 20τ), whose angular peak is narrow
- * and lies many σ_ξ below ξ = 1, where the reflected-log rule clusters
- * its nodes away from the peak.
+ * Condition (A) handles the narrow-peak regime.  Condition (B) handles
+ * near-elastic scattering where σ_ξ is large but the KN forward cusp still
+ * needs rlog resolution.  This happens at hot T, and at every T for photons
+ * with γ ≲ sqrt(20τ), which includes all thermal photons below
+ * τ = 1e-3.  The last clause of (B) excludes high-energy photons
+ * (γ ≳ 20τ), whose angular peak is narrow and lies many σ_ξ below ξ = 1,
+ * where the reflected-log rule clusters its nodes away from the peak.
  *
- * The constants ε_ξ = XI_ENDPOINT_EPS and τ_cusp = XI_CUSP_TAU were
- * calibrated against a 50-point temperature sweep (1e-5 to 1e3 keV)
- * measuring last-angular-bin convergence at xi_order=48 vs 512.
+ * The constant ε_ξ = XI_ENDPOINT_EPS was calibrated against a 50-point
+ * temperature sweep (1e-5 to 1e3 keV) measuring last-angular-bin
+ * convergence at xi_order=48 vs 512.
  *
  * @param gamma   Dimensionless incoming photon energy  E  / m_e c².
  * @param gamma_p Dimensionless outgoing photon energy E' / m_e c².
@@ -569,7 +566,6 @@ inline bool endpoint_localized_xi(
         sigma_xi <= XI_ENDPOINT_EPS;
     bool const near_elastic_cusp =
         abs_dg <= gamma * XI_ENDPOINT_EPS &&
-        tau > XI_CUSP_TAU &&
         peak_distance_from_one <= sigma_xi;
 
     return thermal_endpoint || near_elastic_cusp;
