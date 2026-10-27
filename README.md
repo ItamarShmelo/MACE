@@ -97,6 +97,14 @@ uv run python examples/point_kernel.py
 
 Plots and NumPy data files are written to `examples/output/`.
 
+## Accuracy and known limitations
+
+The default quadrature settings are not converged in every regime: Wien and
+Planck weights at large E/kT, cold temperatures, and wide forward angle bins
+need higher orders or a wider outgoing-energy window. See
+[`known_limitations.md`](known_limitations.md) for the measured errors and the
+settings to use, and [`todo.md`](todo.md) for planned fixes.
+
 ## Development
 
 ```bash
