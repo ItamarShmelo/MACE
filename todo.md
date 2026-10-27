@@ -49,3 +49,5 @@ Planned work, roughly in order of value. Most items address an entry in
 
 - [ ] Tag a release once the limitations above are documented and the
   published tables reference it.
+- [ ] When the MACE paper is published, replace the arXiv citation in the
+  README (arXiv:2610.25117) with the journal reference and DOI.

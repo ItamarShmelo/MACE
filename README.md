@@ -112,6 +112,26 @@ just test
 just check
 ```
 
+## Citing MACE
+
+If you use MACE, please cite:
+
+I. Giron, M. Krief, and E. Steinberg, "MACE: Multigroup-Multiangle Integrated
+Thermal Compton Scattering Kernel," arXiv:2610.25117 (2026).
+[arXiv:2610.25117](https://arxiv.org/abs/2610.25117)
+
+```bibtex
+@misc{giron2026mace,
+  author        = {Giron, Itamar and Krief, Menahem and Steinberg, Elad},
+  title         = {{MACE}: Multigroup-Multiangle Integrated Thermal Compton Scattering Kernel},
+  year          = {2026},
+  eprint        = {2610.25117},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.IM},
+  url           = {https://arxiv.org/abs/2610.25117}
+}
+```
+
 ## Reference
 
 D. S. Kershaw, M. K. Prasad, and J. D. Beason, "A simple and fast method for
