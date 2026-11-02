@@ -13,6 +13,7 @@
 #include <mpi.h>
 
 #include <chrono>
+#include <fstream>
 #include <cmath>
 #include <filesystem>
 #include <format>
@@ -114,6 +115,71 @@ int main(int argc, char** argv)
           "last-bit changes of the temperature grid keep the cache key");
     nudged.temperatures[1] *= 1.0 + 1e-9;
     check(table_key(nudged) != table_key(spec), "a real change of the grid changes the cache key");
+
+    // Cold recoil (astra's counterexample): E in [0.5, 1] m_e c^2, E' in [0.25, 0.5], xi in [-0.5625, -0.5]
+    // contains e' = e / (1 + e (1 - xi)) (e = 0.75, xi = -0.53125), so no electron energy is needed: s = 0.
+    {
+        TableSpec recoil;
+        recoil.boundaries = {0.25 * units::me_c2, 0.5 * units::me_c2, 1.0 * units::me_c2};
+        recoil.centers = {0.375 * units::me_c2, 0.75 * units::me_c2};
+        recoil.temperatures = {1e3, 1e4};
+        recoil.num_angle_bins = 32;
+        check(suppression_exponent(recoil, 1, 0, 7, 1e3) == 0.0, "cold recoil inside the box is not suppressed");
+    }
+
+    // Failures are collective: a corrupt cache file and an unwritable cache directory make every rank throw.
+    auto all_throw = [&](std::string const& cache) {
+        int threw = 0;
+        try {
+            (void) load_or_build_mpi(spec, cache, MPI_COMM_WORLD, nullptr);
+        } catch (std::exception const&) {
+            threw = 1;
+        }
+        int total = 0;
+        MPI_Allreduce(&threw, &total, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+        return total == size;
+    };
+    std::string const corrupt = directory + "_corrupt";
+    std::string const locked = directory + "_readonly";
+    if (rank == 0) {
+        std::filesystem::create_directories(corrupt);
+        std::ofstream(std::filesystem::path(corrupt) / cache_file_name(spec)) << "not a table\n";
+        std::filesystem::create_directories(locked);
+        std::filesystem::permissions(locked, std::filesystem::perms::owner_read | std::filesystem::perms::owner_exec);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    check(all_throw(corrupt), "a corrupt cache file fails on every rank");
+    check(all_throw(locked), "an unwritable cache directory fails on every rank");
+
+    // A stale lock is taken over and the table is built.
+    std::string const stale = directory + "_stale";
+    if (rank == 0) {
+        std::filesystem::create_directories(stale);
+        std::filesystem::path const lock = std::filesystem::path(stale) / (cache_file_name(spec) + ".lock");
+        std::ofstream(lock) << "dead.owner.0\n";
+        std::filesystem::last_write_time(lock, std::filesystem::file_time_type::clock::now() - std::chrono::hours(2));
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    Table const taken = load_or_build_mpi(spec, stale, MPI_COMM_WORLD, nullptr, 60.0);
+    check(same(taken, mpi), "a stale lock is taken over and the table built");
+
+    if (rank == 0) {
+        // The cache must reject a table whose centre separations differ (key aliasing at 12 digits).
+        Table altered = read_table((std::filesystem::path(stale) / cache_file_name(spec)).string());
+        bool rejected = false;
+        TableSpec moved = spec;
+        moved.centers[1] *= 1.0 + 1e-6;
+        try {
+            check_compatible(altered, moved);
+        } catch (std::exception const&) {
+            rejected = true;
+        }
+        check(rejected, "check_compatible rejects moved centres");
+        std::filesystem::permissions(locked, std::filesystem::perms::owner_all);
+        for (std::string const& path : {corrupt, locked, stale}) {
+            std::filesystem::remove_all(path);
+        }
+    }
 
     double const e = 0.3;
     check(std::abs(minimum_lorentz_factor(e, e, -1.0) - std::sqrt(1.0 + e * e)) < 1e-14,

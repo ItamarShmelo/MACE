@@ -94,28 +94,20 @@ if(COMPTON_ENABLE_OMP)
     target_link_libraries(mace_core PUBLIC OpenMP::OpenMP_CXX)
 endif()
 
-# The commit goes into the Compton table cache key.
-execute_process(
-    COMMAND git rev-parse HEAD
-    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-    OUTPUT_VARIABLE MACE_GIT_COMMIT
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    RESULT_VARIABLE mace_git_result
-    ERROR_QUIET)
-if(NOT mace_git_result EQUAL 0)
-    set(MACE_GIT_COMMIT "unknown")
-else()
-    execute_process(
-        COMMAND git diff --quiet HEAD -- src
-        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-        RESULT_VARIABLE mace_git_dirty
-        ERROR_QUIET)
-    if(NOT mace_git_dirty EQUAL 0)
-        set(MACE_GIT_COMMIT "${MACE_GIT_COMMIT}-dirty")
-    endif()
-endif()
-set_source_files_properties(src/compton_table/compton_table.cpp PROPERTIES
-    COMPILE_DEFINITIONS "MACE_GIT_COMMIT=\"${MACE_GIT_COMMIT}\"")
+# The commit (with a hash of uncommitted src changes) goes into the Compton
+# table cache key; regenerated on every build, rewritten only when it changes.
+set(MACE_VERSION_HEADER "${PROJECT_BINARY_DIR}/generated/mace_version.hpp")
+execute_process(COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR}
+    -DOUTPUT=${MACE_VERSION_HEADER} -P ${PROJECT_SOURCE_DIR}/cmake/MaceVersion.cmake)
+add_custom_target(mace_version
+    COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR}
+        -DOUTPUT=${MACE_VERSION_HEADER} -P ${PROJECT_SOURCE_DIR}/cmake/MaceVersion.cmake
+    BYPRODUCTS ${MACE_VERSION_HEADER}
+    COMMENT "MACE version fingerprint")
+add_dependencies(mace_core mace_version)
+target_include_directories(mace_core PRIVATE "${PROJECT_BINARY_DIR}/generated")
+find_package(Threads REQUIRED)
+target_link_libraries(mace_core PUBLIC Threads::Threads)
 
 # MPI table builder and the build_compton_table tool.
 if(MACE_ENABLE_MPI)

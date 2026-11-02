@@ -1,19 +1,15 @@
 #include "compton_table/compton_table_mpi.hpp"
 
 #include <algorithm>
-#include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <exception>
 #include <filesystem>
 #include <format>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <thread>
 #include <vector>
-
-#include <fcntl.h>
-#include <unistd.h>
 
 namespace compton::table {
 
@@ -48,6 +44,29 @@ void broadcast(std::string& text, MPI_Comm const comm)
     MPI_Bcast(text.data(), static_cast<int>(size), MPI_CHAR, 0, comm);
 }
 
+/// Rank 0's outcome of a step only it performs, shared before any further
+/// collective: every rank throws the same error when rank 0 failed.
+void share_root_status(bool const failed, std::string message, MPI_Comm const comm)
+{
+    int status = failed ? 1 : 0;
+    MPI_Bcast(&status, 1, MPI_INT, 0, comm);
+    if (status != 0) {
+        broadcast(message, comm);
+        throw std::runtime_error(message);
+    }
+}
+
+/// Every rank's outcome of a step all ranks perform: if any failed, all throw.
+void share_all_status(bool const failed, std::string const& message, MPI_Comm const comm)
+{
+    int local = failed ? 1 : 0;
+    int any = 0;
+    MPI_Allreduce(&local, &any, 1, MPI_INT, MPI_MAX, comm);
+    if (any != 0) {
+        throw std::runtime_error(failed ? message : "Compton table build failed on another rank");
+    }
+}
+
 std::string format_seconds(double const seconds)
 {
     auto const total = static_cast<long long>(seconds + 0.5);
@@ -56,42 +75,6 @@ std::string format_seconds(double const seconds)
     }
     return std::format("{}m{:02}s", total / 60, total % 60);
 }
-
-/// Touches the lock file every minute while the table is being built, so
-/// other jobs do not take it over.
-class LockHeartbeat {
-  public:
-    explicit LockHeartbeat(std::filesystem::path path)
-        : path_(std::move(path)), thread_([this] { run(); })
-    {
-    }
-    LockHeartbeat(LockHeartbeat const&) = delete;
-    LockHeartbeat& operator=(LockHeartbeat const&) = delete;
-    ~LockHeartbeat()
-    {
-        stop_ = true;
-        thread_.join();
-    }
-
-  private:
-    void run()
-    {
-        auto last = std::chrono::steady_clock::now();
-        while (!stop_) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-            if (std::chrono::steady_clock::now() - last >= std::chrono::seconds(60)) {
-                std::error_code error;
-                std::filesystem::last_write_time(
-                    path_, std::filesystem::file_time_type::clock::now(), error);
-                last = std::chrono::steady_clock::now();
-            }
-        }
-    }
-
-    std::filesystem::path path_;
-    std::atomic<bool> stop_{false};
-    std::thread thread_;
-};
 
 } // namespace
 
@@ -121,12 +104,24 @@ Table build_mpi(TableSpec const& spec, MPI_Comm const comm, std::ostream* const 
                  << std::flush;
         };
     }
-    Table table = compute_partial(spec, rank, size, progress);
+    Table table;
+    bool failed = false;
+    std::string message;
+    try {
+        table = compute_partial(spec, rank, size, progress);
+    } catch (std::exception const& error) {
+        failed = true;
+        message = std::format("Compton table build failed on rank {}: {}", rank, error.what());
+    }
+    share_all_status(failed, message, comm);
     allreduce_sum(table.sigma, comm);
     allreduce_sum(table.dsigma_dT, comm);
     double seconds = table.diagnostics.build_seconds;
     MPI_Allreduce(MPI_IN_PLACE, &seconds, 1, MPI_DOUBLE, MPI_MAX, comm);
     table.diagnostics.build_seconds = seconds;
+    unsigned long long tapered = table.diagnostics.tapered_entries;
+    MPI_Allreduce(MPI_IN_PLACE, &tapered, 1, MPI_UNSIGNED_LONG_LONG, MPI_SUM, comm);
+    table.diagnostics.tapered_entries = static_cast<std::size_t>(tapered);
     finalize(table);
     return table;
 }
@@ -141,49 +136,25 @@ Table load_or_build_mpi(
     validate(spec);
     int rank = 0;
     MPI_Comm_rank(comm, &rank);
-    std::filesystem::path const directory = cache_dir.empty() ? std::filesystem::path(".") : std::filesystem::path(cache_dir);
-    std::filesystem::path const path = directory / cache_file_name(spec);
-    std::filesystem::path const lock = std::filesystem::path(path.string() + ".lock");
+    std::filesystem::path const directory =
+        cache_dir.empty() ? std::filesystem::path(".") : std::filesystem::path(cache_dir);
+    std::string const path = (directory / cache_file_name(spec)).string();
 
-    // Rank 0 decides: 0 = read the table, 1 = build it (this job holds the lock).
+    // Rank 0 decides (read, or build holding the lock) and shares the outcome.
+    std::unique_ptr<CacheLock> lock;
     int action = 0;
-    if (rank == 0) {
-        std::filesystem::create_directories(directory);
-        bool announced = false;
-        while (true) {
-            if (std::filesystem::exists(path)) {
-                action = 0;
-                break;
+    {
+        bool failed = false;
+        std::string message;
+        if (rank == 0) {
+            try {
+                action = acquire_table(path, stale_seconds, log, lock) == CacheDecision::build ? 1 : 0;
+            } catch (std::exception const& error) {
+                failed = true;
+                message = error.what();
             }
-            int const fd = ::open(lock.c_str(), O_CREAT | O_EXCL | O_WRONLY, 0644);
-            if (fd >= 0) {
-                char host[256] = {};
-                ::gethostname(host, sizeof(host) - 1);
-                std::string const owner = std::format("{} {}\n", host, ::getpid());
-                (void) ::write(fd, owner.data(), owner.size());
-                ::close(fd);
-                action = 1;
-                break;
-            }
-            std::error_code error;
-            auto const modified = std::filesystem::last_write_time(lock, error);
-            double const age = error ? 0.0
-                                     : std::chrono::duration<double>(
-                                           std::filesystem::file_time_type::clock::now() - modified)
-                                           .count();
-            if (age > stale_seconds) {
-                if (log != nullptr) {
-                    *log << "[mace] taking over the stale Compton table lock " << lock << '\n';
-                }
-                std::filesystem::remove(lock, error);
-                continue;
-            }
-            if (!announced && log != nullptr) {
-                *log << "[mace] waiting for another job to build " << path << '\n' << std::flush;
-                announced = true;
-            }
-            std::this_thread::sleep_for(std::chrono::seconds(10));
         }
+        share_root_status(failed, message, comm);
     }
     MPI_Bcast(&action, 1, MPI_INT, 0, comm);
 
@@ -192,37 +163,39 @@ Table load_or_build_mpi(
         if (rank == 0 && log != nullptr) {
             *log << "[mace] building Compton table " << path << '\n' << std::flush;
         }
-        {
-            std::unique_ptr<LockHeartbeat> heartbeat;
-            if (rank == 0) {
-                heartbeat = std::make_unique<LockHeartbeat>(lock);
-            }
-            table = build_mpi(spec, comm, log);
-            if (rank == 0) {
-                write_table(path.string(), table);
-            }
-        }
+        table = build_mpi(spec, comm, log);
+        bool failed = false;
+        std::string message;
         if (rank == 0) {
-            std::error_code error;
-            std::filesystem::remove(lock, error);
+            try {
+                write_table(path, table);
+            } catch (std::exception const& error) {
+                failed = true;
+                message = error.what();
+            }
+            lock.reset();
         }
-        MPI_Barrier(comm);
+        share_root_status(failed, message, comm);
     } else {
-        std::vector<double> diagnostics(5, 0.0);
+        std::vector<double> diagnostics(6, 0.0);
+        bool failed = false;
+        std::string message;
         if (rank == 0) {
-            table = read_table(path.string());
-            if (table.key != table_key(spec)) {
-                throw std::runtime_error("Compton table " + path.string() +
-                                         " does not match the requested specification");
+            try {
+                table = read_table(path);
+                check_compatible(table, spec);
+                diagnostics = {table.diagnostics.max_detailed_balance_mismatch,
+                               table.diagnostics.mismatch_temperature,
+                               static_cast<double>(table.diagnostics.mismatch_g),
+                               static_cast<double>(table.diagnostics.mismatch_gp),
+                               table.diagnostics.build_seconds,
+                               static_cast<double>(table.diagnostics.tapered_entries)};
+            } catch (std::exception const& error) {
+                failed = true;
+                message = "Compton table " + path + ": " + error.what();
             }
-            diagnostics = {table.diagnostics.max_detailed_balance_mismatch,
-                           table.diagnostics.mismatch_temperature,
-                           static_cast<double>(table.diagnostics.mismatch_g),
-                           static_cast<double>(table.diagnostics.mismatch_gp),
-                           table.diagnostics.build_seconds};
-        } else {
-            table.spec = spec;
         }
+        share_root_status(failed, message, comm);
         broadcast(table.key, comm);
         broadcast(table.mace_commit, comm);
         broadcast(table.sigma, comm);
@@ -233,13 +206,14 @@ Table load_or_build_mpi(
         table.diagnostics.mismatch_g = static_cast<int>(diagnostics[2]);
         table.diagnostics.mismatch_gp = static_cast<int>(diagnostics[3]);
         table.diagnostics.build_seconds = diagnostics[4];
-        table.spec = spec;
+        table.diagnostics.tapered_entries = static_cast<std::size_t>(diagnostics[5]);
     }
+    table.spec = spec;
     if (rank == 0 && log != nullptr) {
         TableDiagnostics const& d = table.diagnostics;
         *log << std::format(
                     "[mace] Compton table {} ({}, built in {}); max detailed-balance mismatch {:.2e}\n",
-                    path.string(),
+                    path,
                     action == 1 ? "built now" : "read from cache",
                     format_seconds(d.build_seconds),
                     d.max_detailed_balance_mismatch);

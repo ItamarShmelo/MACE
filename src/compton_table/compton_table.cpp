@@ -26,11 +26,15 @@
 #include <string>
 #include <vector>
 
+#include <cerrno>
+#include <cstring>
+#include <random>
+#include <thread>
+
+#include <fcntl.h>
 #include <unistd.h>
 
-#ifndef MACE_GIT_COMMIT
-#define MACE_GIT_COMMIT "unknown"
-#endif
+#include "mace_version.hpp" // generated: MACE_GIT_COMMIT
 
 namespace compton::table {
 
@@ -134,7 +138,13 @@ MGIntegrationConfig quadrature(TableSpec const& spec, bool const cold)
         spec.e_panel_order_hot);
 }
 
-/// Smallest s over sampled points of the box E in g, E' in g', xi in bin a.
+/// Lower estimate of s = K_min / kT over the box E in g, E' in g', xi in bin a.
+/// K vanishes on the cold-recoil surface E' = E / (1 + e (1 - xi)), which
+/// increases with E and xi: if the box's recoil range meets g', s = 0.
+/// Otherwise K grows with the distance of E' from the surface, so the minimum
+/// lies on the face of g' nearest to it; that face is searched on a grid and
+/// refined, and the result is lowered by a 5% margin (the taper must not
+/// remove allowed transitions).
 double box_exponent(
     TableSpec const& spec,
     int const g,
@@ -143,27 +153,75 @@ double box_exponent(
     double const xi_hi,
     double const T)
 {
-    constexpr int energy_points = 5;
-    constexpr int xi_points = 3;
     double const mc2 = units::me_c2;
     double const kT = units::k_boltz * T;
-    double best = std::numeric_limits<double>::infinity();
-    auto energy = [&](int const group, int const k) {
-        double const lo = spec.boundaries[static_cast<std::size_t>(group)];
-        double const hi = spec.boundaries[static_cast<std::size_t>(group) + 1];
-        return lo * std::pow(hi / lo, static_cast<double>(k) / (energy_points - 1));
+    double const a = spec.boundaries[static_cast<std::size_t>(g)] / mc2;
+    double const b = spec.boundaries[static_cast<std::size_t>(g) + 1] / mc2;
+    double const c = spec.boundaries[static_cast<std::size_t>(gp)] / mc2;
+    double const d = spec.boundaries[static_cast<std::size_t>(gp) + 1] / mc2;
+    auto recoil = [](double const e, double const xi) { return e / (1.0 + e * (1.0 - xi)); };
+    double const recoil_low = recoil(a, xi_lo);
+    double const recoil_high = recoil(b, xi_hi);
+    if (recoil_high >= c && recoil_low <= d) {
+        return 0.0;
+    }
+    double const ep = recoil_high < c ? c : d;
+    // Grid on the face (log e, xi), then coordinate golden-section refinement.
+    constexpr int e_points = 33;
+    constexpr int xi_points = 17;
+    double const log_a = std::log(a);
+    double const log_b = std::log(b);
+    auto kinetic = [&](double const log_e, double const xi) {
+        return minimum_kinetic_energy(std::exp(log_e), ep, xi);
     };
-    for (int i = 0; i < energy_points; ++i) {
-        double const e = energy(g, i) / mc2;
-        for (int j = 0; j < energy_points; ++j) {
-            double const ep = energy(gp, j) / mc2;
-            for (int k = 0; k < xi_points; ++k) {
-                double const xi = xi_lo + (xi_hi - xi_lo) * k / (xi_points - 1);
-                best = std::min(best, minimum_kinetic_energy(e, ep, xi) * mc2 / kT);
+    double best = std::numeric_limits<double>::infinity();
+    double best_log_e = log_a;
+    double best_xi = xi_lo;
+    for (int i = 0; i < e_points; ++i) {
+        double const log_e = log_a + (log_b - log_a) * i / (e_points - 1);
+        for (int k = 0; k < xi_points; ++k) {
+            double const xi = xi_lo + (xi_hi - xi_lo) * k / (xi_points - 1);
+            double const value = kinetic(log_e, xi);
+            if (value < best) {
+                best = value;
+                best_log_e = log_e;
+                best_xi = xi;
             }
         }
     }
-    return best;
+    auto golden = [](auto const& f, double lo, double hi) {
+        double const ratio = 0.5 * (std::sqrt(5.0) - 1.0);
+        double x1 = hi - ratio * (hi - lo);
+        double x2 = lo + ratio * (hi - lo);
+        double f1 = f(x1);
+        double f2 = f(x2);
+        for (int iteration = 0; iteration < 40; ++iteration) {
+            if (f1 < f2) {
+                hi = x2;
+                x2 = x1;
+                f2 = f1;
+                x1 = hi - ratio * (hi - lo);
+                f1 = f(x1);
+            } else {
+                lo = x1;
+                x1 = x2;
+                f1 = f2;
+                x2 = lo + ratio * (hi - lo);
+                f2 = f(x2);
+            }
+        }
+        return f1 < f2 ? x1 : x2;
+    };
+    double const e_step = (log_b - log_a) / (e_points - 1);
+    double const xi_step = (xi_hi - xi_lo) / (xi_points - 1);
+    for (int round = 0; round < 3; ++round) {
+        best_log_e = golden([&](double const x) { return kinetic(x, best_xi); },
+                            std::max(log_a, best_log_e - e_step), std::min(log_b, best_log_e + e_step));
+        best_xi = golden([&](double const x) { return kinetic(best_log_e, x); },
+                         std::max(xi_lo, best_xi - xi_step), std::min(xi_hi, best_xi + xi_step));
+        best = std::min(best, kinetic(best_log_e, best_xi));
+    }
+    return 0.95 * best * mc2 / kT;
 }
 
 /// Centre-form equilibrium group energies B_g and occupations n_g at T, as
@@ -384,7 +442,11 @@ Table compute_partial(
     table.sigma.assign(NT * G * G * A, 0.0);
     table.dsigma_dT.assign(NT * G * G * A, 0.0);
 
-    bool const logging = compute_logging_enabled().exchange(false);
+    // Per-call log files off while building; restored on every exit.
+    struct LoggingGuard {
+        bool previous = compute_logging_enabled().exchange(false);
+        ~LoggingGuard() { compute_logging_enabled() = previous; }
+    } const logging_guard;
     auto const start = std::chrono::steady_clock::now();
 
     auto const weight =
@@ -419,6 +481,9 @@ Table compute_partial(
                 double const s = suppression_exponent(
                     spec, g, static_cast<int>(gp), static_cast<int>(a), T);
                 double const w = taper_weight(spec, s, dw_ds);
+                if (w > 0.0 && w < 1.0) {
+                    ++table.diagnostics.tapered_entries;
+                }
                 std::size_t const index = table.index(i, static_cast<std::size_t>(g), gp, a);
                 table.sigma[index] = w * sigma[local];
                 // ds/dT = -s/T at fixed energies.
@@ -434,7 +499,6 @@ Table compute_partial(
             progress(done, mine, seconds);
         }
     }
-    compute_logging_enabled() = logging;
     table.diagnostics.build_seconds =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     return table;
@@ -447,8 +511,6 @@ void finalize(Table& table)
     std::size_t const A = static_cast<std::size_t>(spec.num_angle_bins);
     TableDiagnostics& diagnostics = table.diagnostics;
     diagnostics.max_detailed_balance_mismatch = 0.0;
-    diagnostics.tapered_entries = 0;
-    diagnostics.zeroed_entries = 0;
     std::vector<double> B;
     std::vector<double> n;
     for (std::size_t i = 0; i < spec.temperatures.size(); ++i) {
@@ -460,19 +522,6 @@ void finalize(Table& table)
             for (std::size_t gp = 0; gp < G; ++gp) {
                 for (std::size_t a = 0; a < A; ++a) {
                     summed[g * G + gp] += table.sigma[table.index(i, g, gp, a)];
-                    double dw_ds = 0.0;
-                    double const w = taper_weight(
-                        spec,
-                        suppression_exponent(
-                            spec,
-                            static_cast<int>(g),
-                            static_cast<int>(gp),
-                            static_cast<int>(a),
-                            T),
-                        dw_ds);
-                    if (w > 0.0 && w < 1.0) {
-                        ++diagnostics.tapered_entries;
-                    }
                 }
                 row_max[g] = std::max(row_max[g], std::abs(summed[g * G + gp]));
             }
@@ -512,7 +561,7 @@ Table build_serial(TableSpec const& spec, ProgressCallback const& progress)
 
 void write_table(std::string const& path, Table const& table)
 {
-    std::string const temporary = std::format("{}.tmp.{}", path, ::getpid());
+    std::string const temporary = std::format("{}.tmp.{}", path, unique_token());
     {
         std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
         if (!file) {
@@ -623,6 +672,193 @@ Table read_table(std::string const& path)
     if (key_for(table.spec, table.mace_commit) != table.key) {
         throw std::runtime_error("Compton table key does not match its contents: " + path);
     }
+    return table;
+}
+
+void check_compatible(Table const& table, TableSpec const& spec)
+{
+    auto fail = [](std::string const& what) {
+        throw std::runtime_error("Compton table does not match the requested specification (" + what + ")");
+    };
+    auto close = [](double const a, double const b, double const tolerance) {
+        return std::abs(a - b) <= tolerance * std::max(std::abs(a), std::abs(b));
+    };
+    auto same_values = [&](std::vector<double> const& a, std::vector<double> const& b, char const* name) {
+        if (a.size() != b.size()) {
+            fail(std::string(name) + " count");
+        }
+        for (std::size_t k = 0; k < a.size(); ++k) {
+            if (!close(a[k], b[k], 1e-10)) {
+                fail(name);
+            }
+        }
+    };
+    TableSpec const& stored = table.spec;
+    same_values(stored.boundaries, spec.boundaries, "boundaries");
+    same_values(stored.centers, spec.centers, "centers");
+    same_values(stored.temperatures, spec.temperatures, "temperatures");
+    // Widths and centre separations enter the effective-rate multiplier directly.
+    for (std::size_t g = 0; g + 1 < spec.boundaries.size(); ++g) {
+        if (!close(stored.boundaries[g + 1] - stored.boundaries[g], spec.boundaries[g + 1] - spec.boundaries[g], 1e-8)) {
+            fail("group widths");
+        }
+    }
+    for (std::size_t g = 0; g + 1 < spec.centers.size(); ++g) {
+        if (!close(stored.centers[g + 1] - stored.centers[g], spec.centers[g + 1] - spec.centers[g], 1e-8)) {
+            fail("centre separations");
+        }
+    }
+    if (stored.num_angle_bins != spec.num_angle_bins || stored.solver != spec.solver ||
+        stored.e_panel_order_cold != spec.e_panel_order_cold || stored.e_panel_order_hot != spec.e_panel_order_hot ||
+        !close(stored.planck_cap_x, spec.planck_cap_x, 1e-10) || !close(stored.cutoff_ratio, spec.cutoff_ratio, 1e-10) ||
+        !close(stored.cold_temperature, spec.cold_temperature, 1e-10) ||
+        !close(stored.taper_start, spec.taper_start, 1e-10) || !close(stored.taper_end, spec.taper_end, 1e-10)) {
+        fail("settings");
+    }
+    std::size_t const G = spec.centers.size();
+    std::size_t const size = spec.temperatures.size() * G * G * static_cast<std::size_t>(spec.num_angle_bins);
+    if (table.sigma.size() != size || table.dsigma_dT.size() != size) {
+        fail("array sizes");
+    }
+}
+
+std::string unique_token()
+{
+    char host[256] = {};
+    ::gethostname(host, sizeof(host) - 1);
+    std::random_device device;
+    std::uint64_t const random = (static_cast<std::uint64_t>(device()) << 32) ^ device();
+    return std::format("{}.{}.{:016x}", host, ::getpid(), random);
+}
+
+CacheLock::CacheLock(std::filesystem::path path, std::string token)
+    : path_(std::move(path)), token_(std::move(token))
+{
+    heartbeat_ = std::thread([this] {
+        auto last = std::chrono::steady_clock::now();
+        while (!stop_) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            if (std::chrono::steady_clock::now() - last >= std::chrono::seconds(60)) {
+                if (owned()) {
+                    std::error_code error;
+                    std::filesystem::last_write_time(
+                        path_, std::filesystem::file_time_type::clock::now(), error);
+                }
+                last = std::chrono::steady_clock::now();
+            }
+        }
+    });
+}
+
+CacheLock::~CacheLock()
+{
+    stop_ = true;
+    heartbeat_.join();
+    if (owned()) {
+        std::error_code error;
+        std::filesystem::remove(path_, error);
+    }
+}
+
+bool CacheLock::owned() const
+{
+    std::ifstream file(path_);
+    std::string content;
+    return static_cast<bool>(std::getline(file, content)) && content == token_;
+}
+
+CacheDecision acquire_table(
+    std::string const& path,
+    double const stale_seconds,
+    std::ostream* const log,
+    std::unique_ptr<CacheLock>& lock)
+{
+    std::filesystem::path const table_path(path);
+    std::filesystem::path const lock_path(path + ".lock");
+    if (table_path.has_parent_path()) {
+        std::filesystem::create_directories(table_path.parent_path());
+    }
+    bool announced = false;
+    while (true) {
+        if (std::filesystem::exists(table_path)) {
+            return CacheDecision::read;
+        }
+        std::string const token = unique_token();
+        int const fd = ::open(lock_path.c_str(), O_CREAT | O_EXCL | O_WRONLY, 0644);
+        if (fd >= 0) {
+            std::string const line = token + '\n';
+            bool const written = ::write(fd, line.data(), line.size()) == static_cast<ssize_t>(line.size());
+            ::close(fd);
+            if (!written) {
+                std::error_code error;
+                std::filesystem::remove(lock_path, error);
+                throw std::runtime_error("cannot write the Compton table lock " + lock_path.string());
+            }
+            lock = std::make_unique<CacheLock>(lock_path, token);
+            // Another job may have published the table between the check and the lock.
+            if (std::filesystem::exists(table_path)) {
+                lock.reset();
+                return CacheDecision::read;
+            }
+            return CacheDecision::build;
+        }
+        if (errno != EEXIST) {
+            throw std::runtime_error("cannot create the Compton table lock " + lock_path.string() + ": " +
+                                     std::strerror(errno));
+        }
+        std::error_code error;
+        auto const modified = std::filesystem::last_write_time(lock_path, error);
+        if (error) {
+            continue; // the lock vanished: try again
+        }
+        double const age = std::chrono::duration<double>(
+                               std::filesystem::file_time_type::clock::now() - modified)
+                               .count();
+        if (age > stale_seconds) {
+            // Atomic takeover: only one process can rename the stale lock away.
+            std::filesystem::path const tombstone(lock_path.string() + ".stale." + token);
+            std::filesystem::rename(lock_path, tombstone, error);
+            if (!error) {
+                std::filesystem::remove(tombstone, error);
+                if (log != nullptr) {
+                    *log << "[mace] took over the stale Compton table lock " << lock_path << '\n';
+                }
+            }
+            continue;
+        }
+        if (!announced && log != nullptr) {
+            *log << "[mace] waiting for another job to build " << table_path << '\n' << std::flush;
+            announced = true;
+        }
+        std::this_thread::sleep_for(std::chrono::seconds(10));
+    }
+}
+
+Table load_or_build(
+    TableSpec const& spec,
+    std::string const& cache_dir,
+    std::ostream* const log,
+    double const stale_seconds)
+{
+    validate(spec);
+    std::filesystem::path const directory =
+        cache_dir.empty() ? std::filesystem::path(".") : std::filesystem::path(cache_dir);
+    std::string const path = (directory / cache_file_name(spec)).string();
+    std::unique_ptr<CacheLock> lock;
+    if (acquire_table(path, stale_seconds, log, lock) == CacheDecision::read) {
+        Table table = read_table(path);
+        check_compatible(table, spec);
+        if (log != nullptr) {
+            *log << "[mace] read Compton table " << path << '\n';
+        }
+        return table;
+    }
+    if (log != nullptr) {
+        *log << "[mace] building Compton table " << path << " (one process; build_compton_table with MPI is faster)\n"
+             << std::flush;
+    }
+    Table table = build_serial(spec);
+    write_table(path, table);
     return table;
 }
 

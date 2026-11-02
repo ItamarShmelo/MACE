@@ -28,9 +28,14 @@
  * built in pieces (compute_partial) and summed (see compton_table_mpi.hpp).
  */
 
+#include <atomic>
 #include <cstddef>
+#include <filesystem>
 #include <functional>
+#include <memory>
+#include <ostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace compton::table {
@@ -62,7 +67,6 @@ struct TableDiagnostics {
     int mismatch_g = -1;
     int mismatch_gp = -1;
     std::size_t tapered_entries = 0; ///< entries with 0 < w < 1
-    std::size_t zeroed_entries = 0;  ///< nonzero entries removed by w = 0
     double build_seconds = 0.0;      ///< wall time of the build
 };
 
@@ -146,6 +150,52 @@ Table build_serial(
 void write_table(std::string const& path, Table const& table);
 
 Table read_table(std::string const& path);
+
+/// Throws std::runtime_error unless `table` was built for `spec`: every stored
+/// double within 1e-10 relative and the group widths and centre separations
+/// within 1e-8 relative (the cache key rounds values to 12 digits).
+void check_compatible(Table const& table, TableSpec const& spec);
+
+/// "host.pid.random", unique across processes and nodes.
+std::string unique_token();
+
+/// Exclusive lock on a cache table (its path + ".lock") holding an owner token.
+/// A heartbeat refreshes the lock's time while the token is still ours; the
+/// destructor removes the lock only if it is still ours.
+class CacheLock {
+  public:
+    CacheLock(std::filesystem::path path, std::string token);
+    CacheLock(CacheLock const&) = delete;
+    CacheLock& operator=(CacheLock const&) = delete;
+    ~CacheLock();
+
+  private:
+    bool owned() const;
+    std::filesystem::path path_;
+    std::string token_;
+    std::atomic<bool> stop_{false};
+    std::thread heartbeat_;
+};
+
+enum class CacheDecision { read, build };
+
+/// One process decides for a cache table `path`: read it if it exists,
+/// otherwise take its lock (returned in `lock`) and build.  Waits while
+/// another owner holds a lock touched within stale_seconds; an older lock is
+/// taken over atomically (renamed to a unique name: one process wins).  Errors
+/// other than an existing lock (permissions, full disk) throw.
+CacheDecision acquire_table(
+    std::string const& path,
+    double stale_seconds,
+    std::ostream* log,
+    std::unique_ptr<CacheLock>& lock);
+
+/// Serial load-or-build of cache_dir/cache_file_name(spec), with the lock.
+Table load_or_build(
+    TableSpec const& spec,
+    std::string const& cache_dir,
+    std::ostream* log,
+    double stale_seconds = 1800.0);
 
 } // namespace compton::table
 
