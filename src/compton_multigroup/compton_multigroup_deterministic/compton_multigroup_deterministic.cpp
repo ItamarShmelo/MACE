@@ -567,6 +567,95 @@ std::vector<double> ComptonMultigroupKernel::compute_Ep_xi_integral_impl(
 // E' uses fixed-order GL via integrate_Ep_ridge (no adaptive refinement).
 // Convergence is controlled by ep_edge_order and ep_interior_order.
 
+void ComptonMultigroupKernel::fill_row(
+    ComptonKernelSolver const& kernel,
+    ComptonResult (
+        ComptonKernelSolver::*eval)(double, double, double, double)
+        const,
+    int const g,
+    int const num_angle_bins,
+    double const T,
+    KernelMultiplier const& multiplier,
+    std::optional<double> const effective_cutoff,
+    double* const row) const
+{
+    int const G = num_groups();
+
+    // Uniform angle-bin width: ξ ∈ [-1, 1] split into num_angle_bins slices.
+    double const dxi = 2.0 / static_cast<double>(num_angle_bins);
+
+    double const denom = weight_func_->compute_denominator(
+        group_boundaries_[g],
+        group_boundaries_[g + 1],
+        T);
+    double const inv_denom = 1.0 / denom;
+
+    auto do_group = [&](int const gp) {
+        // row holds the G x num_angle_bins block of source group g.
+        std::size_t const base =
+            static_cast<std::size_t>(gp) * num_angle_bins;
+
+#pragma omp taskloop grainsize(1) default(shared)
+        for (int a = 0; a < num_angle_bins; ++a) {
+            double const xi_lo = -1.0 + a * dxi;
+            double const xi_hi = std::min(
+                -1.0 + (a + 1) * dxi,
+                1.0 - constants::XI_UPPER_EPS);
+
+            double const numerator = integrate_E_Ep_xi_bin(
+                kernel,
+                eval,
+                g,
+                gp,
+                xi_lo,
+                xi_hi,
+                T,
+                multiplier);
+
+            row[base + static_cast<std::size_t>(a)] =
+                2.0 * std::numbers::pi * numerator * inv_denom;
+        }
+
+        // Summed in a fixed order after the taskloop so that the cutoff
+        // decision does not depend on the thread count.
+        double group_sum = 0.0;
+        for (int a = 0; a < num_angle_bins; ++a) {
+            group_sum +=
+                std::abs(row[base + static_cast<std::size_t>(a)]);
+        }
+        return group_sum;
+    };
+
+    // --- Outward-from-peak target-group traversal ---
+    int const gp_peak = g;
+
+    double const peak_sum = do_group(gp_peak);
+
+    if (effective_cutoff.has_value()) {
+        double const cutoff = effective_cutoff.value() * peak_sum;
+
+        // Expand rightward (higher E' groups) until below cutoff.
+        for (int gp = gp_peak + 1; gp < G; ++gp) {
+            if (do_group(gp) < cutoff) {
+                break;
+            }
+        }
+        // Expand leftward (lower E' groups) until below cutoff.
+        for (int gp = gp_peak - 1; gp >= 0; --gp) {
+            if (do_group(gp) < cutoff) {
+                break;
+            }
+        }
+    } else {
+        for (int gp = gp_peak + 1; gp < G; ++gp) {
+            do_group(gp);
+        }
+        for (int gp = gp_peak - 1; gp >= 0; --gp) {
+            do_group(gp);
+        }
+    }
+}
+
 std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
     ComptonKernelSolver const& kernel,
     ComptonResult (
@@ -589,9 +678,6 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
         static_cast<std::size_t>(G) * G * num_angle_bins,
         0.0);
 
-    // Uniform angle-bin width: ξ ∈ [-1, 1] split into num_angle_bins slices.
-    double const dxi = 2.0 / static_cast<double>(num_angle_bins);
-
     ComputeLogger logger(
         "deterministic",
         std::format(
@@ -607,81 +693,58 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
 #pragma omp single
 #pragma omp taskloop grainsize(1) default(shared)
     for (int g = 0; g < G; ++g) {
-        double const denom = weight_func_->compute_denominator(
-            group_boundaries_[g],
-            group_boundaries_[g + 1],
-            T);
-        double const inv_denom = 1.0 / denom;
-
-        auto do_group = [&](int const gp) {
-            std::size_t const base =
-                static_cast<std::size_t>(g) * G * num_angle_bins +
-                static_cast<std::size_t>(gp) * num_angle_bins;
-
-#pragma omp taskloop grainsize(1) default(shared)
-            for (int a = 0; a < num_angle_bins; ++a) {
-                double const xi_lo = -1.0 + a * dxi;
-                double const xi_hi = std::min(
-                    -1.0 + (a + 1) * dxi,
-                    1.0 - constants::XI_UPPER_EPS);
-
-                double const numerator = integrate_E_Ep_xi_bin(
-                    kernel,
-                    eval,
-                    g,
-                    gp,
-                    xi_lo,
-                    xi_hi,
-                    T,
-                    multiplier);
-
-                result[base + static_cast<std::size_t>(a)] =
-                    2.0 * std::numbers::pi * numerator * inv_denom;
-            }
-
-            // Summed in a fixed order after the taskloop so that the cutoff
-            // decision does not depend on the thread count.
-            double group_sum = 0.0;
-            for (int a = 0; a < num_angle_bins; ++a) {
-                group_sum +=
-                    std::abs(result[base + static_cast<std::size_t>(a)]);
-            }
-            return group_sum;
-        };
-
-        // --- Outward-from-peak target-group traversal ---
-        int const gp_peak = g;
-
-        double const peak_sum = do_group(gp_peak);
-
-        if (effective_cutoff.has_value()) {
-            double const cutoff = effective_cutoff.value() * peak_sum;
-
-            // Expand rightward (higher E' groups) until below cutoff.
-            for (int gp = gp_peak + 1; gp < G; ++gp) {
-                if (do_group(gp) < cutoff) {
-                    break;
-                }
-            }
-            // Expand leftward (lower E' groups) until below cutoff.
-            for (int gp = gp_peak - 1; gp >= 0; --gp) {
-                if (do_group(gp) < cutoff) {
-                    break;
-                }
-            }
-        } else {
-            for (int gp = gp_peak + 1; gp < G; ++gp) {
-                do_group(gp);
-            }
-            for (int gp = gp_peak - 1; gp >= 0; --gp) {
-                do_group(gp);
-            }
-        }
+        fill_row(
+            kernel,
+            eval,
+            g,
+            num_angle_bins,
+            T,
+            multiplier,
+            effective_cutoff,
+            result.data() + static_cast<std::size_t>(g) * G * num_angle_bins);
     }
 
     logger.done();
 
     return result;
+}
+
+std::vector<double> ComptonMultigroupKernel::compute_row_impl(
+    ComptonKernelSolver const& kernel,
+    ComptonResult (
+        ComptonKernelSolver::*eval)(double, double, double, double)
+        const,
+    int const g,
+    int const num_angle_bins,
+    double const T,
+    KernelMultiplier const& multiplier,
+    std::optional<double> const effective_cutoff) const
+{
+    if (num_angle_bins < 1) {
+        throw std::invalid_argument("num_angle_bins must be >= 1");
+    }
+    int const G = num_groups();
+    if (g < 0 || g >= G) {
+        throw std::invalid_argument("source group out of range");
+    }
+
+    std::vector<double> row(static_cast<std::size_t>(G) * num_angle_bins, 0.0);
+
+// One source group: the angle-bin taskloop inside fill_row needs an
+// enclosing parallel region.
+#pragma omp parallel
+#pragma omp single
+    fill_row(
+        kernel,
+        eval,
+        g,
+        num_angle_bins,
+        T,
+        multiplier,
+        effective_cutoff,
+        row.data());
+
+    return row;
 }
 
 std::vector<double> ComptonMultigroupKernel::compute_sigma_matrix(
@@ -799,6 +862,74 @@ std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_matrix(
                 result[idx] += weight_deriv[idx] - sigma[idx] * dD_over_D;
             }
         }
+    }
+    return result;
+}
+
+std::vector<double> ComptonMultigroupKernel::compute_sigma_row(
+    ComptonKernelSolver const& kernel,
+    int const num_angle_bins,
+    double const T,
+    int const g,
+    KernelMultiplier const& multiplier) const
+{
+    return compute_row_impl(
+        kernel,
+        &ComptonKernelSolver::sigma_E,
+        g,
+        num_angle_bins,
+        T,
+        multiplier,
+        group_cutoff_ratio_);
+}
+
+std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_row(
+    ComptonKernelSolver const& kernel,
+    int const num_angle_bins,
+    double const T,
+    int const g,
+    KernelMultiplier const& multiplier) const
+{
+    std::optional<double> const no_cutoff = std::nullopt;
+
+    // The three terms of compute_dsigma_dT_matrix, for source group g only.
+    auto result = compute_row_impl(
+        kernel,
+        &ComptonKernelSolver::dsigma_E_dT,
+        g,
+        num_angle_bins,
+        T,
+        multiplier,
+        no_cutoff);
+    WeightDerivMultiplier wd_mult(*weight_func_, multiplier, T);
+    auto const weight_deriv = compute_row_impl(
+        kernel,
+        &ComptonKernelSolver::sigma_E,
+        g,
+        num_angle_bins,
+        T,
+        wd_mult,
+        no_cutoff);
+    auto const sigma = compute_row_impl(
+        kernel,
+        &ComptonKernelSolver::sigma_E,
+        g,
+        num_angle_bins,
+        T,
+        multiplier,
+        no_cutoff);
+
+    double const D = weight_func_->compute_denominator(
+        group_boundaries_[g],
+        group_boundaries_[g + 1],
+        T);
+    double const dD_dT = weight_func_->d_denominator_dT(
+        group_boundaries_[g],
+        group_boundaries_[g + 1],
+        T);
+    double const dD_over_D = dD_dT / D;
+    for (std::size_t idx = 0; idx < result.size(); ++idx) {
+        result[idx] += weight_deriv[idx] - sigma[idx] * dD_over_D;
     }
     return result;
 }

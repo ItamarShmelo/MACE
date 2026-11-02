@@ -288,6 +288,32 @@ class ComptonMultigroupKernel {
         double T,
         KernelMultiplier const& multiplier) const;
 
+    // ── One source group (rows of the matrices above) ──────────────────
+
+    /**
+     * @brief Row g of compute_sigma_matrix (same arithmetic, same cutoff).
+     *
+     * @return Flat vector of size G×N_angles, row-major [g'][angle].
+     */
+    std::vector<double> compute_sigma_row(
+        ComptonKernelSolver const& kernel,
+        int num_angle_bins,
+        double T,
+        int g,
+        KernelMultiplier const& multiplier) const;
+
+    /**
+     * @brief Row g of compute_dsigma_dT_matrix (same arithmetic, no cutoff).
+     *
+     * @return Flat vector of size G×N_angles, row-major [g'][angle].
+     */
+    std::vector<double> compute_dsigma_dT_row(
+        ComptonKernelSolver const& kernel,
+        int num_angle_bins,
+        double T,
+        int g,
+        KernelMultiplier const& multiplier) const;
+
   private:
     /**
      * @brief Core driver: assemble the full G×G×num_angle_bins scattering
@@ -317,6 +343,36 @@ class ComptonMultigroupKernel {
         ComptonResult (
             ComptonKernelSolver::*eval)(double, double, double, double)
             const,
+        int num_angle_bins,
+        double T,
+        KernelMultiplier const& multiplier,
+        std::optional<double> effective_cutoff) const;
+
+    /**
+     * @brief Fill the G×num_angle_bins block of source group g into row
+     * (outward-from-peak traversal with the optional cutoff).  Uses an
+     * orphaned taskloop over angle bins, so it must run inside a parallel
+     * region.
+     */
+    void fill_row(
+        ComptonKernelSolver const& kernel,
+        ComptonResult (
+            ComptonKernelSolver::*eval)(double, double, double, double)
+            const,
+        int g,
+        int num_angle_bins,
+        double T,
+        KernelMultiplier const& multiplier,
+        std::optional<double> effective_cutoff,
+        double* row) const;
+
+    /** @brief One source group of compute_matrix_impl. */
+    std::vector<double> compute_row_impl(
+        ComptonKernelSolver const& kernel,
+        ComptonResult (
+            ComptonKernelSolver::*eval)(double, double, double, double)
+            const,
+        int g,
         int num_angle_bins,
         double T,
         KernelMultiplier const& multiplier,

@@ -1,0 +1,3 @@
+[submodule "deps/doubledouble"]
+	path = deps/doubledouble
+	url = https://github.com/WarrenWeckesser/doubledouble.git
