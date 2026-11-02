@@ -35,3 +35,6 @@ compile_commands.json
 *.so
 *.png
 *.npy
+
+# C++ library builds
+build_cpp/

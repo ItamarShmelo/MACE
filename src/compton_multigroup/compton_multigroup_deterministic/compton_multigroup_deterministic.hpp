@@ -314,6 +314,20 @@ class ComptonMultigroupKernel {
         int g,
         KernelMultiplier const& multiplier) const;
 
+    /**
+     * @brief Row g of the full dσ/dT restricted to the targets evaluated in
+     * sigma_row (a row of compute_sigma_row, same multiplier and T), which
+     * also serves as the σ term of the quotient rule.  Equal to
+     * compute_dsigma_dT_row on those targets and zero elsewhere.
+     */
+    std::vector<double> compute_dsigma_dT_row(
+        ComptonKernelSolver const& kernel,
+        int num_angle_bins,
+        double T,
+        int g,
+        KernelMultiplier const& multiplier,
+        std::vector<double> const& sigma_row) const;
+
   private:
     /**
      * @brief Core driver: assemble the full G×G×num_angle_bins scattering
@@ -364,9 +378,11 @@ class ComptonMultigroupKernel {
         double T,
         KernelMultiplier const& multiplier,
         std::optional<double> effective_cutoff,
-        double* row) const;
+        double* row,
+        std::vector<char> const* target_mask) const;
 
-    /** @brief One source group of compute_matrix_impl. */
+    /** @brief One source group of compute_matrix_impl; a target mask (with
+     * no cutoff) evaluates only the marked g'. */
     std::vector<double> compute_row_impl(
         ComptonKernelSolver const& kernel,
         ComptonResult (
@@ -376,7 +392,8 @@ class ComptonMultigroupKernel {
         int num_angle_bins,
         double T,
         KernelMultiplier const& multiplier,
-        std::optional<double> effective_cutoff) const;
+        std::optional<double> effective_cutoff,
+        std::vector<char> const* target_mask = nullptr) const;
 
     /**
      * @brief Integrate the kernel over a single ξ bin for fixed (E, E').

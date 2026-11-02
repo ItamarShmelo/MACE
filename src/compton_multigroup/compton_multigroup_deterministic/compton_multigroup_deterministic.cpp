@@ -577,7 +577,8 @@ void ComptonMultigroupKernel::fill_row(
     double const T,
     KernelMultiplier const& multiplier,
     std::optional<double> const effective_cutoff,
-    double* const row) const
+    double* const row,
+    std::vector<char> const* const target_mask) const
 {
     int const G = num_groups();
 
@@ -625,6 +626,16 @@ void ComptonMultigroupKernel::fill_row(
         }
         return group_sum;
     };
+
+    // A target mask (no cutoff) restricts the evaluation to the marked g'.
+    if (target_mask != nullptr) {
+        for (int gp = 0; gp < G; ++gp) {
+            if ((*target_mask)[static_cast<std::size_t>(gp)] != 0) {
+                do_group(gp);
+            }
+        }
+        return;
+    }
 
     // --- Outward-from-peak target-group traversal ---
     int const gp_peak = g;
@@ -701,7 +712,8 @@ std::vector<double> ComptonMultigroupKernel::compute_matrix_impl(
             T,
             multiplier,
             effective_cutoff,
-            result.data() + static_cast<std::size_t>(g) * G * num_angle_bins);
+            result.data() + static_cast<std::size_t>(g) * G * num_angle_bins,
+            nullptr);
     }
 
     logger.done();
@@ -718,12 +730,17 @@ std::vector<double> ComptonMultigroupKernel::compute_row_impl(
     int const num_angle_bins,
     double const T,
     KernelMultiplier const& multiplier,
-    std::optional<double> const effective_cutoff) const
+    std::optional<double> const effective_cutoff,
+    std::vector<char> const* const target_mask) const
 {
     if (num_angle_bins < 1) {
         throw std::invalid_argument("num_angle_bins must be >= 1");
     }
     int const G = num_groups();
+    if (target_mask != nullptr &&
+        target_mask->size() != static_cast<std::size_t>(G)) {
+        throw std::invalid_argument("target mask must have one entry per group");
+    }
     if (g < 0 || g >= G) {
         throw std::invalid_argument("source group out of range");
     }
@@ -742,7 +759,8 @@ std::vector<double> ComptonMultigroupKernel::compute_row_impl(
         T,
         multiplier,
         effective_cutoff,
-        row.data());
+        row.data(),
+        target_mask);
 
     return row;
 }
@@ -930,6 +948,65 @@ std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_row(
     double const dD_over_D = dD_dT / D;
     for (std::size_t idx = 0; idx < result.size(); ++idx) {
         result[idx] += weight_deriv[idx] - sigma[idx] * dD_over_D;
+    }
+    return result;
+}
+
+std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_row(
+    ComptonKernelSolver const& kernel,
+    int const num_angle_bins,
+    double const T,
+    int const g,
+    KernelMultiplier const& multiplier,
+    std::vector<double> const& sigma_row) const
+{
+    int const G = num_groups();
+    std::size_t const row_size = static_cast<std::size_t>(G) * num_angle_bins;
+    if (sigma_row.size() != row_size) {
+        throw std::invalid_argument("sigma_row must have G x num_angle_bins entries");
+    }
+    // Targets evaluated in sigma_row; the others stay zero in all terms.
+    std::vector<char> mask(static_cast<std::size_t>(G), 0);
+    for (int gp = 0; gp < G; ++gp) {
+        for (int a = 0; a < num_angle_bins; ++a) {
+            if (sigma_row[static_cast<std::size_t>(gp) * num_angle_bins +
+                          static_cast<std::size_t>(a)] != 0.0) {
+                mask[static_cast<std::size_t>(gp)] = 1;
+            }
+        }
+    }
+    std::optional<double> const no_cutoff = std::nullopt;
+    auto result = compute_row_impl(
+        kernel,
+        &ComptonKernelSolver::dsigma_E_dT,
+        g,
+        num_angle_bins,
+        T,
+        multiplier,
+        no_cutoff,
+        &mask);
+    WeightDerivMultiplier wd_mult(*weight_func_, multiplier, T);
+    auto const weight_deriv = compute_row_impl(
+        kernel,
+        &ComptonKernelSolver::sigma_E,
+        g,
+        num_angle_bins,
+        T,
+        wd_mult,
+        no_cutoff,
+        &mask);
+
+    double const D = weight_func_->compute_denominator(
+        group_boundaries_[g],
+        group_boundaries_[g + 1],
+        T);
+    double const dD_dT = weight_func_->d_denominator_dT(
+        group_boundaries_[g],
+        group_boundaries_[g + 1],
+        T);
+    double const dD_over_D = dD_dT / D;
+    for (std::size_t idx = 0; idx < result.size(); ++idx) {
+        result[idx] += weight_deriv[idx] - sigma_row[idx] * dD_over_D;
     }
     return result;
 }

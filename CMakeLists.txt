@@ -72,6 +72,7 @@ add_library(mace_core STATIC
     src/compton_differential_cross_section/compton_kernel_solver/compton_kernel_solver.cpp
     src/compton_multigroup/compton_multigroup_deterministic/compton_multigroup_deterministic.cpp
     src/compton_multigroup/weight_function.cpp
+    src/compton_table/compton_table.cpp
 )
 target_include_directories(mace_core PUBLIC
     "${PROJECT_SOURCE_DIR}/src"
@@ -86,11 +87,50 @@ if(COMPTON_ENABLE_OMP)
     target_link_libraries(mace_core PUBLIC OpenMP::OpenMP_CXX)
 endif()
 
+# The commit goes into the Compton table cache key.
+execute_process(
+    COMMAND git rev-parse HEAD
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    OUTPUT_VARIABLE MACE_GIT_COMMIT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE mace_git_result
+    ERROR_QUIET)
+if(NOT mace_git_result EQUAL 0)
+    set(MACE_GIT_COMMIT "unknown")
+else()
+    execute_process(
+        COMMAND git diff --quiet HEAD -- src
+        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+        RESULT_VARIABLE mace_git_dirty
+        ERROR_QUIET)
+    if(NOT mace_git_dirty EQUAL 0)
+        set(MACE_GIT_COMMIT "${MACE_GIT_COMMIT}-dirty")
+    endif()
+endif()
+set_source_files_properties(src/compton_table/compton_table.cpp PROPERTIES
+    COMPILE_DEFINITIONS "MACE_GIT_COMMIT=\"${MACE_GIT_COMMIT}\"")
+
+# MPI table builder and the build_compton_table tool.
+if(MACE_ENABLE_MPI)
+    find_package(MPI REQUIRED COMPONENTS CXX)
+    add_library(mace_table_mpi STATIC src/compton_table/compton_table_mpi.cpp)
+    target_link_libraries(mace_table_mpi PUBLIC mace_core MPI::MPI_CXX)
+    set_target_properties(mace_table_mpi PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_compile_options(mace_table_mpi PRIVATE -O3 -Wall -Wextra -Wpedantic)
+    add_executable(build_compton_table tools/build_compton_table.cpp)
+    target_link_libraries(build_compton_table PRIVATE mace_table_mpi)
+endif()
+
 if(MACE_BUILD_TESTS)
     enable_testing()
     add_executable(test_mace_core tests/cpp/test_mace_core.cpp)
     target_link_libraries(test_mace_core PRIVATE mace_core)
     add_test(NAME mace_core COMMAND test_mace_core)
+    if(MACE_ENABLE_MPI)
+        add_executable(test_compton_table tests/cpp/test_compton_table.cpp)
+        target_link_libraries(test_compton_table PRIVATE mace_table_mpi)
+        add_test(NAME compton_table COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 3 $<TARGET_FILE:test_compton_table>)
+    endif()
 endif()
 
 if(MACE_BUILD_PYTHON)
