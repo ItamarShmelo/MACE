@@ -106,6 +106,15 @@ int main(int argc, char** argv)
         std::filesystem::remove_all(directory);
     }
 
+    TableSpec nudged = spec;
+    for (double& T : nudged.temperatures) {
+        T = std::nextafter(T, 2.0 * T);
+    }
+    check(table_key(nudged) == table_key(spec),
+          "last-bit changes of the temperature grid keep the cache key");
+    nudged.temperatures[1] *= 1.0 + 1e-9;
+    check(table_key(nudged) != table_key(spec), "a real change of the grid changes the cache key");
+
     double const e = 0.3;
     check(std::abs(minimum_lorentz_factor(e, e, -1.0) - std::sqrt(1.0 + e * e)) < 1e-14,
           "backscatter without energy change needs gamma = sqrt(1 + e^2)");

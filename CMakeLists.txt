@@ -4,6 +4,13 @@ project(compton_matrix LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Intel's icx/icpx default to -fp-model=fast, which may reassociate the
+# error-free transformations of the double-double arithmetic; keep IEEE
+# semantics.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
+    add_compile_options(-fp-model=precise)
+endif()
+
 option(MACE_BUILD_PYTHON "Build the pybind11 extension modules" ON)
 option(MACE_BUILD_TESTS "Build the C++ library tests" OFF)
 option(MACE_ENABLE_MPI "Build the MPI table builder and the build_compton_table tool" ON)

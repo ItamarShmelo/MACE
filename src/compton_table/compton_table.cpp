@@ -55,14 +55,19 @@ SolverKind solver_from_name(std::string const& name)
     throw std::runtime_error("unknown solver in table: " + name);
 }
 
-/// The specification as text, one "name value" per line, doubles exact.
-std::string spec_text(TableSpec const& spec)
+/// The specification as text, one "name value" per line, doubles with
+/// `digits` significant digits (17: exact, for the file header; 12: for the
+/// cache key, so grids computed with last-bit differences share a table).
+std::string spec_text(TableSpec const& spec, int const digits = 17)
 {
     std::string text;
+    auto number = [digits](double const value) {
+        return std::format("{:.{}g}", value, digits);
+    };
     auto add_doubles = [&](char const* name, std::vector<double> const& values) {
         text += name;
         for (double const value : values) {
-            text += std::format(" {:.17g}", value);
+            text += ' ' + number(value);
         }
         text += '\n';
     };
@@ -71,15 +76,14 @@ std::string spec_text(TableSpec const& spec)
     add_doubles("temperatures", spec.temperatures);
     text += std::format("angle_bins {}\n", spec.num_angle_bins);
     text += std::format("solver {}\n", solver_name(spec.solver));
-    text += std::format("weight planck cap_x {:.17g}\n", spec.planck_cap_x);
+    text += "weight planck cap_x " + number(spec.planck_cap_x) + '\n';
     text += "multiplier number_weighted_energy_transfer\n";
-    text += std::format("cutoff_ratio {:.17g}\n", spec.cutoff_ratio);
-    text += std::format(
-        "quadrature cold_temperature {:.17g} e_panel_order_cold {} e_panel_order_hot {} cold_ep_k_cut 10 cold_ep_orders 48\n",
-        spec.cold_temperature,
-        spec.e_panel_order_cold,
-        spec.e_panel_order_hot);
-    text += std::format("taper {:.17g} {:.17g}\n", spec.taper_start, spec.taper_end);
+    text += "cutoff_ratio " + number(spec.cutoff_ratio) + '\n';
+    text += "quadrature cold_temperature " + number(spec.cold_temperature) +
+            std::format(" e_panel_order_cold {} e_panel_order_hot {} cold_ep_k_cut 10 cold_ep_orders 48\n",
+                        spec.e_panel_order_cold,
+                        spec.e_panel_order_hot);
+    text += "taper " + number(spec.taper_start) + ' ' + number(spec.taper_end) + '\n';
     return text;
 }
 
@@ -291,7 +295,7 @@ std::string key_for(TableSpec const& spec, std::string const& commit)
         "{} {}\n{}mace_commit {}\n",
         format_magic,
         format_version,
-        spec_text(spec),
+        spec_text(spec, 12),
         commit);
     return std::format("{:016x}", fnv1a(text));
 }
