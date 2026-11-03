@@ -3,6 +3,8 @@
 //   * load_or_build_mpi builds the cache file once, then reads it back
 //     unchanged, and leaves no lock file;
 //   * write/read round trip keeps the key and every array;
+//   * the energy-weighted total is finite, nonnegative and Thomson for soft
+//     photons on cold electrons;
 //   * minimum_lorentz_factor and the taper satisfy closed-form checks.
 // Exit status 0 when every check passes.
 
@@ -40,7 +42,8 @@ void check(bool const ok, std::string const& what)
 
 bool same(compton::table::Table const& a, compton::table::Table const& b)
 {
-    return a.key == b.key && a.sigma == b.sigma && a.dsigma_dT == b.dsigma_dT;
+    return a.key == b.key && a.sigma == b.sigma && a.dsigma_dT == b.dsigma_dT && a.total == b.total &&
+           a.dtotal_dT == b.dtotal_dT;
 }
 
 } // namespace
@@ -73,6 +76,29 @@ int main(int argc, char** argv)
             largest = std::max(largest, value);
         }
         check(largest > 0.0 && std::isfinite(largest), "table is finite and nonzero");
+        bool total_valid = serial.total.size() * spec.centers.size() == serial.sigma.size();
+        for (std::size_t k = 0; k < serial.total.size(); ++k) {
+            total_valid = total_valid && std::isfinite(serial.total[k]) && serial.total[k] >= 0.0 &&
+                          std::isfinite(serial.dtotal_dT[k]);
+        }
+        check(total_valid, "energy-weighted total is finite and nonnegative");
+        // Group 2 (0.046-0.32 keV, Wien weight at its lower edge) at 1e4 K: Klein-Nishina 1 - 2 eps ~ 1 - 2e-4,
+        // and no scattered photon leaves the grid.
+        double soft = 0.0;
+        for (std::size_t a = 0; a < static_cast<std::size_t>(spec.num_angle_bins); ++a) {
+            soft += serial.total[serial.total_index(0, 2, a)];
+        }
+        check(std::abs(soft / units::sigma_thomson - 1.0) < 2e-3,
+              std::format("soft-photon total on cold electrons is sigma_T (ratio {:.6f})", soft / units::sigma_thomson));
+        std::println("direction-only remainder: min fraction {:.3e} at T {:.3g} K group {} ({} negative rows); "
+                     "max negative angular fraction {:.3e} at T {:.3g} K group {}",
+                     serial.diagnostics.min_remainder_fraction,
+                     serial.diagnostics.remainder_temperature,
+                     serial.diagnostics.remainder_g,
+                     serial.diagnostics.negative_remainder_rows,
+                     serial.diagnostics.max_negative_angular_fraction,
+                     serial.diagnostics.negative_angular_temperature,
+                     serial.diagnostics.negative_angular_g);
         std::println("max detailed-balance mismatch {:.3e} at T {:.3g} K (groups {}, {}); tapered entries {}",
                      serial.diagnostics.max_detailed_balance_mismatch,
                      serial.diagnostics.mismatch_temperature,
@@ -102,7 +128,10 @@ int main(int argc, char** argv)
         Table const file = read_table(path.string());
         check(file.key == table_key(spec) && file.spec.boundaries == spec.boundaries &&
                   file.spec.temperatures == spec.temperatures && file.sigma == built.sigma &&
-                  file.dsigma_dT == built.dsigma_dT,
+                  file.dsigma_dT == built.dsigma_dT && file.total == built.total &&
+                  file.dtotal_dT == built.dtotal_dT &&
+                  std::abs(file.diagnostics.min_remainder_fraction - built.diagnostics.min_remainder_fraction) <=
+                      1e-6 * std::abs(built.diagnostics.min_remainder_fraction),
               "read_table round trip");
         std::filesystem::remove_all(directory);
     }

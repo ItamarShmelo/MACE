@@ -116,6 +116,8 @@ Table build_mpi(TableSpec const& spec, MPI_Comm const comm, std::ostream* const 
     share_all_status(failed, message, comm);
     allreduce_sum(table.sigma, comm);
     allreduce_sum(table.dsigma_dT, comm);
+    allreduce_sum(table.total, comm);
+    allreduce_sum(table.dtotal_dT, comm);
     double seconds = table.diagnostics.build_seconds;
     MPI_Allreduce(MPI_IN_PLACE, &seconds, 1, MPI_DOUBLE, MPI_MAX, comm);
     table.diagnostics.build_seconds = seconds;
@@ -177,7 +179,7 @@ Table load_or_build_mpi(
         }
         share_root_status(failed, message, comm);
     } else {
-        std::vector<double> diagnostics(6, 0.0);
+        std::vector<double> diagnostics(13, 0.0);
         bool failed = false;
         std::string message;
         if (rank == 0) {
@@ -189,7 +191,14 @@ Table load_or_build_mpi(
                                static_cast<double>(table.diagnostics.mismatch_g),
                                static_cast<double>(table.diagnostics.mismatch_gp),
                                table.diagnostics.build_seconds,
-                               static_cast<double>(table.diagnostics.tapered_entries)};
+                               static_cast<double>(table.diagnostics.tapered_entries),
+                               table.diagnostics.min_remainder_fraction,
+                               table.diagnostics.remainder_temperature,
+                               static_cast<double>(table.diagnostics.remainder_g),
+                               static_cast<double>(table.diagnostics.negative_remainder_rows),
+                               table.diagnostics.max_negative_angular_fraction,
+                               table.diagnostics.negative_angular_temperature,
+                               static_cast<double>(table.diagnostics.negative_angular_g)};
             } catch (std::exception const& error) {
                 failed = true;
                 message = "Compton table " + path + ": " + error.what();
@@ -200,6 +209,8 @@ Table load_or_build_mpi(
         broadcast(table.mace_commit, comm);
         broadcast(table.sigma, comm);
         broadcast(table.dsigma_dT, comm);
+        broadcast(table.total, comm);
+        broadcast(table.dtotal_dT, comm);
         broadcast(diagnostics, comm);
         table.diagnostics.max_detailed_balance_mismatch = diagnostics[0];
         table.diagnostics.mismatch_temperature = diagnostics[1];
@@ -207,16 +218,30 @@ Table load_or_build_mpi(
         table.diagnostics.mismatch_gp = static_cast<int>(diagnostics[3]);
         table.diagnostics.build_seconds = diagnostics[4];
         table.diagnostics.tapered_entries = static_cast<std::size_t>(diagnostics[5]);
+        table.diagnostics.min_remainder_fraction = diagnostics[6];
+        table.diagnostics.remainder_temperature = diagnostics[7];
+        table.diagnostics.remainder_g = static_cast<int>(diagnostics[8]);
+        table.diagnostics.negative_remainder_rows = static_cast<std::size_t>(diagnostics[9]);
+        table.diagnostics.max_negative_angular_fraction = diagnostics[10];
+        table.diagnostics.negative_angular_temperature = diagnostics[11];
+        table.diagnostics.negative_angular_g = static_cast<int>(diagnostics[12]);
     }
     table.spec = spec;
     if (rank == 0 && log != nullptr) {
         TableDiagnostics const& d = table.diagnostics;
         *log << std::format(
-                    "[mace] Compton table {} ({}, built in {}); max detailed-balance mismatch {:.2e}\n",
+                    "[mace] Compton table {} ({}, built in {}); max detailed-balance mismatch {:.2e}; "
+                    "direction-only remainder (total - off-diagonal) / total >= {:.3e} (T = {:.4g} K, group {}, "
+                    "{} negative rows), negative angular parts <= {:.3e} of the total\n",
                     path,
                     action == 1 ? "built now" : "read from cache",
                     format_seconds(d.build_seconds),
-                    d.max_detailed_balance_mismatch);
+                    d.max_detailed_balance_mismatch,
+                    d.min_remainder_fraction,
+                    d.remainder_temperature,
+                    d.remainder_g,
+                    d.negative_remainder_rows,
+                    d.max_negative_angular_fraction);
         if (d.max_detailed_balance_mismatch > 1e-4) {
             *log << std::format(
                         "[mace] WARNING: detailed-balance mismatch {:.2e} above 1e-4 at T = {:.4g} K, "

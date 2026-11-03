@@ -18,6 +18,20 @@
  * centre-form packet or group that changes group exchanges the exact energy of
  * a Planck-shaped source group (Giron, Krief & Steinberg).
  *
+ * Next to them the table holds the energy-weighted total scattering rate of
+ * each source group per angle bin,
+ *
+ *     total_{g,a}(T) = sum_{g'} (2 pi / B_g) int_g dE B(E)
+ *                      int_{g'} dE' int_{xi bin a} dxi K(E -> E', xi)
+ *
+ * (multiplier 1, same weight, quadrature and taper; E' outside the grid is not
+ * included), and its temperature derivative.  A transport code that uses the
+ * effective rates off the diagonal sets its direction-only (diagonal) rate to
+ * total - sum_{g' != g} sigma_{g->g'}, so that the total direction-changing
+ * rate is the Planck-weighted mean of the thermal Klein-Nishina rate (the
+ * effective rates alone fall short of it, e.g. by a factor ~4 for hard photons
+ * on cold electrons).
+ *
  * A thermal-truncation taper multiplies each entry by w(s), where s is the
  * smallest electron kinetic energy (in units of kT) that allows the
  * transition anywhere in the (g, g', angle bin) box, in either direction:
@@ -68,6 +82,18 @@ struct TableDiagnostics {
     int mismatch_gp = -1;
     std::size_t tapered_entries = 0; ///< entries with 0 < w < 1
     double build_seconds = 0.0;      ///< wall time of the build
+    /// Smallest (total - sum_{g' != g} sigma_{g->g'}) / total over table
+    /// nodes and source groups (before run-time detailed balance), and the
+    /// number of (T, g) rows where it is negative.
+    double min_remainder_fraction = 1.0;
+    double remainder_temperature = 0.0;
+    int remainder_g = -1;
+    std::size_t negative_remainder_rows = 0;
+    /// Largest sum over angle bins of the negative parts of that remainder,
+    /// relative to the total (the angular change if they are projected away).
+    double max_negative_angular_fraction = 0.0;
+    double negative_angular_temperature = 0.0;
+    int negative_angular_g = -1;
 };
 
 struct Table {
@@ -76,12 +102,19 @@ struct Table {
     std::string mace_commit; ///< MACE commit the table was built with
     std::vector<double> sigma;     ///< [T][g][g'][a] [cm^2]
     std::vector<double> dsigma_dT; ///< [T][g][g'][a] [cm^2/K]
+    std::vector<double> total;     ///< [T][g][a] [cm^2]
+    std::vector<double> dtotal_dT; ///< [T][g][a] [cm^2/K]
     TableDiagnostics diagnostics;
 
     std::size_t index(
         std::size_t i,
         std::size_t g,
         std::size_t gp,
+        std::size_t a) const;
+
+    std::size_t total_index(
+        std::size_t i,
+        std::size_t g,
         std::size_t a) const;
 };
 
@@ -136,7 +169,7 @@ Table compute_partial(
     int size,
     ProgressCallback const& progress = {});
 
-/// Detailed-balance diagnostics of an assembled table.
+/// Detailed-balance and diagonal-remainder diagnostics of an assembled table.
 void finalize(Table& table);
 
 /// All items on the calling process (OpenMP inside each item).

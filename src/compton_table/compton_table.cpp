@@ -40,7 +40,7 @@ namespace compton::table {
 
 namespace {
 
-constexpr int format_version = 1;
+constexpr int format_version = 2;
 constexpr char const* format_magic = "MACE_COMPTON_TABLE";
 
 char const* solver_name(SolverKind const solver)
@@ -82,6 +82,7 @@ std::string spec_text(TableSpec const& spec, int const digits = 17)
     text += std::format("solver {}\n", solver_name(spec.solver));
     text += "weight planck cap_x " + number(spec.planck_cap_x) + '\n';
     text += "multiplier number_weighted_energy_transfer\n";
+    text += "total energy_weighted\n";
     text += "cutoff_ratio " + number(spec.cutoff_ratio) + '\n';
     text += "quadrature cold_temperature " + number(spec.cold_temperature) +
             std::format(" e_panel_order_cold {} e_panel_order_hot {} cold_ep_k_cut 10 cold_ep_orders 48\n",
@@ -285,6 +286,16 @@ std::size_t Table::index(
     return ((i * G + g) * G + gp) * A + a;
 }
 
+std::size_t Table::total_index(
+    std::size_t const i,
+    std::size_t const g,
+    std::size_t const a) const
+{
+    std::size_t const G = spec.centers.size();
+    std::size_t const A = static_cast<std::size_t>(spec.num_angle_bins);
+    return (i * G + g) * A + a;
+}
+
 std::vector<double> default_temperatures()
 {
     std::vector<double> temperatures(32);
@@ -441,6 +452,8 @@ Table compute_partial(
     table.mace_commit = mace_commit();
     table.sigma.assign(NT * G * G * A, 0.0);
     table.dsigma_dT.assign(NT * G * G * A, 0.0);
+    table.total.assign(NT * G * A, 0.0);
+    table.dtotal_dT.assign(NT * G * A, 0.0);
 
     // Per-call log files off while building; restored on every exit.
     struct LoggingGuard {
@@ -454,6 +467,7 @@ Table compute_partial(
     ComptonMultigroupKernel const cold_kernel(spec.boundaries, weight, quadrature(spec, true));
     ComptonMultigroupKernel const hot_kernel(spec.boundaries, weight, quadrature(spec, false));
     NumberWeightedEnergyTransferMultiplier const multiplier(spec.boundaries, spec.centers);
+    ConstantMultiplier const unit;
     std::unique_ptr<ComptonKernelSolver> const solver =
         spec.solver == SolverKind::exact
             ? std::make_unique<ComptonKernelSolver>()
@@ -474,6 +488,11 @@ Table compute_partial(
             kernel.compute_sigma_row(*solver, spec.num_angle_bins, T, g, multiplier);
         std::vector<double> const dsigma =
             kernel.compute_dsigma_dT_row(*solver, spec.num_angle_bins, T, g, multiplier, sigma);
+        // Energy-weighted scattering rate into each target (multiplier 1), summed into the total below.
+        std::vector<double> const plain =
+            kernel.compute_sigma_row(*solver, spec.num_angle_bins, T, g, unit);
+        std::vector<double> const dplain =
+            kernel.compute_dsigma_dT_row(*solver, spec.num_angle_bins, T, g, unit, plain);
         for (std::size_t gp = 0; gp < G; ++gp) {
             for (std::size_t a = 0; a < A; ++a) {
                 std::size_t const local = gp * A + a;
@@ -489,6 +508,9 @@ Table compute_partial(
                 // ds/dT = -s/T at fixed energies.
                 table.dsigma_dT[index] =
                     w * dsigma[local] + sigma[local] * dw_ds * (-s / T);
+                std::size_t const total = table.total_index(i, static_cast<std::size_t>(g), a);
+                table.total[total] += w * plain[local];
+                table.dtotal_dT[total] += w * dplain[local] + plain[local] * dw_ds * (-s / T);
             }
         }
         ++done;
@@ -511,6 +533,9 @@ void finalize(Table& table)
     std::size_t const A = static_cast<std::size_t>(spec.num_angle_bins);
     TableDiagnostics& diagnostics = table.diagnostics;
     diagnostics.max_detailed_balance_mismatch = 0.0;
+    diagnostics.min_remainder_fraction = 1.0;
+    diagnostics.negative_remainder_rows = 0;
+    diagnostics.max_negative_angular_fraction = 0.0;
     std::vector<double> B;
     std::vector<double> n;
     for (std::size_t i = 0; i < spec.temperatures.size(); ++i) {
@@ -549,6 +574,39 @@ void finalize(Table& table)
                 }
             }
         }
+        // Direction-only remainder total - sum_{g' != g} sigma, per angle bin and summed.
+        for (std::size_t g = 0; g < G; ++g) {
+            double total = 0.0;
+            double remainder = 0.0;
+            double negative = 0.0;
+            for (std::size_t a = 0; a < A; ++a) {
+                double bin = table.total[table.total_index(i, g, a)];
+                total += bin;
+                for (std::size_t gp = 0; gp < G; ++gp) {
+                    if (gp != g) {
+                        bin -= table.sigma[table.index(i, g, gp, a)];
+                    }
+                }
+                remainder += bin;
+                negative += std::max(0.0, -bin);
+            }
+            if (!(total > 0.0)) {
+                continue;
+            }
+            if (remainder < 0.0) {
+                ++diagnostics.negative_remainder_rows;
+            }
+            if (remainder / total < diagnostics.min_remainder_fraction) {
+                diagnostics.min_remainder_fraction = remainder / total;
+                diagnostics.remainder_temperature = T;
+                diagnostics.remainder_g = static_cast<int>(g);
+            }
+            if (negative / total > diagnostics.max_negative_angular_fraction) {
+                diagnostics.max_negative_angular_fraction = negative / total;
+                diagnostics.negative_angular_temperature = T;
+                diagnostics.negative_angular_g = static_cast<int>(g);
+            }
+        }
     }
 }
 
@@ -579,15 +637,23 @@ void write_table(std::string const& path, Table const& table)
                             d.max_detailed_balance_mismatch, d.mismatch_temperature,
                             d.mismatch_g, d.mismatch_gp)
              << "tapered_entries " << d.tapered_entries << '\n'
+             << std::format("min_remainder_fraction {:.6e} at_T {:.6e} g {} negative_rows {}\n",
+                            d.min_remainder_fraction, d.remainder_temperature, d.remainder_g,
+                            d.negative_remainder_rows)
+             << std::format("max_negative_angular_fraction {:.6e} at_T {:.6e} g {}\n",
+                            d.max_negative_angular_fraction, d.negative_angular_temperature,
+                            d.negative_angular_g)
              << std::format("build_seconds {:.3f}\n", d.build_seconds)
              << "byte_order little\n"
-             << "arrays boundaries centers temperatures sigma dsigma_dT\n"
+             << "arrays boundaries centers temperatures sigma dsigma_dT total dtotal_dT\n"
              << "END_HEADER\n";
         write_doubles(file, table.spec.boundaries);
         write_doubles(file, table.spec.centers);
         write_doubles(file, table.spec.temperatures);
         write_doubles(file, table.sigma);
         write_doubles(file, table.dsigma_dT);
+        write_doubles(file, table.total);
+        write_doubles(file, table.dtotal_dT);
         if (!file) {
             throw std::runtime_error("failed writing Compton table " + temporary);
         }
@@ -656,6 +722,15 @@ Table read_table(std::string const& path)
             table.diagnostics.mismatch_gp = std::stoi(field(7));
         } else if (name == "tapered_entries") {
             table.diagnostics.tapered_entries = std::stoul(field(1));
+        } else if (name == "min_remainder_fraction") {
+            table.diagnostics.min_remainder_fraction = parse_double(field(1));
+            table.diagnostics.remainder_temperature = parse_double(field(3));
+            table.diagnostics.remainder_g = std::stoi(field(5));
+            table.diagnostics.negative_remainder_rows = std::stoul(field(7));
+        } else if (name == "max_negative_angular_fraction") {
+            table.diagnostics.max_negative_angular_fraction = parse_double(field(1));
+            table.diagnostics.negative_angular_temperature = parse_double(field(3));
+            table.diagnostics.negative_angular_g = std::stoi(field(5));
         } else if (name == "build_seconds") {
             table.diagnostics.build_seconds = parse_double(field(1));
         }
@@ -669,6 +744,8 @@ Table read_table(std::string const& path)
     read_doubles(file, table.spec.temperatures, NT);
     read_doubles(file, table.sigma, NT * G * G * A);
     read_doubles(file, table.dsigma_dT, NT * G * G * A);
+    read_doubles(file, table.total, NT * G * A);
+    read_doubles(file, table.dtotal_dT, NT * G * A);
     if (key_for(table.spec, table.mace_commit) != table.key) {
         throw std::runtime_error("Compton table key does not match its contents: " + path);
     }
@@ -717,7 +794,8 @@ void check_compatible(Table const& table, TableSpec const& spec)
     }
     std::size_t const G = spec.centers.size();
     std::size_t const size = spec.temperatures.size() * G * G * static_cast<std::size_t>(spec.num_angle_bins);
-    if (table.sigma.size() != size || table.dsigma_dT.size() != size) {
+    if (table.sigma.size() != size || table.dsigma_dT.size() != size ||
+        table.total.size() * G != size || table.dtotal_dT.size() * G != size) {
         fail("array sizes");
     }
 }
