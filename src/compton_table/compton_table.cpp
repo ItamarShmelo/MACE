@@ -484,15 +484,15 @@ Table compute_partial(
         double const T = spec.temperatures[i];
         ComptonMultigroupKernel const& kernel =
             T < spec.cold_temperature ? cold_kernel : hot_kernel;
-        std::vector<double> const sigma =
-            kernel.compute_sigma_row(*solver, spec.num_angle_bins, T, g, multiplier);
-        std::vector<double> const dsigma =
-            kernel.compute_dsigma_dT_row(*solver, spec.num_angle_bins, T, g, multiplier, sigma);
-        // Energy-weighted scattering rate into each target (multiplier 1), summed into the total below.
-        std::vector<double> const plain =
-            kernel.compute_sigma_row(*solver, spec.num_angle_bins, T, g, unit);
-        std::vector<double> const dplain =
-            kernel.compute_dsigma_dT_row(*solver, spec.num_angle_bins, T, g, unit, plain);
+        // The effective rates and the energy-weighted rates into each target (multiplier 1, summed into the
+        // total below), with their derivatives, from one sweep of each kernel (as compute_sigma_row and
+        // compute_dsigma_dT_row, bit for bit).
+        std::vector<SigmaRowWithDerivative> const rows =
+            kernel.compute_rows_with_derivatives(*solver, spec.num_angle_bins, T, g, {&multiplier, &unit});
+        std::vector<double> const& sigma = rows[0].sigma;
+        std::vector<double> const& dsigma = rows[0].dsigma_dT;
+        std::vector<double> const& plain = rows[1].sigma;
+        std::vector<double> const& dplain = rows[1].dsigma_dT;
         for (std::size_t gp = 0; gp < G; ++gp) {
             for (std::size_t a = 0; a < A; ++a) {
                 std::size_t const local = gp * A + a;

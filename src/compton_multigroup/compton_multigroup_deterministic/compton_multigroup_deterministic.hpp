@@ -60,6 +60,8 @@
 #include "utilities/units.hpp"
 
 #include <algorithm>
+#include <array>
+#include <cstddef>
 #include <cassert>
 #include <cmath>
 #include <memory>
@@ -190,6 +192,13 @@ class ConstantMultiplier : public KernelMultiplier {
     {
         return 1.0;
     }
+};
+
+/// One row of compute_sigma_row and its compute_dsigma_dT_row (see
+/// ComptonMultigroupKernel::compute_rows_with_derivatives).
+struct SigmaRowWithDerivative {
+    std::vector<double> sigma;     ///< [g'][angle]
+    std::vector<double> dsigma_dT; ///< [g'][angle]
 };
 
 /**
@@ -328,6 +337,24 @@ class ComptonMultigroupKernel {
         KernelMultiplier const& multiplier,
         std::vector<double> const& sigma_row) const;
 
+    /**
+     * @brief compute_sigma_row and compute_dsigma_dT_row(..., sigma_row) of
+     * source group g for one or two multipliers at once, bit for bit.
+     *
+     * Each kernel value is evaluated once and shared by every multiplier
+     * and by the weight-derivative term: one sweep of sigma_E and one of
+     * dsigma_E_dT instead of three sweeps per multiplier.  Every row keeps
+     * its own outward cutoff and derivative target mask.
+     *
+     * @return One row pair per multiplier, in the order given.
+     */
+    std::vector<SigmaRowWithDerivative> compute_rows_with_derivatives(
+        ComptonKernelSolver const& kernel,
+        int num_angle_bins,
+        double T,
+        int g,
+        std::vector<KernelMultiplier const*> const& multipliers) const;
+
   private:
     /**
      * @brief Core driver: assemble the full G×G×num_angle_bins scattering
@@ -380,6 +407,48 @@ class ComptonMultigroupKernel {
         std::optional<double> effective_cutoff,
         double* row,
         std::vector<char> const* target_mask) const;
+
+    /** compute_rows_with_derivatives for M multipliers. */
+    template <std::size_t M>
+    std::vector<SigmaRowWithDerivative> compute_rows_with_derivatives_impl(
+        ComptonKernelSolver const& kernel,
+        int num_angle_bins,
+        double T,
+        int g,
+        std::array<KernelMultiplier const*, M> const& multipliers) const;
+
+    /**
+     * The integrations below for a pointwise integrand point(E, E', xi)
+     * returning double or a vector of moments (one kernel evaluation shared
+     * by several multipliers); the double versions call these.
+     */
+    template <typename Point>
+    auto integrate_xi_bin_point(
+        Point const& point,
+        double E,
+        double Ep,
+        double xi_lo,
+        double xi_hi,
+        double T) const;
+
+    template <typename Point>
+    auto integrate_Ep_xi_bin_point(
+        Point const& point,
+        double E,
+        double Ep_lo,
+        double Ep_hi,
+        double xi_lo,
+        double xi_hi,
+        double T) const;
+
+    template <typename Point>
+    auto integrate_E_Ep_xi_bin_point(
+        Point const& point,
+        int g,
+        int gp,
+        double xi_lo,
+        double xi_hi,
+        double T) const;
 
     /** @brief One source group of compute_matrix_impl; a target mask (with
      * no cutoff) evaluates only the marked g'. */

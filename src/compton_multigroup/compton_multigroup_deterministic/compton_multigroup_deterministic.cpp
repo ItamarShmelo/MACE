@@ -7,6 +7,7 @@
 #include "utilities/units.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <cstddef>
@@ -15,6 +16,7 @@
 #include <numbers>
 #include <optional>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -131,8 +133,46 @@ ComptonMultigroupKernel::ComptonMultigroupKernel(
 
 namespace {
 
+/// Moments of one kernel evaluation (one per multiplier) for the shared
+/// integrations: component-wise arithmetic, so each component is computed
+/// exactly as a double integrand would be.
+template <std::size_t N>
+struct KernelMoments {
+    std::array<double, N> v{};
+
+    KernelMoments& operator+=(KernelMoments const& other)
+    {
+        for (std::size_t k = 0; k < N; ++k) {
+            v[k] += other.v[k];
+        }
+        return *this;
+    }
+
+    friend KernelMoments operator+(KernelMoments a, KernelMoments const& b)
+    {
+        a += b;
+        return a;
+    }
+
+    friend KernelMoments operator*(double const s, KernelMoments a)
+    {
+        for (std::size_t k = 0; k < N; ++k) {
+            a.v[k] = s * a.v[k];
+        }
+        return a;
+    }
+
+    friend KernelMoments operator*(KernelMoments a, double const s)
+    {
+        for (std::size_t k = 0; k < N; ++k) {
+            a.v[k] = a.v[k] * s;
+        }
+        return a;
+    }
+};
+
 template <typename F>
-double integrate_Ep_ridge(
+auto integrate_Ep_ridge(
     F const& f,
     double Ep_lo,
     double Ep_hi,
@@ -143,6 +183,7 @@ double integrate_Ep_ridge(
     GaussLegendreRule const& interior_rule,
     GaussLegendreRule const& elastic_core_rule)
 {
+    using Value = std::decay_t<decltype(f(Ep_lo))>;
     double const keep_lo = std::max(Ep_lo, rb.cold_lo - k_cut * rb.sigma_lo);
     double const keep_hi = std::min(
         Ep_hi,
@@ -166,7 +207,7 @@ double integrate_Ep_ridge(
             std::min(keep_hi, rb.cold_hi + k_cut * rb.sigma_hi);
 
         if (ec_hi > ec_lo && ec_hi > Ep_lo && ec_lo < Ep_hi) {
-            double dp_result = 0.0;
+            Value dp_result{};
 
             if (keep_lo > Ep_lo) {
                 assert(Ep_lo > 0.0);
@@ -212,7 +253,7 @@ double integrate_Ep_ridge(
         return legendre_integrate(f, edge_rule, Ep_lo, Ep_hi);
     }
 
-    double result = 0.0;
+    Value result{};
 
     if (keep_lo > Ep_lo) {
         assert(Ep_lo > 0.0);
@@ -255,23 +296,20 @@ double integrate_Ep_ridge(
 
 } // anonymous namespace
 
-double ComptonMultigroupKernel::integrate_xi_bin(
-    ComptonKernelSolver const& kernel,
-    ComptonResult (
-        ComptonKernelSolver::*eval)(double, double, double, double)
-        const,
+template <typename Point>
+auto ComptonMultigroupKernel::integrate_xi_bin_point(
+    Point const& point,
     double const E,
     double const Ep,
     double const xi_lo,
     double const xi_hi,
-    double const T,
-    KernelMultiplier const& multiplier) const
+    double const T) const
 {
+    using Value = std::decay_t<decltype(point(E, Ep, xi_lo))>;
     double const tau = T * units::k_boltz / units::me_c2;
 
     auto f = [&](double const xi) {
-        return multiplier(E, Ep, xi) *
-               (kernel.*eval)(E, Ep, xi, T).value;
+        return point(E, Ep, xi);
     };
 
     double const gamma = E / units::me_c2;
@@ -313,7 +351,7 @@ double ComptonMultigroupKernel::integrate_xi_bin(
     double const core_lo = std::max(xi_lo, peak_lo);
     double const core_hi = std::min(xi_hi, peak_hi);
 
-    double result = 0.0;
+    Value result{};
 
     if (core_lo > xi_lo) {
         double const span = core_lo - xi_lo;
@@ -336,31 +374,20 @@ double ComptonMultigroupKernel::integrate_xi_bin(
     return result;
 }
 
-double ComptonMultigroupKernel::integrate_Ep_xi_bin(
-    ComptonKernelSolver const& kernel,
-    ComptonResult (
-        ComptonKernelSolver::*eval)(double, double, double, double)
-        const,
+template <typename Point>
+auto ComptonMultigroupKernel::integrate_Ep_xi_bin_point(
+    Point const& point,
     double const E,
     double const Ep_lo,
     double const Ep_hi,
     double const xi_lo,
     double const xi_hi,
-    double const T,
-    KernelMultiplier const& multiplier) const
+    double const T) const
 {
     auto const rb = compute_ridge_bounds(E, xi_lo, xi_hi, T);
 
     auto ep_integrand = [&](double const Ep) {
-        return integrate_xi_bin(
-            kernel,
-            eval,
-            E,
-            Ep,
-            xi_lo,
-            xi_hi,
-            T,
-            multiplier);
+        return integrate_xi_bin_point(point, E, Ep, xi_lo, xi_hi, T);
     };
 
     return integrate_Ep_ridge(
@@ -375,41 +402,37 @@ double ComptonMultigroupKernel::integrate_Ep_xi_bin(
         ep_elastic_core_rule_);
 }
 
-double ComptonMultigroupKernel::integrate_E_Ep_xi_bin(
-    ComptonKernelSolver const& kernel,
-    ComptonResult (
-        ComptonKernelSolver::*eval)(double, double, double, double)
-        const,
+template <typename Point>
+auto ComptonMultigroupKernel::integrate_E_Ep_xi_bin_point(
+    Point const& point,
     int const g,
     int const gp,
     double const xi_lo,
     double const xi_hi,
-    double const T,
-    KernelMultiplier const& multiplier) const
+    double const T) const
 {
     double const E_lo = group_boundaries_[g];
     double const E_hi = group_boundaries_[g + 1];
     double const Ep_lo = group_boundaries_[gp];
     double const Ep_hi = group_boundaries_[gp + 1];
+    using Value = std::decay_t<decltype(point(E_lo, Ep_lo, xi_lo))>;
 
     auto E_integrand = [&](double const E) {
         double const w = weight_func_->weight(E, T);
-        double const inner = integrate_Ep_xi_bin(
-            kernel,
-            eval,
+        auto const inner = integrate_Ep_xi_bin_point(
+            point,
             E,
             Ep_lo,
             Ep_hi,
             xi_lo,
             xi_hi,
-            T,
-            multiplier);
+            T);
         return w * inner;
     };
 
-    auto integrate_sub = [&](double const a, double const b) -> double {
+    auto integrate_sub = [&](double const a, double const b) -> Value {
         if (!(b > a)) {
-            return 0.0;
+            return Value{};
         }
         if (b / a <= log_e_panel_ratio_) {
             return legendre_integrate(E_integrand, e_panel_rule_, a, b);
@@ -420,7 +443,7 @@ double ComptonMultigroupKernel::integrate_E_Ep_xi_bin(
         return rlog_legendre_integrate(E_integrand, e_panel_rule_, a, b);
     };
 
-    auto integrate_middle = [&](double const a, double const b) -> double {
+    auto integrate_middle = [&](double const a, double const b) -> Value {
         auto const Epk = weight_func_->peak_energy(T);
         if (Epk && *Epk > a && *Epk < b) {
             return integrate_sub(a, *Epk) + integrate_sub(*Epk, b);
@@ -438,6 +461,61 @@ double ComptonMultigroupKernel::integrate_E_Ep_xi_bin(
                integrate_sub(bl_hi, E_hi);
     }
     return integrate_middle(E_lo, E_hi);
+}
+
+double ComptonMultigroupKernel::integrate_xi_bin(
+    ComptonKernelSolver const& kernel,
+    ComptonResult (
+        ComptonKernelSolver::*eval)(double, double, double, double)
+        const,
+    double const E,
+    double const Ep,
+    double const xi_lo,
+    double const xi_hi,
+    double const T,
+    KernelMultiplier const& multiplier) const
+{
+    auto const point = [&](double const e, double const ep, double const xi) {
+        return multiplier(e, ep, xi) * (kernel.*eval)(e, ep, xi, T).value;
+    };
+    return integrate_xi_bin_point(point, E, Ep, xi_lo, xi_hi, T);
+}
+
+double ComptonMultigroupKernel::integrate_Ep_xi_bin(
+    ComptonKernelSolver const& kernel,
+    ComptonResult (
+        ComptonKernelSolver::*eval)(double, double, double, double)
+        const,
+    double const E,
+    double const Ep_lo,
+    double const Ep_hi,
+    double const xi_lo,
+    double const xi_hi,
+    double const T,
+    KernelMultiplier const& multiplier) const
+{
+    auto const point = [&](double const e, double const ep, double const xi) {
+        return multiplier(e, ep, xi) * (kernel.*eval)(e, ep, xi, T).value;
+    };
+    return integrate_Ep_xi_bin_point(point, E, Ep_lo, Ep_hi, xi_lo, xi_hi, T);
+}
+
+double ComptonMultigroupKernel::integrate_E_Ep_xi_bin(
+    ComptonKernelSolver const& kernel,
+    ComptonResult (
+        ComptonKernelSolver::*eval)(double, double, double, double)
+        const,
+    int const g,
+    int const gp,
+    double const xi_lo,
+    double const xi_hi,
+    double const T,
+    KernelMultiplier const& multiplier) const
+{
+    auto const point = [&](double const e, double const ep, double const xi) {
+        return multiplier(e, ep, xi) * (kernel.*eval)(e, ep, xi, T).value;
+    };
+    return integrate_E_Ep_xi_bin_point(point, g, gp, xi_lo, xi_hi, T);
 }
 
 std::vector<double> ComptonMultigroupKernel::compute_xi_integral_impl(
@@ -1009,6 +1087,220 @@ std::vector<double> ComptonMultigroupKernel::compute_dsigma_dT_row(
         result[idx] += weight_deriv[idx] - sigma_row[idx] * dD_over_D;
     }
     return result;
+}
+
+template <std::size_t M>
+std::vector<SigmaRowWithDerivative>
+ComptonMultigroupKernel::compute_rows_with_derivatives_impl(
+    ComptonKernelSolver const& kernel,
+    int const num_angle_bins,
+    double const T,
+    int const g,
+    std::array<KernelMultiplier const*, M> const& multipliers) const
+{
+    int const G = num_groups();
+    std::size_t const A = static_cast<std::size_t>(num_angle_bins);
+    std::size_t const row_size = static_cast<std::size_t>(G) * A;
+    double const dxi = 2.0 / static_cast<double>(num_angle_bins);
+    double const denom = weight_func_->compute_denominator(
+        group_boundaries_[g],
+        group_boundaries_[g + 1],
+        T);
+    double const inv_denom = 1.0 / denom;
+
+    std::vector<WeightDerivMultiplier> weight_derivs;
+    weight_derivs.reserve(M);
+    for (std::size_t k = 0; k < M; ++k) {
+        weight_derivs.emplace_back(*weight_func_, *multipliers[k], T);
+    }
+    auto const sigma_eval = &ComptonKernelSolver::sigma_E;
+    auto const derivative_eval = &ComptonKernelSolver::dsigma_E_dT;
+
+    // sigma_E sweep: sigma (k) and the weight-derivative term (M + k).
+    auto const sigma_point = [&](double const E, double const Ep, double const xi) {
+        double const value = (kernel.*sigma_eval)(E, Ep, xi, T).value;
+        KernelMoments<2 * M> moments;
+        for (std::size_t k = 0; k < M; ++k) {
+            moments.v[k] = (*multipliers[k])(E, Ep, xi) * value;
+            moments.v[M + k] = weight_derivs[k](E, Ep, xi) * value;
+        }
+        return moments;
+    };
+    // dsigma_E_dT sweep: the kernel-derivative term (k).
+    auto const derivative_point = [&](double const E, double const Ep, double const xi) {
+        double const value = (kernel.*derivative_eval)(E, Ep, xi, T).value;
+        KernelMoments<M> moments;
+        for (std::size_t k = 0; k < M; ++k) {
+            moments.v[k] = (*multipliers[k])(E, Ep, xi) * value;
+        }
+        return moments;
+    };
+
+    std::vector<std::vector<double>> sigma(M, std::vector<double>(row_size, 0.0));
+    std::vector<std::vector<double>> weight_term(M, std::vector<double>(row_size, 0.0));
+    std::vector<std::vector<double>> derivative(M, std::vector<double>(row_size, 0.0));
+
+    auto const clear = [&](std::vector<double>& row, int const gp) {
+        std::size_t const base = static_cast<std::size_t>(gp) * A;
+        std::fill(row.begin() + static_cast<std::ptrdiff_t>(base),
+                  row.begin() + static_cast<std::ptrdiff_t>(base + A),
+                  0.0);
+    };
+
+#pragma omp parallel
+#pragma omp single
+    {
+        // As fill_row, for all moments at once; returns the angle-summed |sigma| per multiplier.
+        auto const do_group = [&](int const gp) {
+            std::size_t const base = static_cast<std::size_t>(gp) * A;
+#pragma omp taskloop grainsize(1) default(shared)
+            for (int a = 0; a < num_angle_bins; ++a) {
+                double const xi_lo = -1.0 + a * dxi;
+                double const xi_hi = std::min(
+                    -1.0 + (a + 1) * dxi,
+                    1.0 - constants::XI_UPPER_EPS);
+                auto const numerator = integrate_E_Ep_xi_bin_point(
+                    sigma_point, g, gp, xi_lo, xi_hi, T);
+                for (std::size_t k = 0; k < M; ++k) {
+                    sigma[k][base + static_cast<std::size_t>(a)] =
+                        2.0 * std::numbers::pi * numerator.v[k] * inv_denom;
+                    weight_term[k][base + static_cast<std::size_t>(a)] =
+                        2.0 * std::numbers::pi * numerator.v[M + k] * inv_denom;
+                }
+            }
+            std::array<double, M> sums{};
+            for (std::size_t k = 0; k < M; ++k) {
+                for (std::size_t a = 0; a < A; ++a) {
+                    sums[k] += std::abs(sigma[k][base + a]);
+                }
+            }
+            return sums;
+        };
+
+        // Outward traversal as fill_row; a multiplier whose own cutoff has
+        // stopped keeps zeros (it would not have evaluated these targets).
+        std::array<double, M> const peak = do_group(g);
+        if (group_cutoff_ratio_.has_value()) {
+            std::array<double, M> cutoff{};
+            for (std::size_t k = 0; k < M; ++k) {
+                cutoff[k] = group_cutoff_ratio_.value() * peak[k];
+            }
+            for (int const step : {1, -1}) {
+                std::array<bool, M> active;
+                active.fill(true);
+                for (int gp = g + step; gp >= 0 && gp < G; gp += step) {
+                    if (std::none_of(active.begin(), active.end(), [](bool const on) { return on; })) {
+                        break;
+                    }
+                    std::array<double, M> const sums = do_group(gp);
+                    for (std::size_t k = 0; k < M; ++k) {
+                        if (!active[k]) {
+                            clear(sigma[k], gp);
+                            clear(weight_term[k], gp);
+                        } else if (sums[k] < cutoff[k]) {
+                            active[k] = false;
+                        }
+                    }
+                }
+            }
+        } else {
+            for (int gp = 0; gp < G; ++gp) {
+                if (gp != g) {
+                    do_group(gp);
+                }
+            }
+        }
+
+        // Derivative targets per multiplier: those with a nonzero sigma, as
+        // compute_dsigma_dT_row(..., sigma_row).
+        std::vector<std::vector<char>> mask(M, std::vector<char>(static_cast<std::size_t>(G), 0));
+        std::vector<char> any_mask(static_cast<std::size_t>(G), 0);
+        for (std::size_t k = 0; k < M; ++k) {
+            for (int gp = 0; gp < G; ++gp) {
+                std::size_t const base = static_cast<std::size_t>(gp) * A;
+                for (std::size_t a = 0; a < A; ++a) {
+                    if (sigma[k][base + a] != 0.0) {
+                        mask[k][static_cast<std::size_t>(gp)] = 1;
+                    }
+                }
+                if (mask[k][static_cast<std::size_t>(gp)] != 0) {
+                    any_mask[static_cast<std::size_t>(gp)] = 1;
+                } else {
+                    clear(weight_term[k], gp);
+                }
+            }
+        }
+
+        for (int gp = 0; gp < G; ++gp) {
+            if (any_mask[static_cast<std::size_t>(gp)] == 0) {
+                continue;
+            }
+            std::size_t const base = static_cast<std::size_t>(gp) * A;
+#pragma omp taskloop grainsize(1) default(shared)
+            for (int a = 0; a < num_angle_bins; ++a) {
+                double const xi_lo = -1.0 + a * dxi;
+                double const xi_hi = std::min(
+                    -1.0 + (a + 1) * dxi,
+                    1.0 - constants::XI_UPPER_EPS);
+                auto const numerator = integrate_E_Ep_xi_bin_point(
+                    derivative_point, g, gp, xi_lo, xi_hi, T);
+                for (std::size_t k = 0; k < M; ++k) {
+                    if (mask[k][static_cast<std::size_t>(gp)] != 0) {
+                        derivative[k][base + static_cast<std::size_t>(a)] =
+                            2.0 * std::numbers::pi * numerator.v[k] * inv_denom;
+                    }
+                }
+            }
+        }
+    }
+
+    double const D = weight_func_->compute_denominator(
+        group_boundaries_[g],
+        group_boundaries_[g + 1],
+        T);
+    double const dD_dT = weight_func_->d_denominator_dT(
+        group_boundaries_[g],
+        group_boundaries_[g + 1],
+        T);
+    double const dD_over_D = dD_dT / D;
+    std::vector<SigmaRowWithDerivative> rows(M);
+    for (std::size_t k = 0; k < M; ++k) {
+        for (std::size_t idx = 0; idx < row_size; ++idx) {
+            derivative[k][idx] += weight_term[k][idx] - sigma[k][idx] * dD_over_D;
+        }
+        rows[k].sigma = std::move(sigma[k]);
+        rows[k].dsigma_dT = std::move(derivative[k]);
+    }
+    return rows;
+}
+
+std::vector<SigmaRowWithDerivative> ComptonMultigroupKernel::compute_rows_with_derivatives(
+    ComptonKernelSolver const& kernel,
+    int const num_angle_bins,
+    double const T,
+    int const g,
+    std::vector<KernelMultiplier const*> const& multipliers) const
+{
+    if (num_angle_bins < 1) {
+        throw std::invalid_argument("num_angle_bins must be >= 1");
+    }
+    if (g < 0 || g >= num_groups()) {
+        throw std::invalid_argument("source group out of range");
+    }
+    for (KernelMultiplier const* const multiplier : multipliers) {
+        if (multiplier == nullptr) {
+            throw std::invalid_argument("null multiplier");
+        }
+    }
+    if (multipliers.size() == 1) {
+        return compute_rows_with_derivatives_impl<1>(
+            kernel, num_angle_bins, T, g, {multipliers[0]});
+    }
+    if (multipliers.size() == 2) {
+        return compute_rows_with_derivatives_impl<2>(
+            kernel, num_angle_bins, T, g, {multipliers[0], multipliers[1]});
+    }
+    throw std::invalid_argument("compute_rows_with_derivatives takes one or two multipliers");
 }
 
 } // namespace compton

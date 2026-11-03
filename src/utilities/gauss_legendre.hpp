@@ -54,6 +54,7 @@
 
 #include <cmath>
 #include <stdexcept>
+#include <type_traits>
 #include <vector>
 
 namespace compton {
@@ -115,23 +116,28 @@ inline GaussLegendreRule compute_gauss_legendre(int const N)
  * Maps the reference nodes from [−1, 1] to [a, b] via the affine
  * transformation x = (b−a)/2 · t + (a+b)/2, with Jacobian (b−a)/2.
  *
- * @param integrand  Callable f(x) → double.
+ * The integrand may return double or a small vector type (value-initialized to
+ * zero, with += and multiplication by a double): each component then gets
+ * exactly the arithmetic of a scalar integrand.
+ *
+ * @param integrand  Callable f(x) → double (or a vector type, see above).
  * @param rule       Precomputed rule on [−1, 1].
  * @param a          Lower integration limit.
  * @param b          Upper integration limit.
  * @return           Approximate value of ∫_a^b f(x) dx.
  */
 template <typename F>
-inline double legendre_integrate(
+inline auto legendre_integrate(
     F const& integrand,
     GaussLegendreRule const& rule,
     double const a,
     double const b)
 {
+    using Value = std::decay_t<decltype(integrand(a))>;
     double const half_width = 0.5 * (b - a);
     double const midpoint = 0.5 * (a + b);
 
-    double sum = 0.0;
+    Value sum{};
     int const n = static_cast<int>(rule.nodes.size());
     for (int i = 0; i < n; ++i) {
         double const x = half_width * rule.nodes[i] + midpoint;
@@ -157,7 +163,7 @@ inline double legendre_integrate(
  * @return            Approximate value of integral_a^b f(x) dx.
  */
 template <typename F>
-inline double log_legendre_integrate(
+inline auto log_legendre_integrate(
     F const& integrand,
     GaussLegendreRule const& rule,
     double const a,
@@ -191,7 +197,7 @@ inline double log_legendre_integrate(
  * @return            Approximate value of integral_a^b f(x) dx.
  */
 template <typename F>
-inline double rlog_legendre_integrate(
+inline auto rlog_legendre_integrate(
     F const& integrand,
     GaussLegendreRule const& rule,
     double const a,
