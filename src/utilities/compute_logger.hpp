@@ -5,7 +5,6 @@
 #include <chrono>
 #include <format>
 #include <fstream>
-#include <print>
 #include <string>
 #include <string_view>
 #include <unistd.h>
@@ -36,7 +35,7 @@ class ComputeLogger {
             return;
         }
         auto const now = std::chrono::system_clock::now();
-        std::println(file, "{:%H:%M:%S} [compton] {}: {}", now, tag_, params);
+        file << std::format("{:%H:%M:%S} [compton] {}: {}", now, tag_, params) << '\n';
     }
 
     void done()
@@ -52,12 +51,11 @@ class ComputeLogger {
         double const elapsed =
             std::chrono::duration<double>(t1 - wall_t0_).count();
         auto const now = std::chrono::system_clock::now();
-        std::println(
-            file,
+        file << std::format(
             "{:%H:%M:%S} [compton] {}: done in {:g} s",
             now,
             tag_,
-            elapsed);
+            elapsed) << '\n';
     }
 
   private:

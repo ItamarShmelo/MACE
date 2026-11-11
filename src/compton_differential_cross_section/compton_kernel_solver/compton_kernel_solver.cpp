@@ -3,7 +3,8 @@
 #include "utilities/units.hpp"
 
 #include <algorithm>
-#include <print>
+#include <format>
+#include <iostream>
 #include <stdexcept>
 
 namespace compton {
@@ -132,8 +133,7 @@ ComptonResult ComptonKernelSolver::sigma_E(
             double const gamma_p = E_prime / units::me_c2;
             double const T_kev = T / units::kev_kelvin;
             double const tau = T * units::k_boltz / units::me_c2;
-            std::println(
-                stderr,
+            std::cerr << std::format(
                 "WARNING sigma_E: all backends failed, returning 0"
                 "  (gamma={:.6e}, gamma'={:.6e}, T={:.6e} keV, tau={:.6e}, "
                 "xi={:.6e})",
@@ -141,7 +141,7 @@ ComptonResult ComptonKernelSolver::sigma_E(
                 gamma_p,
                 T_kev,
                 tau,
-                xi);
+                xi) << '\n';
         }
         return ComptonResult{0.0, 1.0, 1.0, 0};
     }
@@ -151,8 +151,7 @@ ComptonResult ComptonKernelSolver::sigma_E(
             double const gamma_p = E_prime / units::me_c2;
             double const T_kev = T / units::kev_kelvin;
             double const tau = T * units::k_boltz / units::me_c2;
-            std::println(
-                stderr,
+            std::cerr << std::format(
                 "WARNING sigma_E: {:.6e} clamped to 0"
                 "  (gamma={:.6e}, gamma'={:.6e}, T={:.6e} keV, tau={:.6e}, "
                 "xi={:.6e}, "
@@ -163,7 +162,7 @@ ComptonResult ComptonKernelSolver::sigma_E(
                 T_kev,
                 tau,
                 xi,
-                result.estimated_rel_error);
+                result.estimated_rel_error) << '\n';
         }
         result.value = 0.0;
     }
@@ -184,8 +183,7 @@ ComptonResult ComptonKernelSolver::dsigma_E_dT(
             double const gamma_p = E_prime / units::me_c2;
             double const T_kev = T / units::kev_kelvin;
             double const tau = T * units::k_boltz / units::me_c2;
-            std::println(
-                stderr,
+            std::cerr << std::format(
                 "WARNING dsigma_E_dT: all backends failed, returning 0"
                 "  (gamma={:.6e}, gamma'={:.6e}, T={:.6e} keV, tau={:.6e}, "
                 "xi={:.6e})",
@@ -193,7 +191,7 @@ ComptonResult ComptonKernelSolver::dsigma_E_dT(
                 gamma_p,
                 T_kev,
                 tau,
-                xi);
+                xi) << '\n';
         }
         return ComptonResult{0.0, 1.0, 1.0, 0};
     }
