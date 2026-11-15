@@ -52,60 +52,82 @@ The published MACE tables use 128 below 8e4 K and 64 above.
 The xi orders (`xi_order`, `xi_tail_order`) are converged at their defaults:
 doubling them changes results by at most 1e-6.
 
-### Outgoing-energy window and orders at cold temperatures
+## Most forward angle bin at cold temperatures
 
-For each angle bin, the E' integral uses panels placed around the Compton
-ridge, with a window of half-width `ep_k_cut` (default 5) thermal widths. A
-narrow near-forward (elastic) feature is integrated with a fixed 8-point rule
-that no setting changes. At cold temperatures:
+For each angle bin, the E' integral is split into panels around the Compton
+ridge, with a window that extends `ep_k_cut` (default 5) thermal widths beyond
+the ridge positions at the two edges of the bin (`integrate_Ep_ridge` in
+`compton_multigroup_deterministic.cpp`). In the most forward bin the upper
+edge is xi = 1, where the ridge width is zero. Once the recoil shift across
+the bin exceeds `ep_k_cut` widths, the window therefore ends exactly at
+E' = E. Just above E sits a narrow Doppler upscatter tail from near-forward
+angles, a few kT wide; it then falls into a single panel spanning the rest of
+the outgoing group and is under-resolved. The elastic-core branch meant for
+this feature takes its width from the ridge at the upper bin edge, which is
+zero, so it never runs.
 
-- Doubling `ep_edge_order`/`ep_interior_order` (24 -> 48 -> 96) changes row
-  sums by 5e-5 and then 1.6e-4 at 1e3 K for E = 10-100 keV, by 1.5e-4 and
-  8.5e-5 at 9e3 K, and by 1.4e-4 (24 -> 48) at 8e4 K, without settling. At
-  1.1e6 K and above, doubling changes entries above 1% of the row maximum by
-  at most 5e-7.
+Whether this happens is set by one number, the recoil shift across the bin
+in thermal widths at its wide edge:
 
-**What to do:** treat ~1e-4 in row sums as the accuracy floor for E above
-~10 keV at kT below ~10 eV, unless you also widen the E' window (next
-section).
+$$
+R = \frac{E - E'_c(\xi_{lo})}{\sigma_{E'}(\xi_{lo})}
+  \approx E \sqrt{\frac{1 - \xi_{lo}}{2\, kT\, m_e c^2}}
+$$
 
-## Wide angle bins at cold temperatures
+where $E'_c$ is the cold Compton energy and $\sigma_{E'}$ the ridge width
+(`ridge_thermal_width`). With 100 equal bins (1 - xi_lo = 0.02), R = 5 at
+E ~ 10 keV for 1e3 K, 33 keV for 1e4 K, 105 keV for 1e5 K and 330 keV for
+1e6 K. Only the width of the most forward bin enters.
 
-When a forward angle bin is much wider than the near-forward elastic feature,
-the default E' window clips that feature. Raising the xi orders does not help
-at all; only narrower bins or a wider E' window do. Forward diagonal
-(xi in [0.8, 1]) and row total of a 4 keV group, Wien weight, compared with
-2000 bins:
+A window of k widths is accurate (row totals within 1e-9) for R below about
+k, and above that loses the same amount as the default window does at that
+R. In our tests, `ep_k_cut` = 5, 10, 15 and 30 started to fail at R ~ 5, 10,
+16 and 31. Error of the default window, 128 groups, 100 bins, Wien weight,
+compared with `ep_k_cut=30` and E' orders 192 (the uniform weight is similar
+or smaller):
 
-| T [K] | bins | settings | forward diagonal | row total |
-|---|---|---|---|---|
-| 1e3 | 10 | defaults | 0.50x | -2.0e-3 |
-| 1e3 | 10 | `ep_k_cut=7` | 1.000x | -6.7e-8 |
-| 1e3 | 10 | `ep_k_cut=10` | 1.000x | -2.6e-6 |
-| 1e3 | 10 | `ep_k_cut=15` | 1.000x | +2.8e-4 |
-| 1e3 | 10 | `ep_k_cut=10`, E' orders 48 | 1.000x | -2.8e-9 |
-| 1e3 | 100 | defaults | 1.000x | -6.7e-8 |
-| 1e3 | 100 | `ep_k_cut=15` | 1.000x | -4.5e-3 |
-| 9e3 and above | 10 or 100 | defaults | 1.000x | <= 4e-8 |
+| R | row total | largest entry error, relative to row maximum |
+|---|---|---|
+| below 5 | <= 1e-9 | <= 1e-7 |
+| 5 to 7 | -2e-4 to -3e-4 | 1% to 2% |
+| 10 | -9e-5 | 0.5% |
+| 15 | -4e-5 | 0.25% |
+| 20 | -2.5e-5 | 0.15% |
+| 30 | -1e-5 | 0.06% |
 
-The feature narrows as kT·mc²/E² in 1 - xi, so higher energies need narrower
-bins and the problem reaches higher temperatures. At 26.6 keV, default
-settings, compared with 5000 bins:
+The missing piece sits in the g -> g and g -> g+1 entries of the most
+forward bin; at R ~ 5 to 10 the forward diagonal comes out at about half its
+value. dsigma/dT has errors of the same size relative to sigma.
 
-| T [K] | bins | forward diagonal | row total |
-|---|---|---|---|
-| 1e3 | 100 | 0.50x | -5.1e-5 |
-| 1e3 | 1000 | 0.9998x | < 1e-7 |
-| 9e3 | 10 | 0.50x | -4.6e-4 |
-| 9e3 | 100 | 0.999x | -7e-7 |
+Other settings:
 
-**What to do:** at low temperature (we see the effect at kT = 0.09 eV for
-4 keV and up to kT = 0.8 eV for 27 keV), widen the window *and* raise the E'
-orders together. `ep_k_cut=10, ep_edge_order=48, ep_interior_order=48` was
-accurate to ~1e-8 in every case tested so far (4 keV from 1e3 to 1.1e6 K,
-26.6 keV at 1.1e6 K). Widening the window alone helps wide bins but costs
-accuracy in narrow ones (see `ep_k_cut=15` above). Check any setting by
-halving the bin width and comparing.
+- **E' orders.** A wider window needs proportionally higher E' orders; keep
+  about 5 to 6 points per unit of `ep_k_cut` (48 for 10, 96 for 15, 192 for
+  30). `ep_k_cut=15` with the default orders (24) gave row errors up to
+  8e-3, even where R is small. Cost grows linearly with the E' orders:
+  `ep_k_cut=15` with orders 96 costs 4x the defaults.
+- **Orders alone.** Raising the E' orders without widening the window only
+  partly resolves the tail: at 1e3 K and 10 to 100 keV, doubling them from 24
+  to 48 to 96 changed row sums by 5e-5 and then 1.6e-4 without settling.
+  Where R < 5 (with 100 bins, kT above ~100 eV for E up to 300 keV),
+  doubling them changes entries above 1% of the row maximum by at most 5e-7.
+- **Narrower bins.** R scales as the square root of the forward bin's
+  width, so a narrower forward bin works too: 26.6 keV at 1e3 K converged
+  with 1000 equal bins (R ~ 4) and 134 keV at 1e3 K with 20000 (R ~ 4.5).
+
+**What to do:**
+
+- Compute R for the highest group energy, the coldest temperature and your
+  most forward bin. If it is below 5, the defaults are fine.
+- Otherwise set `ep_k_cut` above that R with E' orders of about 6 times
+  `ep_k_cut`, narrow the most forward bin, or both.
+- If that is too expensive, `ep_k_cut=15` with E' orders 96 limits the error
+  to the R > 16 part of the curve above: row totals within ~4e-5 at any R.
+- The published MACE tables (128 groups up to 300 keV, 100 bins, R up to
+  ~140 at 1e3 K) use `ep_k_cut=15` with E' orders 96 below 9e5 K. Compared
+  with `ep_k_cut=30` and E' orders 192 at 1e3 K and 9e3 K, their row totals
+  are within 3e-5 and their entries within 0.18% of the row maximum.
+- The proper fix belongs in MACE; see [`todo.md`](todo.md).
 
 ## Planck normalisation
 

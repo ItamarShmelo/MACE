@@ -5,21 +5,27 @@ Planned work, roughly in order of value. Most items address an entry in
 
 ## Accuracy control
 
+- [ ] **Fix the E' window of the most forward angle bin.** In
+  `integrate_Ep_ridge`, take the upper end of the window from the maximum of
+  E'_c(xi) + k sigma(xi) over the bin (about E + k^2 kT / 2 when the bin ends
+  at xi = 1) instead of from the two bin edges, and give the stretch above E
+  its own panel. The elastic-core branch sizes its panel by sigma at the
+  upper bin edge, which is zero at xi = 1, so it never runs. Fallback: split
+  the bin geometrically in 1 - xi until each piece has R < `ep_k_cut`.
+  Validate against the `ep_k_cut=30` and narrow-bin references in
+  `known_limitations.md`.
 - [ ] **Per-entry error estimate.** Evaluate each matrix entry with two
   quadrature resolutions (or an embedded rule) and return the difference
   alongside the result, so users can see when a setting is too low instead
   of running convergence studies by hand.
-- [ ] **Defaults that scale with the problem.**
-  - Choose `e_panel_order` from the largest x = E/kT in a group, so Wien and
-    Planck weights at large x and cold temperatures get enough points.
-  - Choose `ep_k_cut` from the ratio of the ridge widths at the two ends of
-    an angle bin, and raise the E' orders with it, so wide forward bins at
-    cold temperatures keep the near-forward elastic feature.
+- [ ] **Defaults that scale with the problem.** Choose `e_panel_order` from
+  the largest x = E/kT in a group, so Wien and Planck weights at large x and
+  cold temperatures get enough points; choose `ep_k_cut` and the E' orders
+  from R until the forward-bin fix lands.
 - [ ] **Configurable elastic-core rule.** Expose the order of the
   near-forward elastic-core rule (fixed at 8 points) and the double-peak
   threshold (`DOUBLE_PEAK_RATIO_THRESHOLD = 10`), or scale them with the
-  other E' orders. This is the likely reason the E' integral does not
-  converge with order at cold temperatures.
+  other E' orders.
 - [ ] **Accurate Planck normalisation.** Replace or wrap `planck_integral`
   near x ~ 2, where its relative error reaches 3.3e-5.
 
@@ -27,8 +33,9 @@ Planned work, roughly in order of value. Most items address an entry in
 
 - [ ] Check that a weight function's `group_boundaries` equal the kernel's
   `energy_group_boundaries`, and raise if they do not.
-- [ ] Warn when a requested angle bin is much wider than the near-forward
-  feature at the given energy and temperature.
+- [ ] Warn when the most forward angle bin has R > `ep_k_cut` (see
+  `known_limitations.md`) at the highest group energy and the given
+  temperature.
 
 ## Performance
 
@@ -43,7 +50,8 @@ Planned work, roughly in order of value. Most items address an entry in
 - [ ] Restore a Monte Carlo vs deterministic dsigma/dT comparison with
   sample counts large enough for its tolerances (removed in `43cd06a`).
 - [ ] Add regression tests for the regimes in `known_limitations.md`: Wien at
-  large x, cold near-diagonal entries, and wide forward angle bins.
+  large x, cold near-diagonal entries, and the most forward angle bin at
+  R > `ep_k_cut`.
 
 ## Release
 
