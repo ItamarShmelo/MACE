@@ -1,9 +1,11 @@
 # MACE
 
-**MACE** (Multigroup and Angle-resolved Compton Evaluator) computes the exact
-thermal Compton scattering kernel and reduces it to multigroup, angle-resolved
-redistribution matrices for radiation-transport calculations. The numerical
-core is written in C++23 and exposed through Python bindings.
+**Multigroup-Multiangle Integrated Thermal Compton Scattering Kernel**
+
+MACE computes the exact thermal Compton scattering kernel and reduces it to
+multigroup, angle-resolved redistribution matrices for radiation-transport
+calculations. The numerical core is written in C++23 and exposed through
+Python bindings.
 
 ## What MACE computes
 
